@@ -1,7 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 
-import { applicationInsights } from "./ApplicationInsightsProvider";
+import { trackEvent } from "./telemetryClient";
 
 interface PageStaticData {
   trackingTitle?: string;
@@ -15,6 +15,27 @@ function getStaticData(matches: { staticData: unknown }[]): PageStaticData | und
     }
   }
   return undefined;
+}
+
+// One page-load performance report per navigation, from the browser's Navigation Timing entry.
+function trackPagePerformance(name: string, uri: string) {
+  const entry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  if (!entry) {
+    return;
+  }
+
+  trackEvent({
+    type: "pageviewPerformance",
+    name,
+    url: uri,
+    measurements: {
+      networkConnect: entry.connectEnd - entry.connectStart,
+      sentRequest: entry.responseStart - entry.requestStart,
+      receivedResponse: entry.responseEnd - entry.responseStart,
+      domProcessing: entry.domComplete - entry.domInteractive,
+      perfTotal: entry.domComplete - entry.startTime
+    }
+  });
 }
 
 export function PageTracker() {
@@ -33,7 +54,8 @@ export function PageTracker() {
         return;
       }
 
-      applicationInsights.trackPageView({ name: data.trackingTitle, uri, properties: { type: "page" } });
+      trackEvent({ type: "pageview", name: data.trackingTitle, url: uri, properties: { type: "page" } });
+      trackPagePerformance(data.trackingTitle, uri);
     }
 
     trackPage(router.state.location.pathname, window.location.href);
