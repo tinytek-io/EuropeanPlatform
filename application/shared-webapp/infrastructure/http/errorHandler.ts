@@ -11,7 +11,7 @@
 
 import { toast } from "sonner";
 
-import { applicationInsights } from "../applicationInsights/ApplicationInsightsProvider";
+import { trackException } from "../telemetry/TelemetryProvider";
 
 // RFC 7807 Problem Details format
 interface ProblemDetails {
@@ -105,8 +105,8 @@ function showTimeoutToast(): void {
 }
 
 function showUnknownErrorToast(error: Error) {
-  // Track the error in Application Insights
-  applicationInsights.trackException({ exception: error });
+  // Track the error in telemetry
+  trackException(error);
 
   toast.error("Unknown Error", {
     description: `An unknown error occurred (${error})`,
