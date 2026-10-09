@@ -427,6 +427,7 @@ playwright-report/
 # .NET Aspire
 **/.aspire/settings.json
 aspire.config.json
+aspire-output/
 
 # PlatformPlatform agent workspace
 .workspace

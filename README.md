@@ -1,37 +1,17 @@
-![PlatformPlatform Resource Groups](https://platformplatformgithub.blob.core.windows.net/$root/GitHubTopBanner.png)
-
-<h4 align="center">
-
-[![App Gateway](https://github.com/platformplatform/PlatformPlatform/actions/workflows/app-gateway.yml/badge.svg)](https://github.com/platformplatform/PlatformPlatform/actions/workflows/app-gateway.yml?query=branch%3Amain)
-[![Account](https://github.com/platformplatform/PlatformPlatform/actions/workflows/account.yml/badge.svg)](https://github.com/platformplatform/PlatformPlatform/actions/workflows/account.yml?query=branch%3Amain)
-[![Main](https://github.com/platformplatform/PlatformPlatform/actions/workflows/main.yml/badge.svg)](https://github.com/platformplatform/PlatformPlatform/actions/workflows/main.yml?query=branch%3Amain)
-[![Cloud Infrastructure](https://github.com/platformplatform/PlatformPlatform/actions/workflows/cloud-infrastructure.yml/badge.svg)](https://github.com/platformplatform/PlatformPlatform/actions/workflows/cloud-infrastructure.yml?query=branch%3Amain)
-
-[![GitHub issues with enhancement label](https://img.shields.io/github/issues-raw/platformplatform/PlatformPlatform/enhancement?label=enhancements&logo=github&color=%23A2EEEF)](https://github.com/orgs/PlatformPlatform/projects/1/views/3?filterQuery=-status%3A%22%E2%9C%85+Done%22+label%3Aenhancement)
-[![GitHub issues with roadmap label](https://img.shields.io/github/issues-raw/platformplatform/PlatformPlatform/roadmap?label=roadmap&logo=github&color=%23006B75)](https://github.com/orgs/PlatformPlatform/projects/2/views/2?filterQuery=is%3Aopen+label%3Aroadmap)
-[![GitHub issues with bug label](https://img.shields.io/github/issues-raw/platformplatform/PlatformPlatform/bug?label=bugs&logo=github&color=red)](https://github.com/platformplatform/PlatformPlatform/issues?q=is%3Aissue+is%3Aopen+label%3Abug)
-
-<a href="https://sonarcloud.io/summary/overall?id=PlatformPlatform_platformplatform" target="_blank" rel="noopener noreferrer"><img src="https://sonarcloud.io/api/project_badges/measure?project=PlatformPlatform_platformplatform&metric=alert_status" alt="Quality Gate Status" /></a>
-<a href="https://sonarcloud.io/component_measures?id=PlatformPlatform_platformplatform&metric=Security" target="_blank" rel="noopener noreferrer"><img src="https://sonarcloud.io/api/project_badges/measure?project=PlatformPlatform_platformplatform&metric=security_rating" alt="Security Rating" /></a>
-<a href="https://sonarcloud.io/component_measures?id=PlatformPlatform_platformplatform&metric=Reliability" target="_blank" rel="noopener noreferrer"><img src="https://sonarcloud.io/api/project_badges/measure?project=PlatformPlatform_platformplatform&metric=reliability_rating" alt="Reliability Rating" /></a>
-<a href="https://sonarcloud.io/component_measures?id=PlatformPlatform_platformplatform&metric=Maintainability" target="_blank" rel="noopener noreferrer"><img src="https://sonarcloud.io/api/project_badges/measure?project=PlatformPlatform_platformplatform&metric=sqale_rating" alt="Maintainability Rating" /></a>
-
-</h4>
-
 # 👋 Welcome to PlatformPlatform
 
 Kick-start building top-tier B2B & B2C cloud SaaS products with sleek design, fully localized and accessible, vertical slice architecture, automated and fast DevOps, and top-notch security.
 
 Ships with signup and login via Google or email one-time password, Stripe-powered subscription and payment management with plan upgrades, downgrades, and invoicing, feature flags with A/B-rollout, plan-gating, and per-user/tenant overrides, and a back-office dashboard with MRR and revenue trends, plan distribution, and tenant growth.
 
-Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Azure, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where PlatformPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
+Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Scaleway, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where PlatformPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
 
 ## What's inside
 
 * **Backend** - .NET 10 and C# 14 following the principles of vertical slice architecture, DDD, CQRS, and clean code
 * **Frontend** - React 19, TypeScript, TanStack Router & Query, ShadCN 2.0 with Base UI for accessible UI
-* **CI/CD** - GitHub actions for fast passwordless deployments of docker containers and infrastructure (Bicep)
-* **Infrastructure** - Cost efficient and scalable Azure PaaS like Azure Container Apps and PostgreSQL
+* **Deployment** - Infrastructure as Code with Terraform, and application deployments through the Aspire publish/deploy pipeline to a Kubernetes cluster
+* **Infrastructure** - Cost efficient and scalable Scaleway services like Kapsule (Kubernetes), Managed PostgreSQL, and Object Storage
 * **Developer CLI** - Extendable .NET CLI for DevEx - set up CI/CD is one command and a couple of questions
 * **AI rules** - 30+ rules & skills, refined and battle-tested over a year of daily use, capturing our opinionated patterns
 * **Multi-agent development** - Agent Teams workflow where specialized Claude Code agents with deep PlatformPlatform expertise collaborate end-to-end
@@ -75,7 +55,7 @@ TL;DR: Requires .NET 10, Node, and Docker. Clone the repo and `dotnet run` from 
 
 ### Prerequisites
 
-For development, you need .NET, Docker, and Node. And GitHub and Azure CLI for setting up CI/CD.
+For development, you need .NET, Docker, and Node. And the Scaleway CLI (`scw`), Terraform, and the Aspire CLI for setting up deployments.
 
 <details>
 
@@ -93,7 +73,7 @@ For development, you need .NET, Docker, and Node. And GitHub and Azure CLI for s
     winget install Microsoft.DotNet.SDK.10
     winget install Git.Git
     winget install Docker.DockerDesktop
-    winget install Microsoft.AzureCLI
+    winget install Scaleway.ScalewayCli
     winget install GitHub.cli
     ```
 
@@ -137,7 +117,7 @@ Open a terminal and run the following commands (if not installed):
    ```bash
    brew install --cask dotnet-sdk
    brew install --cask docker
-   brew install git azure-cli gh
+   brew install git gh scaleway/tap/scw terraform
    ```
 
 3. Install Node.js — the version must match [`.node-version`](./application/.node-version). We recommend [fnm](https://github.com/Schniz/fnm) which auto-installs the exact version via the Developer CLI. When using an IDE like Rider, ensure the active fnm version matches [`.node-version`](./application/.node-version).
@@ -248,7 +228,7 @@ Open a terminal and run the following commands (if not installed):
    dotnet dev-certs https --trust
    ```
 
-10. (Optional) Install GitHub CLI and Azure CLI (needed for CI/CD setup)
+10. (Optional) Install the GitHub CLI and Scaleway CLI (needed for deployment setup)
 
    ```bash
    (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
@@ -257,7 +237,7 @@ Open a terminal and run the following commands (if not installed):
    && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
    sudo apt-get update && sudo apt-get install -y gh
-   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+   curl -o scw https://github.com/scaleway/scaleway-cli/releases/latest/download/scw-linux-x86_64 && sudo mv scw /usr/local/bin/scw
    ```
 
 </details>
@@ -377,34 +357,44 @@ Each developer needs their own Stripe sandbox. The local database stays in sync 
 
 All values are stored securely in .NET user secrets and persist across restarts.
 
-## 4. Set up CI/CD with passwordless deployments from GitHub to Azure
+## 4. Deploy to Scaleway (Terraform + Aspire deploy)
 
-Run this command to automate Azure Subscription configuration and set up [GitHub Workflows](https://github.com/platformplatform/PlatformPlatform/actions) for deploying [Azure Infrastructure](./cloud-infrastructure) (using Bicep) and compiling [application code](./application) to Docker images deployed to Azure Container Apps:
+Deployment is fully scripted and reproducible from a developer machine. Infrastructure lives in
+Terraform (`cloud-infrastructure/scaleway`), applications deploy through the Aspire
+publish/deploy pipeline. After the two Terraform modules are applied (see
+[cloud-infrastructure/README.md](./cloud-infrastructure/README.md) for credentials and
+variables), one command deploys an environment:
 
 ```bash
-cd developer-cli
-dotnet run deploy # Tip: Add --verbose-logging to show the used CLI commands
+dotnet run --project developer-cli -- deploy -e staging
 ```
 
-You need to be the owner of the GitHub repository and the Azure Subscription, plus have permissions to create Service Principals and Active Directory Groups.
+The command verifies the infrastructure matches the Terraform configuration (refusing to deploy
+over drift), resolves the cluster kubeconfig and the per-workload deploy keys from Terraform
+outputs, and runs the Aspire build/publish/deploy pipeline with live progress. Afterwards, run
+`edge-health` for a read-only health check of the edge and the public endpoints.
 
-The command will first prompt you to login to Azure and GitHub, and collect information. You will be presented with a complete list of changes before they are applied. It will look something like this:
+Workloads push OpenTelemetry metrics, logs, and traces to the project's Cockpit. For a new
+environment, open the Cockpit Grafana once in the Scaleway console (the project's
+`...dashboard.cockpit.scaleway.com` URL) — Grafana registration happens on that first visit.
+Until then the Terraform-managed data sources push telemetry fine but do not appear in Grafana,
+and applies that change a data source report a harmless data-source sync error.
 
-![Configure Continuous Deployments](https://platformplatformgithub.blob.core.windows.net/$root/ConfigureContinuousDeployments.png)
+After the first deploy, create the DNS records for your domain (one CNAME per public hostname
+pointing at its Edge Services pipeline, plus the transactional email records). The
+[DNS guide](./cloud-infrastructure/scaleway/docs/dns-guide.md) lists the exact record set and
+verification steps.
 
-Except for adding a DNS record, everything is fully automated. After successful setup, the command will provide simple instructions on how to configure branch policies, Sonar Cloud static code analysis, and more.
+Secrets are provisioned in Scaleway Secret Manager by Terraform (connection strings, signing
+keys, API keys), and each workload runs with its own IAM application that can read only its
+secrets. There are no secrets in the repository, in images, or in the Helm chart.
 
-The infrastructure is configured with auto-scaling and hosting costs in focus. It will cost less than 2 USD per day for a cluster, and it will allow scaling to millions of users 🎉
-
-![Azure Costs](https://platformplatformgithub.blob.core.windows.net/$root/azure-costs-center.png)
+The infrastructure is configured with hosting costs in focus: a staging environment with a
+small Kapsule node pool runs for a few tens of euros per month.
 
 ### (Optional) Configure Google OAuth for staging and production
 
-If you set up Google OAuth locally, use the Developer CLI to store your Google OAuth credentials as GitHub secrets for deployment to Azure Key Vault:
-
-```bash
-pp github-config
-```
+If you set up Google OAuth locally, store the credentials for staging and production as Secret Manager entries per the environment module (they surface to workloads as configuration keys):
 
 Remember to add redirect URIs for each environment in your Google Cloud Console configuration, e.g.:
 - `https://staging.yourproduct.com/api/account/authentication/Google/login/callback`
@@ -424,21 +414,21 @@ On localhost, the Stripe CLI container automatically forwards webhook events. On
 4. Set the **Destination name** to the environment (e.g., `Staging` or `Production`), set the **Endpoint URL** to `https://app.yourproduct.com/api/account/subscriptions/stripe-webhook` (replace with your actual domain), and click **Continue**
 5. On the destination detail page, click **Reveal** under **Signing secret** to get the webhook secret (`whsec_...`)
 
-Use the Developer CLI to store Stripe credentials as GitHub secrets for deployment to Azure Key Vault:
-
-```bash
-pp github-config
-```
-
-Select the **Stripe** group and enter the **Publishable Key**, **API Key** (Secret key), and **Webhook Secret** (the signing secret from the webhook endpoint). The subscription feature is automatically enabled on Azure when all three secrets are present in Key Vault.
+Provision the **Publishable Key**, **API Key** (Secret key), and **Webhook Secret** as Secret Manager entries for the environment (the same keys the local user-secrets setup uses). The subscription feature is enabled when all three are present.
 
 ### Back-office access
 
-The deploy command provisions everything needed for the back-office host automatically: an Entra ID app registration per environment with reply URLs scoped to `back-office.<domain>`, a `<env>-BackOfficeAdmins` security group, and the corresponding GitHub variables consumed by the cluster Bicep. The infrastructure deploy then provisions a dedicated Azure Container App for the back-office subdomain with Easy Auth bound to that Entra app.
+The back-office host runs on its own hostname (`back-office.<domain>`) in front of the same
+application, protected by an authentication gate: on staging this is MockEasyAuth (a deliberate
+stand-in until a proper OIDC provider for staff accounts is configured), and the edge pipelines
+serve its hostname with the same TLS, WAF, and caching as the app.
 
-To grant a person access to the back-office host, add their Entra user account as a member of the `<env>-BackOfficeAdmins` security group. The platform Easy Auth redirects unauthenticated visitors to Entra ID; once signed in, the platform-issued token carries the group claim that the back-office uses to enforce admin-only endpoints.
+To grant a person access once staff OIDC is configured, add them to the administrator group in
+the identity provider; the platform-issued token then carries the claim the back-office uses to
+enforce admin-only endpoints.
 
-If a custom back-office domain is configured, add a DNS CNAME record for `back-office.<domain>` pointing at the cluster's Container Apps environment, the same way you would for `app.<domain>`.
+Add the back-office CNAME record the same way as the app hostname (see the
+[DNS guide](./cloud-infrastructure/scaleway/docs/dns-guide.md)).
 
 # Multi-Agent Development with Claude Code
 
@@ -571,14 +561,14 @@ PlatformPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 │  │   └─ Tests           # Tests for the Api, Core, and Workers
 │  ├─ shared-kernel      # Reusable components and default configuration for all systems
 │  └─ shared-webapp      # Reusable ShadCN 2.0 components with Base UI that affect all systems
-├─ cloud-infrastructure  # Contains Bash and Bicep scripts (IaC) for Azure resources
-│  ├─ cluster            # Scale units like production-west-eu, production-east-us, etc.
-│  ├─ environment        # Shared resources like App Insights, Container Registry, etc.
-│  └─ modules            # Reusable Bicep modules like Container App, PostgreSQL, etc.
+├─ cloud-infrastructure  # Infrastructure as Code (Terraform) and cluster operation scripts for Scaleway
+│  └─ scaleway           # bootstrap (state bucket, registry) and environment (VPC, Kapsule, RDB,
+│                        #   Object Storage, Secret Manager, Edge Services, IAM) modules
+│                        #   plus cluster-ops scripts (gateway LB adoption, failover, docs)
 └─ developer-cli         # A .NET CLI tool for automating common developer tasks
 ```
 
-** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The back-office surface for operations and support is hosted by the `account` SCS as a separate SPA on its own hostname, authenticated via Entra ID (Azure Easy Auth in production, MockEasyAuth in development).
+** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The back-office surface for operations and support is hosted by the `account` SCS as a separate SPA on its own hostname, authenticated via a staff identity provider (MockEasyAuth on staging and in development until then).
 
 # Technologies
 
@@ -626,52 +616,56 @@ The frontend is built with these technologies:
 - [oxlint](https://oxc.rs/docs/guide/usage/linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) for linting and formatting
 - [Node](https://nodejs.org/en)
 
-### Azure Cloud Infrastructure With Enterprise-Grade Security and Zero Secrets
+### Scaleway Infrastructure With Enterprise-Grade Security and Zero Secrets
 
-PlatformPlatform's cloud infrastructure is built using the latest Azure Platform as a Service (PaaS) technologies:
+PlatformPlatform's cloud infrastructure is built on Scaleway managed services, defined entirely
+in Terraform and deployed through the Aspire pipeline:
 
-- [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/overview)
-- [Azure Database for PostgreSQL](https://azure.microsoft.com/en-us/products/postgresql)
-- [Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs)
-- [Azure Service Bus](https://azure.microsoft.com/en-us/services/service-bus)
-- [Azure Key Vault](https://azure.microsoft.com/en-us/services/key-vault)
-- [Azure Application Insights](https://azure.microsoft.com/en-us/services/monitor)
-- [Azure Log Analytics](https://azure.microsoft.com/en-us/services/monitor)
-- [Azure Virtual Network](https://azure.microsoft.com/en-us/services/virtual-network)
-- [Azure Managed Identities](https://docs.microsoft.com/en-us/azure/active-directory/lifecyclesmanaged-identities-azure-resources/overview)
-- [Azure Container Registry](https://azure.microsoft.com/en-us/products/communication-services/)
-- [Azure Communication Services](https://azure.microsoft.com/en-us/products/communication-services/)
-- [Microsoft Defender for Cloud](https://azure.microsoft.com/en-us/products/defender-for-cloud)
+- [Kapsule](https://www.scaleway.com/en/docs/containers/kubernetes/) - managed Kubernetes (Cilium networking, Gateway API ingress)
+- [Managed Database for PostgreSQL](https://www.scaleway.com/en/docs/manage-databases-postgres/) - one database per self-contained system on a shared instance
+- [Object Storage](https://www.scaleway.com/en/docs/storage/object/) - S3-compatible blob storage (avatars, logos, the shared Data Protection keyring)
+- [Secret Manager](https://www.scaleway.com/en/docs/account/secret-manager/) - all application secrets, read by workloads at runtime
+- [IAM](https://www.scaleway.com/en/docs/account/iam/) - one application per workload with least-privilege access to exactly its secrets
+- [Edge Services](https://www.scaleway.com/en/docs/network/edge-services/) - WAF, edge TLS, and caching in front of the cluster
+- [Transactional Email](https://www.scaleway.com/en/docs/transactional-email/) - deliverability for signup and account emails
+- [Container Registry](https://www.scaleway.com/en/docs/container-registry/) - the image store the Aspire pipeline pushes to
 
 <details>
 
 <summary>Read more about this enterprise-grade architecture</summary>
 
-- **Platform as a Service (PaaS) technologies**: Azure is the leading Cloud Service Provider (CSP) when it comes to PaaS technologies. PlatformPlatform uses PaaS technologies which are fully managed by Microsoft, as opposed to Infrastructure as a Service (IaaS) technologies where the customer is responsible for the underlying infrastructure. This means that Microsoft is responsible for the availability of the infrastructure, and you are only responsible for the application and data. This makes it possible for even a small team to run a highly scalable, stable, and secure solution.
-- **Enterprise-grade security with zero secrets**:
-  - **Managed Identities**: No secrets are used when Container Apps connect to e.g. Databases, Blob Storage, and Service Bus. The infrastructure uses Managed Identities for all communication with Azure resources, eliminating the need for secrets.
-  - **Federated credentials**: Deployment from GitHub to Azure is done using federated credentials, establishing a trust between the GitHub repository and Azure subscription based on the repository's URL, without the need for secrets.
-  - **No secrets expires**: Since no secrets are used, there is no need to rotate secrets, and no risk of secrets expiring.
-  - **100% Security Score**: The current infrastructure configuration follows best practices, and the current setup code achieves a 100% Security Score in Microsoft Defender for Cloud. This minimizes the attack surface and protects against even sophisticated attacks.
-- **Automatic certificate management**: The infrastructure is configured to automatically request and renew SSL certificates, eliminating the need for manual certificate management.
-- **Multiple environments**: The setup includes different environments like Development, Staging, and Production, deployed into clearly named resource groups within a single Azure Subscription.
-- **Multi-region**: Spinning up a cluster in a new region is a matter of adding one extra deployment job to the GitHub workflow. This allows customers to select a region where their data is close to the user and local data protection laws like GDPR, CCPA, etc. are followed.
-- **Azure Container Apps**: The application is hosted using Azure Container Apps, which is a new service from Azure that provides a fully managed Kubernetes environment for running containerized applications. You don't need to be a Kubernetes expert to run your application in a scalable and secure environment.
-- **Scaling from zero to millions of users**: The Azure Container App Environment is configured to scale from zero to millions of users, and the infrastructure is configured to scale automatically based on load. This means the starting costs are very low, and the solution can scale to millions of users without any manual intervention. This enables having Development and Staging environments running with very low costs.
-- **Azure PostgreSQL**: The database is hosted using Azure Database for PostgreSQL Flexible Server, which is a fully managed PostgreSQL database. PostgreSQL is known for its high performance, stability, scalability, and security. The server will easily handle millions of users with single-digit millisecond response times.
+- **Infrastructure as Code everywhere**: every resource from the state bucket to the edge
+  pipelines is owned by Terraform; application deployment is owned by the Aspire
+  publish/deploy pipeline. Nothing is created by hand, and `terraform plan` + the
+  `edge-health` developer-cli command verify the environment.
+- **Enterprise-grade security with zero secrets in the codebase**:
+  - **Per-workload identities**: every workload runs with its own IAM application whose policy
+    grants access to exactly its Secret Manager path — a compromised workload cannot read
+    another's secrets.
+  - **Secrets in Secret Manager**: connection strings, signing keys, and API keys are
+    provisioned by Terraform and read at runtime; nothing sensitive lives in the repository,
+    images, or Helm charts.
+  - **Shared Data Protection keyring encrypted at rest**: the keyring that spans
+    self-contained systems is encrypted with a Secret Manager key before it is persisted to
+    Object Storage.
+- **Automatic certificate management**: TLS certificates are requested and renewed
+  automatically — managed certificates at the edge, cert-manager with the Gateway API inside
+  the cluster.
+- **Multiple environments**: each environment (staging, production, ...) is its own Scaleway
+  project, so cost and blast radius are tracked per environment.
+- **Kapsule**: the application runs on managed Kubernetes with Cilium's Gateway API (Envoy) for
+  ingress — one entry point per public hostname with hostname-based routing to the
+  self-contained systems.
+- **PostgreSQL**: the database is a managed PostgreSQL instance with one database per
+  self-contained system, keeping system boundaries hard and per-system restores trivial.
+- **Scaling**: node pools scale with load, and the cost profile starts at a few tens of euros
+  per month for a staging environment.
 
 </details>
 
 # Screenshots
 
-This is how it looks when GitHub workflows has deployed Azure Infrastructure:
-
-![GitHub Environments](https://platformplatformgithub.blob.core.windows.net/GitHubInfrastructureDeployments.png)
-
-These are the resource groups created when deploying one staging cluster, and two production clusters:
-
-![PlatformPlatform Resource Groups](https://platformplatformgithub.blob.core.windows.net/PlatformPlatformResourceGroups.png)
-
-This is the security score after deploying PlatformPlatform resources to Azure. Achieving a 100% security score in Azure Defender for Cloud without exemptions is not trivial.
-
-![Azure Security Recommendations](https://platformplatformgithub.blob.core.windows.net/AzureSecurityRecommendations.png)
+Deploy an environment and open the Scaleway console to see the running stack: one project per
+environment with its Kapsule cluster, managed PostgreSQL, Object Storage buckets, Edge Services
+pipelines, and Secret Manager. Run `edge-health` from the developer CLI for a full read-only
+health report of the edge and the public endpoints.
