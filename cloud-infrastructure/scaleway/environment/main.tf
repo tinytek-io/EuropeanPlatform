@@ -716,10 +716,15 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
   }
 }
 
+# The WAF runs in blocking mode ("enable": requests matching the managed OWASP CRS ruleset are
+# rejected at the edge before reaching the cluster) at paranoia level 1. The /api/track false
+# positive that blocked this move is gone — the SPA's telemetry client sends a minimal JSON
+# payload since the Application Insights SDK removal. Known false positives can be excepted with
+# exclusion_rules by CRS rule ID.
 resource "scaleway_edge_services_waf_stage" "gateway" {
   for_each         = local.edge_pipelines
   pipeline_id      = scaleway_edge_services_pipeline.gateway[each.key].id
-  mode             = "log_only"
+  mode             = "enable"
   paranoia_level   = 1
   backend_stage_id = scaleway_edge_services_backend_stage.gateway[each.key].id
 }
