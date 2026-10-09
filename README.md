@@ -402,6 +402,26 @@ Remember to add redirect URIs for each environment in your Google Cloud Console 
 - `https://app.yourproduct.com/api/account/authentication/Google/login/callback`
 - `https://app.yourproduct.com/api/account/authentication/Google/signup/callback`
 
+### (Optional) Configure a staff OIDC provider for the back-office
+
+The back-office staff sign-in uses any standard OpenID Connect provider (Entra ID, Google
+Workspace, Auth0, ...) when one is configured; otherwise environments fall back to the mock
+identity selector (local development, and staging until a provider exists).
+
+To wire a provider, set — as Secret Manager entries for the account workloads or environment
+variables on the account API — the keys under `BackOffice:Oidc`:
+
+- `BackOffice:Oidc:Authority` — the provider's base URL with a discoverable
+  `.well-known/openid-configuration` (e.g. `https://login.microsoftonline.com/{tenant}/v2.0`)
+- `BackOffice:Oidc:ClientId` — the application/client ID registered with the provider
+- `BackOffice:Oidc:ClientSecret` — the client secret (`BackOffice__Oidc__ClientSecret` as a
+  Secret Manager entry)
+
+Register the redirect URI `https://back-office.<your-domain>/.auth/login/aad/callback` with the
+provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` set to the
+value the provider issues in the `groups` claim for staff administrators. When these keys are
+configured, the mock identity selector is disabled automatically.
+
 ### (Optional) Configure Stripe for staging and production
 
 Create a separate Stripe account (or sandbox) for each environment. For production, use a live Stripe account instead of a sandbox. Follow the Stripe Dashboard setup steps in [section 3.2](#32-optional-set-up-stripe-sandbox-for-localhost) to configure products, payment methods, tax, invoices, and other settings.
