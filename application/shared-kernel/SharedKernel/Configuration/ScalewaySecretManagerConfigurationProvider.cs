@@ -18,15 +18,15 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
 {
     private const string ApiUrl = "https://api.scaleway.com/secret-manager/v1beta1/regions/{0}";
     private const int PageSize = 100;
+    private readonly string _apiUrl;
 
     private readonly HttpClient _httpClient;
-    private readonly string _apiUrl;
-    private readonly string _projectId;
-    private readonly string _path;
-    private readonly TimeSpan? _reloadInterval;
     private readonly ILogger _logger;
-    private Timer? _refreshTimer;
+    private readonly string _path;
+    private readonly string _projectId;
+    private readonly TimeSpan? _reloadInterval;
     private int _refreshInProgress;
+    private Timer? _refreshTimer;
 
     public ScalewaySecretManagerConfigurationProvider(string secretKey, string projectId, string region, string path, TimeSpan? reloadInterval, ILogger? logger = null)
     {
@@ -124,7 +124,7 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
         var secrets = new List<SecretSummary>();
         try
         {
-            for (var page = 1; ; page++)
+            for (var page = 1;; page++)
             {
                 var response = await HttpGetJson($"{_apiUrl}/secrets?project_id={_projectId}&path={Uri.EscapeDataString(_path)}&page_size={PageSize}&page={page}");
                 if (response is null)
