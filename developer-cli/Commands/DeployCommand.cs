@@ -293,6 +293,15 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {deployments.Length} deployments roll out with zero unavailable pods.");
+
+        var migrationJobs = Directory.GetFiles(templatesFolder, "job.yaml", SearchOption.AllDirectories);
+        if (migrationJobs.Length != 2)
+        {
+            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] expected 2 migration job templates (one per self-contained system), found {migrationJobs.Length} — the AppHost migration patch did not reach the chart.");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {migrationJobs.Length} pre-upgrade migration jobs.");
     }
 
     private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder)

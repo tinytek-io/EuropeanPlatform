@@ -448,22 +448,71 @@ if (isPublishMode && kubernetes is not null)
         .WithRoute(appPublicHostname, "/", appGateway.GetEndpoint("http"))
         .WithRoute(backOfficePublicHostname, "/", accountApi.GetEndpoint("http"));
 
-    // The generated chart rolls out every Deployment with maxUnavailable: 1, which lets the last
-    // ready pod of a single-replica workload terminate before its replacement passes readiness —
-    // every deploy showed up as a window of edge 504s (found in the Cockpit access logs). The
-    // patch pins maxUnavailable: 0 (maxSurge stays 1) right after the chart is generated, so helm
-    // installs a chart whose rollouts are zero-gap at any replica count.
-    builder.Pipeline.WithFinalAction("publish-kubernetes", PatchChartRolloutStrategy);
+    // Two patches to the generated chart, applied right after chart generation so helm consumes
+    // them (chart-consuming steps run after final actions):
+    //  * every Deployment rolls out with maxUnavailable: 1 — with single-replica workloads the last
+    //    ready pod terminates before its replacement passes readiness, so deploys surfaced as edge
+    //    504 windows. The patch pins maxUnavailable: 0 (maxSurge stays 1).
+    //  * one pre-upgrade migration Job per self-contained system: schema + data migrations run to
+    //    completion in the workers' image BEFORE any new pod rolls out (pre-upgrade only — on a
+    //    first install the workers' startup migrations cover it, and hook resources are created
+    //    before the config maps the Job's pod depends on).
+    builder.Pipeline.WithFinalAction("publish-kubernetes", PatchGeneratedChart);
 }
 
 AddStripeCliContainer();
 
 await builder.Build().RunAsync();
 
+// Generated per self-contained system; the MIGRATIONS/VALUES_KEY/WORKERS tokens are replaced per
+// self-contained system. The image/config/secrets are the workers' own — the Job runs the same
+// image with MIGRATE_ONLY=true so it exits after schema + data migrations instead of starting
+// hosted services. Helm's own {{ ... }} braces stay literal (raw string, no interpolation).
+const string JobTemplate = """
+                           ---
+                           apiVersion: "batch/v1"
+                           kind: "Job"
+                           metadata:
+                             name: "{{ .Chart.Name }}-MIGRATIONS-job"
+                             labels:
+                               app.kubernetes.io/name: "{{ .Chart.Name }}"
+                               app.kubernetes.io/component: "MIGRATIONS"
+                               app.kubernetes.io/instance: "{{ .Release.Name }}"
+                             annotations:
+                               # Runs BEFORE any Deployment is upgraded and blocks the upgrade until migrations complete;
+                               # a failed migration aborts the deploy with the old version still serving.
+                               "helm.sh/hook": "pre-upgrade"
+                               # The previous Job is deleted just before this one is created (default policy).
+                               "helm.sh/hook-delete-policy": "before-hook-creation"
+                               "helm.sh/hook-weight": "-1"
+                           spec:
+                             backoffLimit: 2
+                             template:
+                               metadata:
+                                 labels:
+                                   app.kubernetes.io/name: "{{ .Chart.Name }}"
+                                   app.kubernetes.io/component: "MIGRATIONS"
+                                   app.kubernetes.io/instance: "{{ .Release.Name }}"
+                               spec:
+                                 restartPolicy: Never
+                                 containers:
+                                   - name: "MIGRATIONS"
+                                     image: "{{ .Values.parameters.VALUES_KEY.VALUES_KEY_image }}"
+                                     env:
+                                       - name: "MIGRATE_ONLY"
+                                         value: "true"
+                                     envFrom:
+                                       - configMapRef:
+                                           name: "WORKERS-config"
+                                       - secretRef:
+                                           name: "WORKERS-secrets"
+                                     imagePullPolicy: "IfNotPresent"
+                           """;
+
 // Runs as the final action of the chart-generation step (publish-kubernetes): by then the Helm
 // chart exists, and every step that consumes it — helm-deploy-kubernetes in a deploy — runs
 // after final actions complete.
-async Task PatchChartRolloutStrategy(PipelineStepContext context)
+async Task PatchGeneratedChart(PipelineStepContext context)
 {
     var templatesFolder = Path.Combine(builder.AppHostDirectory, "aspire-output", "templates");
     if (!Directory.Exists(templatesFolder))
@@ -471,6 +520,12 @@ async Task PatchChartRolloutStrategy(PipelineStepContext context)
         throw new InvalidOperationException($"Chart templates folder not found at '{templatesFolder}'.");
     }
 
+    await PatchRolloutStrategyAsync(templatesFolder);
+    await AddMigrationJobsAsync(templatesFolder);
+}
+
+async Task PatchRolloutStrategyAsync(string templatesFolder)
+{
     var deployments = Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories);
     if (deployments.Length == 0)
     {
@@ -492,6 +547,35 @@ async Task PatchChartRolloutStrategy(PipelineStepContext context)
 
     Console.WriteLine($"Rollout patch: {patched} of {deployments.Length} deployments pinned to maxUnavailable: 0.");
 }
+
+async Task AddMigrationJobsAsync(string templatesFolder)
+{
+    // One migration Job per workers Deployment: e.g. templates/account-workers/deployment.yaml
+    // produces templates/account-migrations/job.yaml, reusing the workers' image, config, and
+    // secrets. The workers run the same migration code at startup as a no-op safety net (and to
+    // cover first installs, where pre-install hooks would race the config maps they depend on).
+    var workersDeployments = Directory.GetDirectories(templatesFolder, "*-workers");
+    if (workersDeployments.Length == 0)
+    {
+        throw new InvalidOperationException("No *-workers deployment found in the generated chart — the chart layout changed, update the migration patch.");
+    }
+
+    foreach (var workersFolder in workersDeployments)
+    {
+        var workers = Path.GetFileName(workersFolder); // account-workers
+        var migrations = workers.Replace("-workers", "-migrations"); // account-migrations
+        var valuesKey = workers.Replace('-', '_'); // account_workers
+        var jobFolder = Path.Combine(templatesFolder, migrations);
+        Directory.CreateDirectory(jobFolder);
+
+        // Helm's own {{ ... }} template braces are literal here: string.Format only touches {0}-style.
+        var job = JobTemplate.Replace("MIGRATIONS", migrations).Replace("VALUES_KEY", valuesKey).Replace("WORKERS", workers);
+
+        await File.WriteAllTextAsync(Path.Combine(jobFolder, "job.yaml"), job);
+        Console.WriteLine($"Migration patch: {migrations} Job added (pre-upgrade hook, image from {workers}).");
+    }
+}
+
 
 return;
 
