@@ -1,0 +1,7 @@
+# Keeps the frontend-build Docker context small. Careful: this file applies to any docker build
+# with the application/ folder as context — only list paths that no build step needs.
+node_modules
+**/node_modules
+.git
+.turbo
+**/dist

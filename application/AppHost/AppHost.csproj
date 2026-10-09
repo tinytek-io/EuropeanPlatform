@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -6,6 +6,10 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <UserSecretsId>platformplatform-f817f2a1-ac57-4756-aef2-a57ca864bbd3</UserSecretsId>
+        <AspireUseCliBundle>true</AspireUseCliBundle>
+        <!-- Opt in to Aspire's evaluation-only publishing APIs: ASPIREPIPELINES001 gates
+             builder.Pipeline, ASPIRECOMPUTE003 gates the container registry APIs. -->
+        <NoWarn>$(NoWarn);ASPIREPIPELINES001;ASPIRECOMPUTE003</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -18,10 +22,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Azure.Storage.Blobs"/>
-        <PackageReference Include="Aspire.Hosting.Azure.Storage"/>
+        <PackageReference Include="Aspire.Hosting.EntityFrameworkCore"/>
         <PackageReference Include="Aspire.Hosting.JavaScript"/>
+        <PackageReference Include="Aspire.Hosting.Kubernetes"/>
         <PackageReference Include="Aspire.Hosting.PostgreSQL"/>
+        <PackageReference Include="YamlDotNet"/>
         <PackageReference Include="Microsoft.Extensions.Configuration"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets"/>
     </ItemGroup>
