@@ -485,9 +485,9 @@ public sealed class MockStripeClient(IConfiguration configuration, TimeProvider 
     {
         var allowMockProvider = configuration.GetValue<bool>("Stripe:AllowMockProvider");
 
-        if (allowMockProvider && SharedInfrastructureConfiguration.IsRunningInAzure)
+        if (allowMockProvider && SharedInfrastructureConfiguration.IsRunningInCloud)
         {
-            throw new InvalidOperationException("Mock Stripe provider cannot be enabled in Azure environments.");
+            throw new InvalidOperationException("Mock Stripe provider cannot be enabled in deployed environments.");
         }
 
         return allowMockProvider;

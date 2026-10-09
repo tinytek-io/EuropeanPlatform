@@ -29,12 +29,11 @@ var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
 using var scope = host.Services.CreateScope();
 
-// Apply migrations to the database only when running locally
-if (!SharedInfrastructureConfiguration.IsRunningInAzure)
-{
-    var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<AccountDbContext>>();
-    migrationService.ApplyMigrations();
-}
+// Apply migrations on startup. EF Core's migration lock (__EFMigrationsLock) serializes
+// concurrent replicas, so a rolling upgrade is safe. The APIs start in parallel with the workers,
+// which mirrors local development.
+var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<AccountDbContext>>();
+migrationService.ApplyMigrations();
 
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<AccountDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);

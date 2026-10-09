@@ -1,17 +1,12 @@
-using Azure.Core;
-using Azure.Extensions.AspNetCore.Configuration.Secrets;
-using Azure.Identity;
-using Azure.Monitor.OpenTelemetry.AspNetCore;
-using Azure.Security.KeyVault.Secrets;
-using Azure.Storage.Blobs;
-using Microsoft.ApplicationInsights.AspNetCore.Extensions;
-using Microsoft.ApplicationInsights.Extensibility;
+using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Npgsql;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Instrumentation.AspNetCore;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -24,7 +19,12 @@ namespace SharedKernel.Configuration;
 
 public static class SharedInfrastructureConfiguration
 {
-    public static readonly bool IsRunningInAzure = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID") is not null;
+    // True when the process runs as a deployed workload rather than on a developer machine or in a
+    // test host. Container images set ASPNETCORE_ENVIRONMENT=Production; local Aspire runs set
+    // Development; test hosts leave it unset. This replaces the previous "IsRunningInAzure"
+    // distinction with the one it actually meant: deployed versus developer machine.
+    public static readonly bool IsRunningInCloud =
+        (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")) == "Production";
 
     public static readonly string? ServiceVersion = ResolveServiceVersion();
 
@@ -35,8 +35,6 @@ public static class SharedInfrastructureConfiguration
     public static readonly string? DeploymentCommitHash = GetAssemblyMetadata("DeploymentCommitHash");
 
     public static readonly string? DeploymentGithubActionId = GetAssemblyMetadata("DeploymentGithubActionId");
-
-    public static DefaultAzureCredential DefaultAzureCredential => GetDefaultAzureCredential();
 
     private static string? ResolveServiceVersion()
     {
@@ -57,12 +55,34 @@ public static class SharedInfrastructureConfiguration
             .FirstOrDefault(a => a.Key == key)?.Value;
     }
 
-    private static DefaultAzureCredential GetDefaultAzureCredential()
+    /// <summary>
+    ///     Configures an OTLP exporter for the project's Cockpit when the deploy wires it (each signal
+    ///     gets its own endpoint plus a token header). When the Cockpit configuration is absent — local
+    ///     development through the Aspire dashboard, or an environment without Cockpit — the exporter
+    ///     falls back to its standard OTEL_EXPORTER_OTLP_* behavior.
+    /// </summary>
+    private static Action<OtlpExporterOptions> CockpitOtlpOptions(IHostApplicationBuilder builder, string signal)
     {
-        // Hack: Remove trailing whitespace from the environment variable, added in Bicep to workaround issue #157.
-        var managedIdentityClientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")!.Trim();
-        var credentialOptions = new DefaultAzureCredentialOptions { ManagedIdentityClientId = managedIdentityClientId };
-        return new DefaultAzureCredential(credentialOptions);
+        return options =>
+        {
+            var endpoint = builder.Configuration[$"Cockpit:{signal}OtlpEndpoint"];
+            if (string.IsNullOrWhiteSpace(endpoint))
+            {
+                return;
+            }
+
+            var token = builder.Configuration["Cockpit:Token"];
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException(
+                    $"Cockpit:{signal}OtlpEndpoint is configured but Cockpit:Token is missing — the exporter cannot authenticate its telemetry pushes."
+                );
+            }
+
+            options.Endpoint = new Uri(endpoint);
+            options.Protocol = OtlpExportProtocol.HttpProtobuf;
+            options.Headers = $"X-TOKEN={token}";
+        };
     }
 
     extension(IHostApplicationBuilder builder)
@@ -71,10 +91,13 @@ public static class SharedInfrastructureConfiguration
             where T : DbContext
         {
             builder
-                .AddAzureKeyVaultConfiguration()
                 .ConfigureDatabaseContext<T>(connectionName)
                 .AddDefaultBlobStorage()
                 .AddSharedTelemetry();
+
+            // Deployed workloads read their secrets from Scaleway Secret Manager (added last so
+            // they override chart placeholders); a no-op in local development and tests.
+            builder.Configuration.AddScalewaySecretManager(TimeSpan.FromMinutes(5));
 
             builder.Services
                 .ConfigureHttpClientDefaults(http =>
@@ -101,19 +124,20 @@ public static class SharedInfrastructureConfiguration
             return builder;
         }
 
-        // Wires OpenTelemetry tracing/logging/metrics, the Azure Monitor exporter, and Application
-        // Insights without requiring a DbContext. AppGateway and other database-less hosts should call
-        // this directly; AddSharedInfrastructure<T> calls it as part of the full bundle.
+        // Wires OpenTelemetry tracing/logging/metrics with the OTLP exporter (collected by the
+        // in-cluster Aspire dashboard on staging and Cockpit in production) without requiring a
+        // DbContext. AppGateway and other database-less hosts should call this directly;
+        // AddSharedInfrastructure<T> calls it as part of the full bundle.
         public IHostApplicationBuilder AddSharedTelemetry()
         {
             builder
                 .AddConfigureOpenTelemetry()
                 .AddOpenTelemetryExporters();
 
-            // Register service.version AFTER UseAzureMonitor so it wins the resource merge against
-            // the Azure Container Apps detector, which otherwise sets service.version to the revision
-            // name. The deployment.* tags travel as activity tags via DeploymentTagsProcessor since
-            // Azure Monitor only surfaces a fixed set of resource attributes on AppRequests.
+            // Database-less hosts (AppGateway) fetch their secrets (e.g. the token signing key) the
+            // same way; the source deduplicates against the AddSharedInfrastructure call.
+            builder.Configuration.AddScalewaySecretManager(TimeSpan.FromMinutes(5));
+
             if (ServiceVersion is not null)
             {
                 builder.Services.AddOpenTelemetry().ConfigureResource(resource =>
@@ -121,113 +145,85 @@ public static class SharedInfrastructureConfiguration
                 );
             }
 
-            builder.Services.AddApplicationInsightsTelemetry();
-
             return builder;
         }
     }
 
     extension(IHostApplicationBuilder builder)
     {
-        private IHostApplicationBuilder AddAzureKeyVaultConfiguration()
-        {
-            if (IsRunningInAzure)
-            {
-                var keyVaultUri = new Uri(Environment.GetEnvironmentVariable("KEYVAULT_URL")!);
-                var secretClient = new SecretClient(keyVaultUri, DefaultAzureCredential);
-
-                builder.Configuration.AddAzureKeyVault(secretClient, new AzureKeyVaultConfigurationOptions
-                    {
-                        Manager = new KeyVaultSecretManager(),
-                        ReloadInterval = TimeSpan.FromMinutes(1)
-                    }
-                );
-            }
-
-            return builder;
-        }
-
         private IHostApplicationBuilder ConfigureDatabaseContext<T>(string connectionName)
             where T : DbContext
         {
-            var connectionString = IsRunningInAzure
-                ? Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
-                : builder.Configuration.GetConnectionString(connectionName);
+            // The managed database connection string arrives through configuration: the Aspire
+            // AppHost in local development, a Kubernetes secret when published — overridden at
+            // runtime by the Scaleway Secret Manager provider. Resolved per context creation
+            // instead of being captured here: registration happens before the Secret Manager
+            // source is added, and capturing eagerly would also defeat its refresh timer.
+            builder.Services.AddDbContext<T>((serviceProvider, options) =>
+                {
+                    var connectionString = serviceProvider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
+                                           ?? throw new InvalidOperationException(
+                                               $"The connection string '{connectionName}' is required but was not configured."
+                                           );
 
-            if (IsRunningInAzure)
-            {
-                var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-                dataSourceBuilder.UsePeriodicPasswordProvider(async (_, cancellationToken) =>
-                    {
-                        var token = await DefaultAzureCredential.GetTokenAsync(new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]), cancellationToken);
-                        return token.Token;
-                    }, TimeSpan.FromMinutes(30), TimeSpan.FromSeconds(5)
-                );
-                var dataSource = dataSourceBuilder.Build();
-                builder.Services.AddSingleton(dataSource);
-                builder.Services.AddDbContext<T>(options =>
-                    options.UseNpgsql(dataSource, o => o.MigrationsHistoryTable("__ef_migrations_history")).UseSnakeCaseNamingConvention()
-                );
-            }
-            else
-            {
-                builder.Services.AddDbContext<T>(options =>
-                    options.UseNpgsql(connectionString, o => o.MigrationsHistoryTable("__ef_migrations_history")).UseSnakeCaseNamingConvention()
-                );
-            }
+                    options.UseNpgsql(connectionString, o => o.MigrationsHistoryTable("__ef_migrations_history"))
+                        .UseSnakeCaseNamingConvention();
+                }
+            );
 
             return builder;
         }
 
         private IHostApplicationBuilder AddDefaultBlobStorage()
         {
-            // Register the default storage account for BlobStorage
-            if (IsRunningInAzure)
-            {
-                var defaultBlobStorageUri = new Uri(Environment.GetEnvironmentVariable("BLOB_STORAGE_URL")!);
-                builder.Services.AddSingleton<IBlobStorageClient>(sp =>
-                    new BlobStorageClient(new BlobServiceClient(defaultBlobStorageUri, DefaultAzureCredential), sp.GetRequiredService<TimeProvider>())
-                );
-            }
-            else
-            {
-                var connectionString = builder.Configuration.GetConnectionString("blob-storage");
-                builder.Services.AddSingleton<IBlobStorageClient>(sp =>
-                    new BlobStorageClient(new BlobServiceClient(connectionString), sp.GetRequiredService<TimeProvider>())
-                );
-            }
+            IHostApplicationBuilder.RegisterS3BlobStorage(builder.Services);
 
             return builder;
         }
 
         /// <summary>
-        ///     Register different storage accounts for BlobStorage using .NET Keyed services, when a service needs to access
-        ///     multiple storage accounts.
+        ///     Register additional S3 storage accounts for BlobStorage using .NET Keyed services, when a
+        ///     service needs to access multiple storage accounts (e.g. the back-office blob proxy).
         /// </summary>
-        public IHostApplicationBuilder AddNamedBlobStorages((string ConnectionName, string EnvironmentVariable)?[] connections)
+        public IHostApplicationBuilder AddNamedBlobStorages(params string[] connectionNames)
         {
-            if (IsRunningInAzure)
+            foreach (var connectionName in connectionNames)
             {
-                foreach (var connection in connections)
-                {
-                    var storageEndpointUri = new Uri(Environment.GetEnvironmentVariable(connection!.Value.EnvironmentVariable)!);
-                    builder.Services.AddKeyedSingleton<IBlobStorageClient>(connection.Value.ConnectionName,
-                        (sp, _) => new BlobStorageClient(new BlobServiceClient(storageEndpointUri, DefaultAzureCredential), sp.GetRequiredService<TimeProvider>())
-                    );
-                }
-            }
-            else
-            {
-                var connectionString = builder.Configuration.GetConnectionString("blob-storage");
-                foreach (var connection in connections)
-                {
-                    builder.Services.AddKeyedSingleton<IBlobStorageClient>(connection!.Value.ConnectionName,
-                        (sp, _) => new BlobStorageClient(new BlobServiceClient(connectionString), sp.GetRequiredService<TimeProvider>())
-                    );
-                }
+                IHostApplicationBuilder.RegisterS3BlobStorage(builder.Services, connectionName);
             }
 
             return builder;
+        }
+
+        private static void RegisterS3BlobStorage(IServiceCollection services, string? connectionName = null)
+        {
+            // S3-compatible object storage (Scaleway Object Storage in production, MinIO in local
+            // development) configured from the `blob-storage` connection string. The key registers
+            // the same client additionally under a named key for consumers of multiple accounts.
+            services.TryAddSingleton<IBlobStorageClient>(IHostApplicationBuilder.CreateBlobStorageClient);
+            if (connectionName is not null)
+            {
+                services.AddKeyedSingleton<IBlobStorageClient>(connectionName, (sp, _) => IHostApplicationBuilder.CreateBlobStorageClient(sp));
+            }
+        }
+
+        private static S3BlobStorageClient CreateBlobStorageClient(IServiceProvider serviceProvider)
+        {
+            var connectionString = serviceProvider.GetRequiredService<IConfiguration>().GetConnectionString("blob-storage")
+                                   ?? throw new InvalidOperationException("The blob-storage connection string is required.");
+
+            var options = S3BlobStorageOptions.Parse(connectionString);
+            var s3Client = new AmazonS3Client(
+                new BasicAWSCredentials(options.AccessKey, options.SecretKey),
+                new AmazonS3Config
+                {
+                    ServiceURL = options.ServiceUrl,
+                    ForcePathStyle = options.ForcePathStyle,
+                    AuthenticationRegion = options.Region
+                }
+            );
+
+            return new S3BlobStorageClient(s3Client, options, serviceProvider.GetRequiredService<TimeProvider>());
         }
 
         private IHostApplicationBuilder AddConfigureOpenTelemetry()
@@ -299,54 +295,24 @@ public static class SharedInfrastructureConfiguration
 
         private IHostApplicationBuilder AddOpenTelemetryExporters()
         {
-            var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+            // Deployed environments wire the Cockpit endpoints instead of the standard variable; a
+            // signal without a Cockpit endpoint falls back to OTEL_EXPORTER_OTLP_* defaults.
+            var cockpitEndpoints = new[] { "Logs", "Metrics", "Traces" }
+                .Select(signal => builder.Configuration[$"Cockpit:{signal}OtlpEndpoint"])
+                .Any(endpoint => !string.IsNullOrWhiteSpace(endpoint));
+
+            var useOtlpExporter = cockpitEndpoints
+                                  || !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 
             if (useOtlpExporter)
             {
                 builder.Services
-                    .Configure<OpenTelemetryLoggerOptions>(logging => logging.AddOtlpExporter())
-                    .ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddOtlpExporter())
-                    .ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddOtlpExporter());
-            }
-
-            // Azure Monitor exports to Application Insights only from Azure-hosted instances. Outside Azure the
-            // connection string is a localhost placeholder, so the exporter and Live Metrics have nothing real to
-            // reach; their background flush then blocks host shutdown (e.g. WebApplicationFactory teardown in
-            // integration tests). Only wire it when running in Azure.
-            if (IsRunningInAzure)
-            {
-                builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
-                    options.ConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
-                );
+                    .Configure<OpenTelemetryLoggerOptions>(logging => logging.AddOtlpExporter(CockpitOtlpOptions(builder, "Logs")))
+                    .ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddOtlpExporter(CockpitOtlpOptions(builder, "Metrics")))
+                    .ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddOtlpExporter(CockpitOtlpOptions(builder, "Traces")));
             }
 
             return builder;
-        }
-    }
-
-    extension(IServiceCollection services)
-    {
-        private IServiceCollection AddApplicationInsightsTelemetry()
-        {
-            var applicationInsightsServiceOptions = new ApplicationInsightsServiceOptions
-            {
-                EnableQuickPulseMetricStream = false,
-                EnableRequestTrackingTelemetryModule = false,
-                EnableDependencyTrackingTelemetryModule = false,
-                RequestCollectionOptions = { TrackExceptions = false }
-            };
-
-            services
-                .AddApplicationInsightsTelemetry(applicationInsightsServiceOptions)
-                .AddApplicationInsightsTelemetryProcessor<EndpointTelemetryFilter>()
-                .AddSingleton<ITelemetryInitializer, ApplicationInsightsTelemetryInitializer>();
-
-            if (!IsRunningInAzure)
-            {
-                services.AddApplicationInsightsTelemetryProcessor<DevelopmentApplicationInsightsLogger>();
-            }
-
-            return services;
         }
     }
 }
