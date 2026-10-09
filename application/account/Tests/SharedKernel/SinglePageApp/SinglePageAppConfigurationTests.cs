@@ -7,7 +7,7 @@ namespace Account.Tests.SharedKernel.SinglePageApp;
 public sealed class SinglePageAppConfigurationTests
 {
     [Fact]
-    public void Constructor_WhenRunningInAzure_ShouldNotThrowAndShouldLeavePublicDirectoryNull()
+    public void Constructor_WhenDeployed_ShouldNotThrowAndShouldLeavePublicDirectoryNull()
     {
         // Act
         var act = () => new SinglePageAppConfiguration(

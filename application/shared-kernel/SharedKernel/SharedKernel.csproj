@@ -12,58 +12,56 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Azure.Storage.Blobs"/>
-        <PackageReference Include="Azure.Communication.Email"/>
-        <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets"/>
-        <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore"/>
-        <PackageReference Include="Azure.Security.KeyVault.Keys"/>
-        <PackageReference Include="Azure.Security.KeyVault.Secrets"/>
-        <PackageReference Include="FluentValidation.DependencyInjectionExtensions"/>
-        <PackageReference Include="Scriban"/>
-        <PackageReference Include="Humanizer.Core"/>
-        <PackageReference Include="IdGen"/>
-        <PackageReference Include="JetBrains.Annotations"/>
-        <PackageReference Include="Mapster"/>
-        <PackageReference Include="MediatR"/>
-        <PackageReference Include="MediatR.Contracts"/>
-        <PackageReference Include="Microsoft.ApplicationInsights"/>
-        <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore"/>
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore"/>
-        <PackageReference Include="EFCore.NamingConventions"/>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL"/>
+        <ProjectReference Include="..\Scaleway.Sdk\Scaleway.Sdk.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+
+        <PackageReference Include="AWSSDK.S3" />
+        <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+        <PackageReference Include="Scriban" />
+        <PackageReference Include="Humanizer.Core" />
+        <PackageReference Include="IdGen" />
+        <PackageReference Include="JetBrains.Annotations" />
+        <PackageReference Include="Mapster" />
+        <PackageReference Include="MediatR" />
+        <PackageReference Include="MediatR.Contracts" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="EFCore.NamingConventions" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
-        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery"/>
-        <PackageReference Include="NSwag.AspNetCore"/>
+        <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
+        <PackageReference Include="NSwag.AspNetCore" />
         <PackageReference Include="NSwag.MSBuild">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentFiles; analyzers; buildTransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="NUlid"/>
-        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"/>
-        <PackageReference Include="OpenTelemetry.Extensions.Hosting"/>
-        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore"/>
-        <PackageReference Include="OpenTelemetry.Instrumentation.GrpcNetClient"/>
-        <PackageReference Include="OpenTelemetry.Instrumentation.Http"/>
-        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"/>
-        <PackageReference Include="Scrutor"/>
+        <PackageReference Include="NUlid" />
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.GrpcNetClient" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+        <PackageReference Include="Scrutor" />
     </ItemGroup>
 
     <ItemGroup>
-        <EmbeddedResource Include="..\..\platform-settings.jsonc" LogicalName="platform-settings.jsonc"/>
+        <EmbeddedResource Include="..\..\platform-settings.jsonc" LogicalName="platform-settings.jsonc" />
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="SharedKernel.Tests"/>
-        <InternalsVisibleTo Include="Account.Tests"/>
+        <InternalsVisibleTo Include="SharedKernel.Tests" />
+        <InternalsVisibleTo Include="Account.Tests" />
     </ItemGroup>
 
 </Project>

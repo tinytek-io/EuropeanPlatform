@@ -89,9 +89,9 @@ public static class PublicHostTelemetryEnricher
         var publicScheme = request.Headers["X-Forwarded-Proto"].ToString();
         if (string.IsNullOrEmpty(publicScheme))
         {
-            // ACA terminates TLS at the envoy so Kestrel-facing scheme is http; default to https
-            // when running in Azure rather than mislabelling the public URL.
-            publicScheme = SharedInfrastructureConfiguration.IsRunningInAzure ? "https" : request.Scheme;
+            // The cluster gateway terminates TLS so the Kestrel-facing scheme is http; default
+            // to https when deployed rather than mislabelling the public URL.
+            publicScheme = SharedInfrastructureConfiguration.IsRunningInCloud ? "https" : request.Scheme;
         }
 
         publicHost = StripDefaultPort(publicHost, publicScheme);

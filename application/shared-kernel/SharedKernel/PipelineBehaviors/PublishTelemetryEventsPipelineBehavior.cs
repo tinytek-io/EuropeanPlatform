@@ -1,4 +1,3 @@
-using Microsoft.ApplicationInsights;
 using SharedKernel.Cqrs;
 using SharedKernel.Telemetry;
 
@@ -6,7 +5,6 @@ namespace SharedKernel.PipelineBehaviors;
 
 public sealed class PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>(
     ITelemetryEventsCollector telemetryEventsCollector,
-    TelemetryClient telemetryClient,
     ConcurrentCommandCounter concurrentCommandCounter,
     ILogger<PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>> logger
 ) : IPipelineBehavior<TRequest, TResponse> where TRequest : ICommand where TResponse : ResultBase
@@ -21,7 +19,6 @@ public sealed class PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>(
             {
                 var telemetryEvent = telemetryEventsCollector.Dequeue();
 
-                telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
                 logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
             }
         }
