@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace SharedKernel.Authentication.BackOfficeIdentity;
@@ -43,12 +44,14 @@ public sealed class BackOfficeIdentityHandler(
         return Task.CompletedTask;
     }
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var headerName = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalNameHeader].ToString();
         if (string.IsNullOrWhiteSpace(headerName))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            // No Easy Auth-style headers: fall back to the OIDC session cookie (registered only
+            // when a staff identity provider is configured). Absent scheme or cookie -> NoResult.
+            return await TryAuthenticateOidcCookieAsync();
         }
 
         var oid = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalIdHeader].ToString();
@@ -58,7 +61,29 @@ public sealed class BackOfficeIdentityHandler(
         var claims = BuildClaims(headerName, oid, principal);
         var identity = new ClaimsIdentity(claims, BackOfficeIdentityDefaults.AuthenticationScheme, ClaimTypes.Name, ClaimTypes.Role);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return AuthenticateResult.Success(ticket);
+    }
+
+    private async Task<AuthenticateResult> TryAuthenticateOidcCookieAsync()
+    {
+        // RequestServices is null in bare unit-test contexts (the nullable contract claims
+        // otherwise): nothing to fall back to there.
+        var services = (IServiceProvider?)Context.RequestServices;
+        if (services is null)
+        {
+            return AuthenticateResult.NoResult();
+        }
+
+        var schemeProvider = services.GetRequiredService<IAuthenticationSchemeProvider>();
+        if (await schemeProvider.GetSchemeAsync(BackOfficeOidcDefaults.CookieScheme) is null)
+        {
+            return AuthenticateResult.NoResult();
+        }
+
+        var result = await Context.AuthenticateAsync(BackOfficeOidcDefaults.CookieScheme);
+        return result.Succeeded
+            ? AuthenticateResult.Success(new AuthenticationTicket(result.Principal!, Scheme.Name))
+            : AuthenticateResult.NoResult();
     }
 
     // The PrincipalNameHeader carries the UPN/email in real Easy Auth. The friendly display name
