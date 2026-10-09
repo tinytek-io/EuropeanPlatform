@@ -31,6 +31,12 @@ builder.Services
     .AddAccountServices()
     .AddBackOfficeDevStaticProxy();
 
+// Back-office staff identity: a configured OIDC provider (BackOffice:Oidc) takes precedence;
+// the mock identity selector applies only when no provider exists (local development and
+// environments that explicitly opt in through MockEasyAuth:Enabled). Registered before Build.
+var backOfficeOidcConfigured = builder.Configuration.IsBackOfficeOidcConfigured();
+builder.Services.AddBackOfficeOidcIdentity(builder.Configuration);
+
 var app = builder.Build();
 
 // At runtime AppHost surfaces both hostnames. At build time (dotnet-getdocument invokes Program.Main
@@ -55,9 +61,10 @@ var backOfficeCdnUrl = Environment.GetEnvironmentVariable("BACK_OFFICE_CDN_URL")
 // The /login picker belongs to the MockEasyAuth identity selector: available during local
 // development and on staging where MockEasyAuth:Enabled explicitly opts in, blocked everywhere
 // else (removed from the auth-gate exemption list and short-circuited to 401 below to reject
-// even authenticated requests).
-var mockEasyAuthEnabled = app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>()
-                          || SharedInfrastructureConfiguration.IsRunningInCloud is false;
+// even authenticated requests). Superseded whenever an OIDC provider is configured above.
+var mockEasyAuthEnabled = !backOfficeOidcConfigured
+                          && (app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>()
+                              || SharedInfrastructureConfiguration.IsRunningInCloud is false);
 
 // Runtime feature flags injected into the SPA HTML so the React shell can branch on capability without
 // a separate config endpoint. Both flags must be wired into BOTH host-scoped SPAs because each one renders
@@ -72,6 +79,11 @@ var runtimeEnvironment = new Dictionary<string, string>
 };
 
 string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled ? ["/login"] : [];
+
+if (backOfficeOidcConfigured)
+{
+    app.MapBackOfficeOidcEndpoints();
+}
 
 if (!mockEasyAuthEnabled)
 {
