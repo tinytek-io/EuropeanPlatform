@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -52,7 +51,7 @@ public static class BackOfficeOidcExtensions
 
         services
             .AddAuthentication()
-            .AddCookie(BackOfficeOidcDefaults.CookieScheme, BackOfficeOidcExtensions.ConfigureBackOfficeOidcSessionCookie)
+            .AddCookie(BackOfficeOidcDefaults.CookieScheme, ConfigureBackOfficeOidcSessionCookie)
             .AddOpenIdConnect(BackOfficeOidcDefaults.OidcScheme, oidc =>
                 {
                     oidc.Authority = options.Authority;
