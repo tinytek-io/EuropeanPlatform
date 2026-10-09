@@ -2,12 +2,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Card, CardDescription, CardTitle } from "@repo/ui/components/Card";
 import { Link } from "@repo/ui/components/Link";
-import { ExternalLinkIcon } from "lucide-react";
-
-import azureActivityLog from "@/shared/images/icons/azure-activity-log.svg";
-import azureCompliance from "@/shared/images/icons/azure-compliance.svg";
-import azurePolicy from "@/shared/images/icons/azure-policy.svg";
-import azureSecurity from "@/shared/images/icons/azure-security.svg";
+import { FileTextIcon, Globe2Icon, LandmarkIcon, ExternalLinkIcon } from "lucide-react";
 
 export function ComplianceResourcesSection() {
   return (
@@ -15,88 +10,67 @@ export function ComplianceResourcesSection() {
       <div className="mx-auto max-w-[64rem]">
         <div className="mb-12 text-center">
           <h2 className="marketing">
-            <Trans>Microsoft compliance resources</Trans>
+            <Trans>Compliance resources</Trans>
           </h2>
           <p className="text-muted-foreground">
-            <Trans>
-              For detailed compliance certifications and audit reports, visit Microsoft's official resources.
-            </Trans>
+            <Trans>For detailed compliance documents and regulations, follow the official resources below.</Trans>
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Link
-            href="https://www.microsoft.com/en-us/trust-center"
+            href="https://www.scaleway.com/en/contracts/"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={t`Trust Center (opens in new window)`}
+            aria-label={t`Cloud contracts and DPA (opens in new window)`}
             underline={false}
             className="block min-w-0 rounded-xl whitespace-normal outline-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <Card className="h-full gap-3 px-6 py-5 transition-colors hover:bg-hover-background">
-              <img src={azureSecurity} alt="" className="size-10" />
+              <FileTextIcon className="size-10" />
               <CardTitle className="flex items-center gap-2">
-                <Trans>Trust Center</Trans>
+                <Trans>Cloud contracts and DPA</Trans>
                 <ExternalLinkIcon className="size-4 text-muted-foreground" />
               </CardTitle>
               <CardDescription>
-                <Trans>Security, privacy, and compliance information</Trans>
+                <Trans>General terms, Data Processing Agreement, and technical and organizational measures</Trans>
               </CardDescription>
             </Card>
           </Link>
           <Link
-            href="https://learn.microsoft.com/en-us/azure/compliance/"
+            href="https://commission.europa.eu/law/law-topic/data-protection_en"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={t`Azure Compliance (opens in new window)`}
+            aria-label={t`EU data protection (opens in new window)`}
             underline={false}
             className="block min-w-0 rounded-xl whitespace-normal outline-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <Card className="h-full gap-3 px-6 py-5 transition-colors hover:bg-hover-background">
-              <img src={azureCompliance} alt="" className="size-10" />
+              <LandmarkIcon className="size-10" />
               <CardTitle className="flex items-center gap-2">
-                <Trans>Azure Compliance</Trans>
+                <Trans>EU data protection</Trans>
                 <ExternalLinkIcon className="size-4 text-muted-foreground" />
               </CardTitle>
               <CardDescription>
-                <Trans>Regulatory standards and certifications</Trans>
+                <Trans>The European Commission's overview of GDPR rules and how they protect your data</Trans>
               </CardDescription>
             </Card>
           </Link>
           <Link
-            href="https://servicetrust.microsoft.com/"
+            href="https://eur-lex.europa.eu/eli/reg/2016/679/oj"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={t`SOC and ISO Reports (opens in new window)`}
+            aria-label={t`GDPR regulation text (opens in new window)`}
             underline={false}
             className="block min-w-0 rounded-xl whitespace-normal outline-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <Card className="h-full gap-3 px-6 py-5 transition-colors hover:bg-hover-background">
-              <img src={azureActivityLog} alt="" className="size-10" />
+              <Globe2Icon className="size-10" />
               <CardTitle className="flex items-center gap-2">
-                <Trans>SOC and ISO Reports</Trans>
+                <Trans>GDPR regulation text</Trans>
                 <ExternalLinkIcon className="size-4 text-muted-foreground" />
               </CardTitle>
               <CardDescription>
-                <Trans>Audit reports and assessments</Trans>
-              </CardDescription>
-            </Card>
-          </Link>
-          <Link
-            href="https://www.microsoft.com/licensing/docs/view/Microsoft-Products-and-Services-Data-Protection-Addendum-DPA"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t`Microsoft DPA (opens in new window)`}
-            underline={false}
-            className="block min-w-0 rounded-xl whitespace-normal outline-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <Card className="h-full gap-3 px-6 py-5 transition-colors hover:bg-hover-background">
-              <img src={azurePolicy} alt="" className="size-10" />
-              <CardTitle className="flex items-center gap-2">
-                <Trans>Microsoft DPA</Trans>
-                <ExternalLinkIcon className="size-4 text-muted-foreground" />
-              </CardTitle>
-              <CardDescription>
-                <Trans>Data protection addendum</Trans>
+                <Trans>The official General Data Protection Regulation as published by the European Union</Trans>
               </CardDescription>
             </Card>
           </Link>

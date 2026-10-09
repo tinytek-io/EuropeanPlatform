@@ -68,9 +68,6 @@ msgstr "10 users"
 msgid "100 GB storage"
 msgstr "100 GB storage"
 
-msgid "100% Security Score"
-msgstr "100% Security Score"
-
 msgid "5 users"
 msgstr "5 users"
 
@@ -131,9 +128,6 @@ msgstr "Account suspended"
 msgid "Account switched"
 msgstr "Account switched"
 
-msgid "Achieved in Microsoft Defender for Cloud following Azure best practices"
-msgstr "Achieved in Microsoft Defender for Cloud following Azure best practices"
-
 msgid "Activating subscription"
 msgstr "Activating subscription"
 
@@ -175,6 +169,9 @@ msgstr "Admin"
 
 msgid "Advanced analytics"
 msgstr "Advanced analytics"
+
+msgid "All traffic passes through a managed web application firewall, with TLS everywhere"
+msgstr "All traffic passes through a managed web application firewall, with TLS everywhere"
 
 msgid "All users"
 msgstr "All users"
@@ -229,9 +226,6 @@ msgstr "Are you sure you want to permanently delete <0>{userDisplayName}</0>?"
 msgid "Are you sure you want to revoke this session? The device will be logged out and will need to log in again."
 msgstr "Are you sure you want to revoke this session? The device will be logged out and will need to log in again."
 
-msgid "Audit reports and assessments"
-msgstr "Audit reports and assessments"
-
 msgid "Authentication failed"
 msgstr "Authentication failed"
 
@@ -243,12 +237,6 @@ msgstr "Authentication is shared across all tabs. To use multiple accounts simul
 
 msgid "Authentication was cancelled or denied. Please try again if you want to continue."
 msgstr "Authentication was cancelled or denied. Please try again if you want to continue."
-
-msgid "Azure Compliance"
-msgstr "Azure Compliance"
-
-msgid "Azure Compliance (opens in new window)"
-msgstr "Azure Compliance (opens in new window)"
 
 msgid "Back to app"
 msgstr "Back to app"
@@ -391,11 +379,20 @@ msgstr "Close"
 msgid "Close user profile"
 msgstr "Close user profile"
 
+msgid "Cloud contracts and DPA"
+msgstr "Cloud contracts and DPA"
+
+msgid "Cloud contracts and DPA (opens in new window)"
+msgstr "Cloud contracts and DPA (opens in new window)"
+
 msgid "Complete your payment to activate your subscription."
 msgstr "Complete your payment to activate your subscription."
 
 msgid "Compliance"
 msgstr "Compliance"
+
+msgid "Compliance resources"
+msgstr "Compliance resources"
 
 msgid "Confirm downgrade"
 msgstr "Confirm downgrade"
@@ -454,9 +451,6 @@ msgstr "Dashboard"
 msgid "Data Processing Agreement"
 msgstr "Data Processing Agreement"
 
-msgid "Data protection addendum"
-msgstr "Data protection addendum"
-
 msgid "Data residency"
 msgstr "Data residency"
 
@@ -505,6 +499,9 @@ msgstr "Deleted users loading"
 
 msgid "Deleted users will appear here for recovery"
 msgstr "Deleted users will appear here for recovery"
+
+msgid "Deployments run through a scripted pipeline with scoped, revocable credentials — no passwords in the codebase"
+msgstr "Deployments run through a scripted pipeline with scoped, revocable credentials — no passwords in the codebase"
 
 msgid "Desktop"
 msgstr "Desktop"
@@ -575,14 +572,29 @@ msgstr "Enter your new payment details below."
 msgid "Enter your verification code"
 msgstr "Enter your verification code"
 
-msgid "Enterprise-grade Azure infrastructure"
-msgstr "Enterprise-grade Azure infrastructure"
+msgid "Enterprise-grade European cloud infrastructure"
+msgstr "Enterprise-grade European cloud infrastructure"
 
 msgid "Environment isolation"
 msgstr "Environment isolation"
 
 msgid "Estimated next bill: {targetFormattedPrice}"
 msgstr "Estimated next bill: {targetFormattedPrice}"
+
+msgid "EU data protection"
+msgstr "EU data protection"
+
+msgid "EU data protection (opens in new window)"
+msgstr "EU data protection (opens in new window)"
+
+msgid "EU data residency"
+msgstr "EU data residency"
+
+msgid "EU Data Residency"
+msgstr "EU Data Residency"
+
+msgid "Every service runs with its own scoped credentials, and only trusted personnel can access data"
+msgstr "Every service runs with its own scoped credentials, and only trusted personnel can access data"
 
 msgid "Excl. tax"
 msgstr "Excl. tax"
@@ -617,8 +629,8 @@ msgstr "Filters"
 msgid "First name"
 msgstr "First name"
 
-msgid "For detailed compliance certifications and audit reports, visit Microsoft's official resources."
-msgstr "For detailed compliance certifications and audit reports, visit Microsoft's official resources."
+msgid "For detailed compliance documents and regulations, follow the official resources below."
+msgstr "For detailed compliance documents and regulations, follow the official resources below."
 
 msgid "Found an alternative"
 msgstr "Found an alternative"
@@ -644,11 +656,17 @@ msgstr "GDPR compliant"
 msgid "GDPR Compliant"
 msgstr "GDPR Compliant"
 
+msgid "GDPR regulation text"
+msgstr "GDPR regulation text"
+
+msgid "GDPR regulation text (opens in new window)"
+msgstr "GDPR regulation text (opens in new window)"
+
+msgid "General terms, Data Processing Agreement, and technical and organizational measures"
+msgstr "General terms, Data Processing Agreement, and technical and organizational measures"
+
 msgid "GitHub"
 msgstr "GitHub"
-
-msgid "GitHub deploys directly to Azure without passwords or API keys"
-msgstr "GitHub deploys directly to Azure without passwords or API keys"
 
 msgid "Go to account settings"
 msgstr "Go to account settings"
@@ -737,6 +755,9 @@ msgstr "Last name"
 msgid "Last seen"
 msgstr "Last seen"
 
+msgid "Least-privilege access"
+msgstr "Least-privilege access"
+
 msgid "Leave"
 msgstr "Leave"
 
@@ -800,29 +821,11 @@ msgstr "Manage your subscription plan."
 msgid "Manage your users and permissions here."
 msgstr "Manage your users and permissions here."
 
-msgid "Managed identities"
-msgstr "Managed identities"
+msgid "Managed Kubernetes and managed PostgreSQL on European cloud infrastructure."
+msgstr "Managed Kubernetes and managed PostgreSQL on European cloud infrastructure."
 
 msgid "Member"
 msgstr "Member"
-
-msgid "Microsoft Azure"
-msgstr "Microsoft Azure"
-
-msgid "Microsoft Azure Platform-as-a-Service (PaaS) with enterprise-grade reliability."
-msgstr "Microsoft Azure Platform-as-a-Service (PaaS) with enterprise-grade reliability."
-
-msgid "Microsoft compliance resources"
-msgstr "Microsoft compliance resources"
-
-msgid "Microsoft DPA"
-msgstr "Microsoft DPA"
-
-msgid "Microsoft DPA (opens in new window)"
-msgstr "Microsoft DPA (opens in new window)"
-
-msgid "Microsoft patches and secures all PaaS infrastructure automatically"
-msgstr "Microsoft patches and secures all PaaS infrastructure automatically"
 
 msgid "Mobile"
 msgstr "Mobile"
@@ -881,9 +884,6 @@ msgstr "Only account owners can modify the account name"
 msgid "Only owners can change user roles"
 msgstr "Only owners can change user roles"
 
-msgid "Only trusted personnel access data through Azure AD authentication"
-msgstr "Only trusted personnel access data through Azure AD authentication"
-
 msgid "or"
 msgstr "or"
 
@@ -904,9 +904,6 @@ msgstr "Page not found"
 
 msgid "Paid"
 msgstr "Paid"
-
-msgid "Passwordless deployments"
-msgstr "Passwordless deployments"
 
 msgid "Pay"
 msgstr "Pay"
@@ -1044,9 +1041,6 @@ msgstr "Reference ID: {id}"
 msgid "Refunded"
 msgstr "Refunded"
 
-msgid "Regulatory standards and certifications"
-msgstr "Regulatory standards and certifications"
-
 msgid "Reload"
 msgstr "Reload"
 
@@ -1099,11 +1093,11 @@ msgstr "Saving..."
 msgid "Screenshots of the dashboard project with desktop and mobile versions"
 msgstr "Screenshots of the dashboard project with desktop and mobile versions"
 
+msgid "Scripted deployments"
+msgstr "Scripted deployments"
+
 msgid "Search"
 msgstr "Search"
-
-msgid "Security, privacy, and compliance information"
-msgstr "Security, privacy, and compliance information"
 
 #. placeholder {0}: user.firstName
 #. placeholder {1}: user.lastName
@@ -1175,12 +1169,6 @@ msgstr "SLA"
 
 msgid "Small"
 msgstr "Small"
-
-msgid "SOC and ISO Reports"
-msgstr "SOC and ISO Reports"
-
-msgid "SOC and ISO Reports (opens in new window)"
-msgstr "SOC and ISO Reports (opens in new window)"
 
 msgid "Something went wrong"
 msgstr "Something went wrong"
@@ -1264,8 +1252,17 @@ msgstr "The agreement governing your use of our Service, including acceptable us
 msgid "The authentication request was invalid. Please try again."
 msgstr "The authentication request was invalid. Please try again."
 
+msgid "The European Commission's overview of GDPR rules and how they protect your data"
+msgstr "The European Commission's overview of GDPR rules and how they protect your data"
+
+msgid "The managed platform patches and secures the underlying infrastructure automatically"
+msgstr "The managed platform patches and secures the underlying infrastructure automatically"
+
 msgid "The name of your account, shown to users and in email notifications"
 msgstr "The name of your account, shown to users and in email notifications"
+
+msgid "The official General Data Protection Regulation as published by the European Union"
+msgstr "The official General Data Protection Regulation as published by the European Union"
 
 msgid "The page you are looking for does not exist or was moved."
 msgstr "The page you are looking for does not exist or was moved."
@@ -1311,12 +1308,6 @@ msgstr "Total users"
 
 msgid "Transparency, security, and privacy are at the core of how we operate. Review our policies and learn how we protect your data."
 msgstr "Transparency, security, and privacy are at the core of how we operate. Review our policies and learn how we protect your data."
-
-msgid "Trust Center"
-msgstr "Trust Center"
-
-msgid "Trust Center (opens in new window)"
-msgstr "Trust Center (opens in new window)"
 
 msgid "Try adjusting your search or filters"
 msgstr "Try adjusting your search or filters"
@@ -1469,6 +1460,9 @@ msgstr "View users"
 msgid "We detected a security issue with your login attempt. Please try again."
 msgstr "We detected a security issue with your login attempt. Please try again."
 
+msgid "Web application firewall"
+msgstr "Web application firewall"
+
 msgid "When you accept this invitation, your profile information (name, title, and avatar) from your current account will be copied to the new account."
 msgstr "When you accept this invitation, your profile information (name, title, and avatar) from your current account will be copied to the new account."
 
@@ -1523,8 +1517,8 @@ msgstr "Your cancellation will be reversed and your {planName} subscription will
 msgid "Your changes may take a moment to appear."
 msgstr "Your changes may take a moment to appear."
 
-msgid "Your data stays in the Azure region you select at signup"
-msgstr "Your data stays in the Azure region you select at signup"
+msgid "Your data stays in the European region your environment runs in"
+msgstr "Your data stays in the European region your environment runs in"
 
 msgid "Your downgrade has been scheduled."
 msgstr "Your downgrade has been scheduled."

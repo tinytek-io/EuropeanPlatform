@@ -7,6 +7,7 @@ import {
   DatabaseIcon,
   ExternalLinkIcon,
   FingerprintIcon,
+  Globe2Icon,
   KeyIcon,
   LayersIcon,
   ServerIcon,
@@ -15,16 +16,16 @@ import {
 
 import gdprBadge from "@/shared/images/compliance/gdpr.png";
 
-export function AzureInfrastructureSection() {
+export function CloudInfrastructureSection() {
   return (
     <section className="bg-input-background px-4 py-16">
       <div className="mx-auto max-w-[64rem]">
         <div className="mb-12 text-center">
           <h2 className="marketing">
-            <Trans>Enterprise-grade Azure infrastructure</Trans>
+            <Trans>Enterprise-grade European cloud infrastructure</Trans>
           </h2>
           <p className="text-muted-foreground">
-            <Trans>Microsoft Azure Platform-as-a-Service (PaaS) with enterprise-grade reliability.</Trans>
+            <Trans>Managed Kubernetes and managed PostgreSQL on European cloud infrastructure.</Trans>
           </p>
         </div>
 
@@ -48,17 +49,11 @@ function ComplianceBadges() {
         </span>
       </div>
       <div className="flex flex-col items-center gap-3">
-        <div className="flex size-24 items-center justify-center rounded-full bg-[#0078d4]/10">
-          <svg viewBox="0 0 96 96" className="size-14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <title>Microsoft Azure</title>
-            <path d="M48 12L12 30v36l36 18 36-18V30L48 12z" fill="#0078d4" />
-            <path d="M48 12v36L12 30l36-18z" fill="#50e6ff" />
-            <path d="M48 48v36l36-18V30L48 48z" fill="#0078d4" />
-            <path d="M48 48L12 30v36l36 18V48z" fill="#1490df" />
-          </svg>
+        <div className="flex size-24 items-center justify-center rounded-full bg-primary/10">
+          <Globe2Icon className="size-14 text-primary" aria-label={t`EU data residency`} />
         </div>
         <span className="font-semibold text-foreground">
-          <Trans>Microsoft Azure</Trans>
+          <Trans>EU Data Residency</Trans>
         </span>
       </div>
     </div>
@@ -76,7 +71,7 @@ function SecurityFeaturesGrid() {
           <Trans>Fully managed infrastructure</Trans>
         </CardTitle>
         <CardDescription>
-          <Trans>Microsoft patches and secures all PaaS infrastructure automatically</Trans>
+          <Trans>The managed platform patches and secures the underlying infrastructure automatically</Trans>
         </CardDescription>
       </Card>
       <Card className="px-6 transition-colors hover:bg-hover-background">
@@ -84,10 +79,10 @@ function SecurityFeaturesGrid() {
           <FingerprintIcon className="size-6 text-primary" />
         </div>
         <CardTitle>
-          <Trans>Managed identities</Trans>
+          <Trans>Least-privilege access</Trans>
         </CardTitle>
         <CardDescription>
-          <Trans>Only trusted personnel access data through Azure AD authentication</Trans>
+          <Trans>Every service runs with its own scoped credentials, and only trusted personnel can access data</Trans>
         </CardDescription>
       </Card>
       <Card className="px-6 transition-colors hover:bg-hover-background">
@@ -106,10 +101,13 @@ function SecurityFeaturesGrid() {
           <KeyIcon className="size-6 text-primary" />
         </div>
         <CardTitle>
-          <Trans>Passwordless deployments</Trans>
+          <Trans>Scripted deployments</Trans>
         </CardTitle>
         <CardDescription>
-          <Trans>GitHub deploys directly to Azure without passwords or API keys</Trans>
+          <Trans>
+            Deployments run through a scripted pipeline with scoped, revocable credentials — no passwords in the
+            codebase
+          </Trans>
         </CardDescription>
       </Card>
       <Card className="px-6 transition-colors hover:bg-hover-background">
@@ -120,7 +118,7 @@ function SecurityFeaturesGrid() {
           <Trans>Data residency</Trans>
         </CardTitle>
         <CardDescription>
-          <Trans>Your data stays in the Azure region you select at signup</Trans>
+          <Trans>Your data stays in the European region your environment runs in</Trans>
         </CardDescription>
       </Card>
       <Card className="px-6 transition-colors hover:bg-hover-background">
@@ -128,10 +126,10 @@ function SecurityFeaturesGrid() {
           <ShieldCheckIcon className="size-6 text-primary" />
         </div>
         <CardTitle>
-          <Trans>100% Security Score</Trans>
+          <Trans>Web application firewall</Trans>
         </CardTitle>
         <CardDescription>
-          <Trans>Achieved in Microsoft Defender for Cloud following Azure best practices</Trans>
+          <Trans>All traffic passes through a managed web application firewall, with TLS everywhere</Trans>
         </CardDescription>
       </Card>
     </div>

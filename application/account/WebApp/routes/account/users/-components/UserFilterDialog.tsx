@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { Button } from "@repo/ui/components/Button";
 import { DateRangePicker } from "@repo/ui/components/DateRangePicker";
 import {
