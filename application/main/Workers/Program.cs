@@ -33,4 +33,12 @@ migrationService.ApplyMigrations();
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<MainDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);
 
+// The pre-deploy migration Job runs this image with MIGRATE_ONLY=true: schema + data migrations
+// complete before any new pods roll out (helm pre-upgrade hook). Exit here so the Job finishes
+// successfully instead of starting the hosted services.
+if (Environment.GetEnvironmentVariable("MIGRATE_ONLY") == "true")
+{
+    return;
+}
+
 await host.RunAsync();
