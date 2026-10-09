@@ -1,6 +1,6 @@
 import { Trans } from "@lingui/react/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { useUserInfo } from "@repo/infrastructure/auth/hooks";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { Button } from "@repo/ui/components/Button";
 import { AlertTriangleIcon } from "lucide-react";
 
