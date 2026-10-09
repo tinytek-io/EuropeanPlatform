@@ -1,49 +1,32 @@
-## Cloud Infrastructure
+# Cloud Infrastructure
 
-This folder contains Bash and [Bicep](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview) scripts used by [GitHub Actions](https://github.com/features/actions) to deploy resources to Azure.
+This folder contains the Terraform modules that provision the platform on [Scaleway](https://www.scaleway.com), used by Aspire's publish/deploy pipeline for the application topology.
 
-Bicep is an Infrastructure-as-Code (IaC) language specific to Azure. While Bicep is less mature than Terraform, it is a great choice for Azure-only projects. Unlike Terraform which often is many months behind, Bicep is always up to date with the latest Azure features, and as it matures, it will become the better choice for Azure infrastructure. The tooling is already much better than Terraform, and since Bicep is a typed language, you get intellisense and the compiler will catch many errors while writing the code.
+## Structure
 
-## Getting started
+- `scaleway/bootstrap`: the one-time bootstrap tier — creates the per-environment Scaleway Project (e.g. `pp-stage`), the Object Storage bucket that holds every later module's Terraform state, the Container Registry namespace, and the deploy pipeline's IAM application, policy, and API key. Runs with local state by design; see its [README](scaleway/README.md).
+- `scaleway/environment`: the environment stack — VPC, managed PostgreSQL (one database per self-contained system), public-read Object Storage buckets for avatars/logos, and the Kapsule cluster (Cilium CNI for the Gateway API ingress). State lives in the bootstrap bucket with S3 conditional-write locking.
 
-Please follow the simple instructions in [Getting started](/README.md#setting-up-cicd-with-passwordless-deployments-from-github-to-azure-in-minutes) to setup passwordless deployments from GitHub to Azure.
+## Usage
 
-## Folder structure
+```bash
+cd cloud-infrastructure/scaleway/bootstrap
+terraform init && terraform apply -var prefix=pp -var environment=stage -var project_id=<default project id>
 
-- `environment`: Each environment (like `Staging` and `Production`) has resources that are shared between clusters, e.g., Azure Log Analytics workspace and Application Insights. This allows for central tracking and monitoring across clusters. No Personally Identifiable Information (PII) is tracked, which ensures compliance with data protection laws. See the [`environment/main-environment.bicep`](/cloud-infrastructure/environment/main-environment.bicep).
-- `cluster`: Scripts to deploy a cluster into clearly named resource groups like `ppdemo-stage-weu`, `ppdemo-prod-weu`, and `ppdemo-prod-eus2`. A cluster has its own Azure Container Apps environment (managed Kubernetes), PostgreSQL, Azure Blob Storage, etc. Tenants (a.k.a. a customer) are created in a dedicated cluster that contains all data belonging to that tenant. This ensures compliance with data protection laws like GDPR, CCPA, PIPEDA, APPs, etc., through geo-isolation. See the [`cluster/main-cluster.bicep`](/cloud-infrastructure/cluster/main-cluster.bicep).
+cd ../environment
+export AWS_ACCESS_KEY_ID=<bootstrap output: deploy_pipeline_access_key>
+export AWS_SECRET_ACCESS_KEY=<bootstrap output: deploy_pipeline_secret_key>
+terraform init && terraform apply -var prefix=pp -var environment=stage \
+  -var project_id=<bootstrap output: environment_project_id>
+```
 
-- `modules`: Each Azure Resource is created by a separate Bicep module file, ensuring a modular, reusable, and manageable infrastructure.
+> **Always set `SCW_DEFAULT_PROJECT_ID` when running plan/apply against the environment module.**
+> Scaleway's S3 API acts through the API key's preferred project: with an operator key whose
+> preferred project is the organization default, refreshes of `scaleway_object` resources fail
+> with `GetObjectTagging` 403 until the variable is set.
 
-### Naming Conventions
+Connection strings and bucket URLs for the deploy-time secrets come from the environment module's outputs (`terraform output`); the Kapsule kubeconfig is the sensitive `kubeconfig` output.
 
-Azure resources are named using the following convention: `uniquePrefix-environment-locationAcronym-name`.
+## Naming conventions
 
-- `uniquePrefix` (2-6 characters): e.g., `pp`, `ppdemo`
-- `environment` (max 5 characters): e.g., `prod`, `dev`, `qa`, `stage`
-- `locationAcronym` (max 4 characters): e.g., `weu`, `eus2`
-- `name` (for some resources like storage accounts there is a max of 24 characters, so depending on the length of `uniquePrefix` this allows for 9-13 characters)
-
-There are a couple of exceptions:
-- Azure Storage Accounts, Azure Container Apps, etc., do not allow `-` in names
-- Child resources like Azure Container Apps (ACA) and SQL databases are not prefixed, as ACA has a limit of 32 characters, making names too cryptic
-
-Examples of cluster-specific resources:
-- Resource Group: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- PostgreSQL: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- PostgreSQL database: `main`, `account`
-- Azure Container App Environment: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- Azure Container Apps: `main-api`, `account-api`, `account-workers`
-- Managed Identity: `ppdemo-stage-weu-main`, `ppdemo-stage-weu-account`
-- Key Vault: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- Virtual Network: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- Communication Service: `ppdemo-stage-weu`, `ppdemo-prod-eus2`
-- Storage Accounts: `ppdemostageweuacctmgmt`, `ppdemoprodweudiagnostic`
-
-Examples of global resources (shared across all clusters in an environment):
-- Resource Group: `ppdemo-stage-global`, `ppdemo-prod-global`
-- Application Insights: `ppdemo-stage`, `ppdemo-prod`
-- Log Analytics workspace: `ppdemo-stage`, `ppdemo-prod`
-- Container Registry: `ppdemostage`, `ppdemoprod`
-
-All Azure resources are tagged with `environment` (e.g., `stage`, `prod`) and `managed-by` (e.g., `bicep`, `manual`) for easier cost tracking and resource management.
+Resources are named `{prefix}-{environment}-{name}`, e.g. `pp-stage-database` and `pp-stage-avatars`, following the same convention as the previous cloud (where the resource group carried the environment, that role now belongs to the per-environment Scaleway Project). All resources are tagged with `environment:{stage|prod}` and `managed-by:terraform`.
