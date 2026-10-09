@@ -356,8 +356,8 @@ msgstr "Back"
 msgid "Back Office"
 msgstr "Back Office"
 
-msgid "Back Office - Localhost"
-msgstr "Back Office - Localhost"
+msgid "Back Office - Sign in"
+msgstr "Back Office - Sign in"
 
 msgid "Back Office overview · {today}"
 msgstr "Back Office overview · {today}"
@@ -1305,9 +1305,6 @@ msgstr "Link underline"
 
 msgid "Link variants"
 msgstr "Link variants"
-
-msgid "Local development sign-in. Production requires authenticated staff sign-in."
-msgstr "Local development sign-in. Production requires authenticated staff sign-in."
 
 msgid "Local seasonal"
 msgstr "Local seasonal"
@@ -2317,6 +2314,9 @@ msgstr "Sidebar"
 
 msgid "Sidebar footer"
 msgstr "Sidebar footer"
+
+msgid "Sign in with a mock identity. Production requires authenticated staff sign-in."
+msgstr "Sign in with a mock identity. Production requires authenticated staff sign-in."
 
 msgid "Sign in without a password using your device."
 msgstr "Sign in without a password using your device."
