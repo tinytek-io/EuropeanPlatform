@@ -1,7 +1,4 @@
 using Main.Database;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -72,7 +69,6 @@ internal static class SeededDatabaseTemplate
         services.AddMainServices();
         services.AddScoped<ITelemetryEventsCollector>(_ => new TelemetryEventsCollectorSpy(new TelemetryEventsCollector()));
         services.AddScoped<IEmailClient>(_ => Substitute.For<IEmailClient>());
-        services.AddSingleton(new TelemetryClient(new TelemetryConfiguration { TelemetryChannel = Substitute.For<ITelemetryChannel>() }));
         services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
         using var serviceProvider = services.BuildServiceProvider();

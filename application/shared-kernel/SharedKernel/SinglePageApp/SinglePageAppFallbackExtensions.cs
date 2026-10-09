@@ -127,7 +127,7 @@ public static class SinglePageAppFallbackExtensions
     private static IFileProvider BuildSpaFileProvider(SinglePageAppConfiguration configuration)
     {
         var bundleProvider = new PhysicalFileProvider(configuration.BundleDirectory);
-        if (SharedInfrastructureConfiguration.IsRunningInAzure
+        if (SharedInfrastructureConfiguration.IsRunningInCloud
             || configuration.PublicDirectory is null
             || !Directory.Exists(configuration.PublicDirectory))
         {
@@ -283,7 +283,7 @@ public static class SinglePageAppFallbackExtensions
             Directory.CreateDirectory(SinglePageAppConfiguration.BuildRootPath);
 
             var bundleProvider = new PhysicalFileProvider(SinglePageAppConfiguration.BuildRootPath);
-            var fileProvider = !SharedInfrastructureConfiguration.IsRunningInAzure
+            var fileProvider = !SharedInfrastructureConfiguration.IsRunningInCloud
                                && SinglePageAppConfiguration.PublicRootPath is not null
                                && Directory.Exists(SinglePageAppConfiguration.PublicRootPath)
                 ? (IFileProvider)new CompositeFileProvider(bundleProvider, new PhysicalFileProvider(SinglePageAppConfiguration.PublicRootPath))

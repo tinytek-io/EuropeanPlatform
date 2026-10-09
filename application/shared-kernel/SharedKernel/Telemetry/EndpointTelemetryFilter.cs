@@ -1,15 +1,12 @@
 using System.Collections.Immutable;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.DataContracts;
-using Microsoft.ApplicationInsights.Extensibility;
 
 namespace SharedKernel.Telemetry;
 
 /// <summary>
-///     Filter out telemetry from requests matching excluded paths
+///     Paths and file extensions excluded from request telemetry. Shared by the OpenTelemetry
+///     ASP.NET Core instrumentation filter so scanner probes and static assets do not pollute traces.
 /// </summary>
-public class EndpointTelemetryFilter(ITelemetryProcessor telemetryProcessor)
-    : ITelemetryProcessor
+public static class EndpointTelemetryFilter
 {
     public static readonly ImmutableHashSet<string> ExcludedPaths = ImmutableHashSet.Create(
         StringComparer.OrdinalIgnoreCase,
@@ -28,26 +25,4 @@ public class EndpointTelemetryFilter(ITelemetryProcessor telemetryProcessor)
         // Common scanner-probe file extensions -- secrets, source code, and editor artifacts no legitimate route would have
         ".env", ".yml", ".yaml", ".properties", ".bak", ".old", ".ini", ".config", ".rb", ".py", ".ts", ".sql", ".sh", ".htaccess", ".php", ".local", ".envrc", ".sample", "~"
     );
-
-    public void Process(ITelemetry item)
-    {
-        if (item is RequestTelemetry requestTelemetry && (IsExcludedPath(requestTelemetry) || IsExcludedFileExtension(requestTelemetry)))
-        {
-            return;
-        }
-
-        telemetryProcessor.Process(item);
-    }
-
-    private static bool IsExcludedPath(RequestTelemetry requestTelemetry)
-    {
-        var path = requestTelemetry.Url.AbsolutePath;
-        return ExcludedPaths.Any(path.StartsWith);
-    }
-
-    private static bool IsExcludedFileExtension(RequestTelemetry requestTelemetry)
-    {
-        var path = requestTelemetry.Url.AbsolutePath;
-        return ExcludedFileExtensions.Any(path.EndsWith);
-    }
 }

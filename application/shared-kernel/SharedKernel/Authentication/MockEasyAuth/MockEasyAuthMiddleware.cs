@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SharedKernel.Authentication.BackOfficeIdentity;
@@ -118,8 +119,13 @@ public static class MockEasyAuthMiddlewareExtensions
     {
         public IApplicationBuilder UseMockEasyAuthInDevelopment()
         {
+            // Enabled by default during local development. The MockEasyAuth:Enabled configuration
+            // key turns it on explicitly for non-development environments (e.g. a staging cluster
+            // before a proper OIDC provider for staff exists); it must NEVER be enabled in
+            // production.
             var environment = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>();
-            return environment.IsDevelopment() ? app.UseMiddleware<MockEasyAuthMiddleware>() : app;
+            var enabledByConfiguration = app.ApplicationServices.GetRequiredService<IConfiguration>().GetSection("MockEasyAuth:Enabled").Get<bool>();
+            return environment.IsDevelopment() || enabledByConfiguration ? app.UseMiddleware<MockEasyAuthMiddleware>() : app;
         }
     }
 }

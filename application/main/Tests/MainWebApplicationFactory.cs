@@ -1,7 +1,4 @@
 using Main.Database;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -10,7 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using NSubstitute;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
@@ -84,7 +80,6 @@ public class MainWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(services.Single(d => d.ServiceType == typeof(IEmailClient)));
                 services.AddTransient<IEmailClient>(_ => CurrentContext.EmailClient);
 
-                services.AddSingleton(new TelemetryClient(new TelemetryConfiguration { TelemetryChannel = Substitute.For<ITelemetryChannel>() }));
                 services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
                 ConfigureAdditionalTestServices(services);

@@ -1,0 +1,3024 @@
+openapi: 3.1.0
+info:
+  title: Serverless Containers API
+  description: |-
+    Scaleway Serverless Containers is a «Container As A Service» product which gives users the ability to deploy atomic serverless workloads and only pay for resources used while containers are running.
+
+    It provides many advantages, such as:
+
+    - Containers are only executed when an event is triggered, which allows users to save money while code is not running
+    - Auto-Scalability:
+      - Automated `Scaling up and down` based on user configuration (e.g. min: 0, max: 50 replicas of my container).
+      - Automated `Scaling to zero` when a container is not executed, which is cost-effective for the user and saves computing resources for the cloud provider.
+    - Endpoint-only scaling
+
+    ### Serverless Framework
+
+    This page explains how to use the Scaleway Containers API, including a quickstart and the full API documentation. However, you may prefer to use the
+    [Serverless Framework plugin](https://github.com/scaleway/serverless-scaleway-functions) enabling users to deploy their serverless workloads
+    much more easily with a single `serverless deploy` command.
+
+    If what you are looking for is an easy way to deploy your code, you may prefer Serverless Framework.
+
+    Below, you will find a step-by-step guide on how to create a `namespace`, configure and deploy `containers`, and trigger your `containers` via HTTP, CRON triggers, or messaging triggers.
+
+    ## Concepts
+
+    Refer to our [dedicated concepts page](https://www.scaleway.com/en/docs/serverless/containers/concepts/) to find definitions of the different terms referring to Serverless Containers.
+
+    ## Technical information
+
+    A **Container** in Scaleway Containers consists of multiple components:
+
+    - **Environment variables**: Users may configure specific environment variables (Database host/credentials for example) which are safely encrypted in our Database, and will be mounted inside your containers. **Note** that environment variables set at `namespace` level will also be mounted (in every container). Environment variables written at `container` level override the ones set at `namespace` level (if two of them bear the same name for example).
+    - **Docker image**: A Docker image contains all the elements required to run your software: code, a runtime environment, tools, scripts, libraries, etc.
+    - **Resources**: Users may decide how much computing resource to allocate to each container -> `Memory Limit` (in MB). We will then allocate the right amount of `CPU` based on Memory Limit choice. The right choice for your container's resources is very important, as you will be billed based on compute usage over time and the number of Containers executions.
+
+    ### Product features
+
+    - Fully isolated environments
+    - Scaling to zero (saves money and computing resources while the code is not executed)
+    - High availability and scalability (automated and configurable, each container may scale automatically according to incoming workloads)
+    - Multiple event sources:
+      - HTTP (request on our gateway will execute the container)
+      - CRON (time-based job, runs according to configurable cron schedule)
+      - SQS messaging, compatible with [Scaleway Queues](https://www.scaleway.com/en/docs/queues/)
+      - NATS messaging, compatible with [Scaleway NATS](https://www.scaleway.com/en/docs/nats/)
+    - Integrated to the Scaleway Container Registry product:
+      - Deploy any docker image from one of your registry namespace
+    - Flexible resources: you can choose values separately for your memory and CPU within a range in respect with maximum and minimum allowed values in [Containers Limitation documentation](https://www.scaleway.com/en/docs/serverless/containers/reference-content/containers-limitations/).
+
+    ### Regions
+
+    Serverless Containers is available in the Paris, Amsterdam and Warsaw regions, which are represented by the following path parameters:
+
+    - `fr-par`
+    - `nl-ams`
+    - `pl-waw`
+
+    ### Authentication
+
+    By default new containers are `public` meaning that no credentials are required to invoke them.
+
+    A container can be `private` or `public`. This can be configured through the `privacy` parameter.
+
+    Calling a `private` container without authentication will return HTTP code `403`.
+
+    ### Logs
+
+    Containers logs are sent to the project's [Cockpit](https://www.scaleway.com/en/developers/api/cockpit/regional-api/).
+
+    The **Serverless Containers Logs** dashboard in Grafana can be used to see containers logs. More complex queries can be done using the "Explore" section of Grafana, and LogQL queries:
+
+    ```logql
+    {resource_type="serverless_container"}
+    ```
+
+    Additionally, the logs can be retrieved programmatically. For instance, using the `logcli` utility. For more information, refer to our [dedicated documentation](https://www.scaleway.com/en/docs/cockpit/api-cli/querying-logs-with-logcli/).
+
+    ## Going further
+
+    For more help using Scaleway Serverless containers, check out the following resources:
+
+    - Our [main documentation](https://www.scaleway.com/en/docs/serverless/containers/)
+    - The #serverless-containers channel on our [Slack Community](https://www.scaleway.com/en/docs/tutorials/scaleway-slack-community/)
+    - Our [support ticketing system](https://www.scaleway.com/en/docs/console/account/how-to/open-a-support-ticket/).
+  version: v1
+servers:
+- url: https://api.scaleway.com
+tags:
+- name: Namespaces
+  description: |
+    A namespace is a logical concept that allows you to group your containers.
+
+    Containers in the same namespace can share environment variables, defined only once, at the namespace level.
+- name: Containers
+  description: |
+    A container is a web application, packaged as an OCI image, that runs inside Scaleway infrastructure and scales automatically.
+
+    A container can be composed of multiple instances, depending on the scaling option configured by the user.
+- name: Domains
+  description: "A container is provided with an automatically generated domain through
+    which it is accessible.\n    \nAlternatively, custom domains can be assigned to
+    containers in order to facilitate their use.\n"
+- name: Triggers
+  description: |
+    A trigger is a way to invoke a container based on specific events, such as a periodic schedule or a message arriving in a queue.
+
+    When the event occurs, the trigger invokes the container, passing relevant information about the event to it.
+components:
+  schemas:
+    scaleway.containers.v1.Container:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Container unique ID. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        name:
+          type: string
+          description: Container name.
+        namespace_id:
+          type: string
+          description: Unique ID of the namespace the container belongs to. (UUID
+            format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        description:
+          type: string
+          description: Container description.
+        status:
+          type: string
+          description: Container status.
+          enum:
+          - unknown_status
+          - updating
+          - deleting
+          - locking
+          - ready
+          - error
+          - locked
+          - creating
+          - upgrading
+          x-enum-descriptions:
+            values:
+              unknown_status: Unknown status
+              updating: Updating status. Resource is being redeployed to match the
+                desired configuration
+              deleting: Deleting status
+              locking: Locking status
+              ready: Ready status
+              error: Error status
+              locked: Locked status. Resource cannot be modified
+              creating: Creating status. Resource is being created
+              upgrading: Upgrading status. Resource is being upgraded as part of a
+                planned maintenance. No downtime is expected
+          default: unknown_status
+        error_message:
+          type: string
+          description: Container last error message.
+          nullable: true
+        created_at:
+          type: string
+          description: Container creation date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Container last update date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        environment_variables:
+          type: object
+          description: Environment variables of the container.
+          properties:
+            <environment_variableKey>:
+              type: string
+              description: Environment variables of the container.
+          additionalProperties: true
+        secret_environment_variables:
+          type: object
+          description: Secret environment variables of the container.
+          properties:
+            <secret_environment_variableKey>:
+              type: string
+              description: Secret environment variables of the container.
+          additionalProperties: true
+        min_scale:
+          type: integer
+          description: Minimum number of instances to scale the container to.
+          format: uint32
+        max_scale:
+          type: integer
+          description: Maximum number of instances to scale the container to.
+          format: uint32
+        memory_limit_bytes:
+          type: integer
+          description: Memory limit of the container in bytes. (in bytes)
+          format: uint64
+        mvcpu_limit:
+          type: integer
+          description: CPU limit of the container in mvCPU.
+          format: uint32
+        local_storage_limit_bytes:
+          type: integer
+          description: Local storage limit of the container (in bytes). (in bytes)
+          format: uint64
+        timeout:
+          type: string
+          description: Processing time limit for the container. (in seconds)
+          example: 2.5s
+          nullable: true
+        privacy:
+          type: string
+          description: Privacy policy of the container.
+          enum:
+          - unknown_privacy
+          - public
+          - private
+          x-enum-descriptions:
+            values:
+              unknown_privacy: Unknown privacy
+              public: Container is public, and can be accessed without authentication
+              private: Container is private, and can only be accessed by providing
+                an authentication token (IAM or legacy JWTs)
+          default: unknown_privacy
+        image:
+          type: string
+          description: Image reference (e.g. "rg.fr-par.scw.cloud/my-registry-namespace/image:tag").
+        protocol:
+          type: string
+          description: Protocol the container uses.
+          enum:
+          - unknown_protocol
+          - http1
+          - h2c
+          x-enum-descriptions:
+            values:
+              unknown_protocol: Unknown protocol
+              http1: HTTP/1 protocol. Recommended for most use cases
+              h2c: HTTP/2 protocol. Useful for gRPC applications. Requires that the
+                container explicitly supports HTTP/2 (e.g. Nginx's `listen 80 http2`
+                directive).
+          default: unknown_protocol
+        port:
+          type: integer
+          description: Port the container listens on.
+          format: uint32
+        https_connections_only:
+          type: boolean
+          description: If true, it will allow only HTTPS connections to access your
+            container to prevent it from being triggered by insecure connections (HTTP).
+        sandbox:
+          type: string
+          description: Execution environment of the container.
+          enum:
+          - unknown_sandbox
+          - v1
+          - v2
+          x-enum-descriptions:
+            values:
+              unknown_sandbox: Unknown sandbox
+              v1: Legacy sandbox with slower cold starts. Fully supports the Linux
+                system call interface
+              v2: Recommended sandbox with faster cold starts
+          default: unknown_sandbox
+        scaling_option:
+          type: object
+          description: Parameter used to decide when to scale up or down.
+          properties:
+            concurrent_requests_threshold:
+              type: integer
+              description: Scale depending on the number of concurrent requests being
+                processed per container instance. The threshold value is the number
+                of concurrent requests above which the container will be scaled up.
+              format: uint32
+              nullable: true
+              x-one-of: scaling_rule
+            cpu_usage_threshold:
+              type: integer
+              description: Scale depending on the CPU usage of a container instance.
+                The threshold value is the percentage of CPU usage above which the
+                container will be scaled up.
+              format: uint32
+              nullable: true
+              x-one-of: scaling_rule
+            memory_usage_threshold:
+              type: integer
+              description: Scale depending on the memory usage of a container instance.
+                The threshold value is the percentage of memory usage above which
+                the container will be scaled up.
+              format: uint32
+              nullable: true
+              x-one-of: scaling_rule
+          x-properties-order:
+          - concurrent_requests_threshold
+          - cpu_usage_threshold
+          - memory_usage_threshold
+        liveness_probe:
+          type: object
+          description: |-
+            Defines how to check if the container is running and healthy.
+            If the liveness probe fails, the container will be restarted.
+            It is performed periodically during the container's lifetime. The liveness probe is not executed until the startup probe (if defined) is successful.
+
+            Possible check types:
+            - http: Perform HTTP check on the container with the specified path.
+            - tcp: Perform TCP check on the container.
+          properties:
+            failure_threshold:
+              type: integer
+              description: |-
+                Number of consecutive failures before considering the container as unhealthy.
+                Unhealthy containers do not receive traffic from incoming requests.
+              format: uint32
+            interval:
+              type: string
+              description: Time interval between checks. (in seconds)
+              example: 2.5s
+              nullable: true
+            timeout:
+              type: string
+              description: Duration before the check times out. (in seconds)
+              example: 2.5s
+              nullable: true
+            tcp:
+              type: object
+              description: |-
+                Perform TCP check on the container.
+                The check is successful if a TCP connection can be established with the container within the specified timeout.
+              nullable: true
+              x-one-of: probe
+            http:
+              type: object
+              description: |-
+                Perform HTTP check on the container.
+                The check is successful if an HTTP request to the specified path returns a successful status code (e.g. 2XX or 3XX) within the specified timeout.
+              properties:
+                path:
+                  type: string
+                  description: HTTP path to perform the check on.
+              nullable: true
+              x-properties-order:
+              - path
+              x-one-of: probe
+          x-properties-order:
+          - failure_threshold
+          - interval
+          - timeout
+          - tcp
+          - http
+        startup_probe:
+          type: object
+          description: |-
+            Defines how to check if the container has started successfully.
+            If the startup probe fails, the container will be restarted.
+            This check is useful for applications that might take a long time to start. It is only performed when the container is starting.
+
+            Possible check types:
+            - http: Perform HTTP check on the container with the specified path.
+            - tcp: Perform TCP check on the container.
+          properties:
+            failure_threshold:
+              type: integer
+              description: |-
+                Number of consecutive failures before considering the container as unhealthy.
+                Unhealthy containers do not receive traffic from incoming requests.
+              format: uint32
+            interval:
+              type: string
+              description: Time interval between checks. (in seconds)
+              example: 2.5s
+              nullable: true
+            timeout:
+              type: string
+              description: Duration before the check times out. (in seconds)
+              example: 2.5s
+              nullable: true
+            tcp:
+              type: object
+              description: |-
+                Perform TCP check on the container.
+                The check is successful if a TCP connection can be established with the container within the specified timeout.
+              nullable: true
+              x-one-of: probe
+            http:
+              type: object
+              description: |-
+                Perform HTTP check on the container.
+                The check is successful if an HTTP request to the specified path returns a successful status code (e.g. 2XX or 3XX) within the specified timeout.
+              properties:
+                path:
+                  type: string
+                  description: HTTP path to perform the check on.
+              nullable: true
+              x-properties-order:
+              - path
+              x-one-of: probe
+          x-properties-order:
+          - failure_threshold
+          - interval
+          - timeout
+          - tcp
+          - http
+        tags:
+          type: array
+          description: Tags of the Serverless Container.
+          items:
+            type: string
+        private_network_id:
+          type: string
+          description: |-
+            ID of the Private Network the container is connected to.
+            When connected to a Private Network, the container can access other Scaleway resources in this Private Network. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+          nullable: true
+        command:
+          type: array
+          description: |-
+            Container command.
+            Command executed when the container starts. This overrides the default command defined in the container image. This is usually the main executable, or ENTRYPOINT script to run.
+          items:
+            type: string
+        args:
+          type: array
+          description: |-
+            Container arguments.
+            Arguments passed to the command specified in the "command" field. These override the default arguments from the container image, and behave like command-line parameters.
+          items:
+            type: string
+        public_endpoint:
+          type: string
+          description: |-
+            Public URL of the container.
+            This is the default endpoint generated by Scaleway to access the container from the Internet.
+        region:
+          type: string
+          description: Region in which the container exists.
+      x-properties-order:
+      - id
+      - name
+      - namespace_id
+      - description
+      - status
+      - error_message
+      - created_at
+      - updated_at
+      - environment_variables
+      - secret_environment_variables
+      - min_scale
+      - max_scale
+      - memory_limit_bytes
+      - mvcpu_limit
+      - local_storage_limit_bytes
+      - timeout
+      - privacy
+      - image
+      - protocol
+      - port
+      - https_connections_only
+      - sandbox
+      - scaling_option
+      - liveness_probe
+      - startup_probe
+      - tags
+      - private_network_id
+      - command
+      - args
+      - public_endpoint
+      - region
+    scaleway.containers.v1.Domain:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Domain unique ID. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        container_id:
+          type: string
+          description: Unique ID of the container the domain is assigned to. (UUID
+            format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        hostname:
+          type: string
+          description: Domain assigned to the container.
+        status:
+          type: string
+          description: Domain status.
+          enum:
+          - unknown_status
+          - creating
+          - updating
+          - deleting
+          - ready
+          - error
+          - locked
+          - locking
+          - upgrading
+          x-enum-descriptions:
+            values:
+              unknown_status: Unknown status
+              creating: Creating status. Resource is being created
+              updating: Updating status. Resource is being redeployed to match the
+                desired configuration
+              deleting: Deleting status
+              ready: Ready status
+              error: Error status
+              locked: Locked status. Resource cannot be modified
+              locking: Locking status
+              upgrading: Upgrading status. Resource is being upgraded as part of a
+                planned maintenance. No downtime is expected
+          default: unknown_status
+        error_message:
+          type: string
+          description: Domain last error message.
+          nullable: true
+        created_at:
+          type: string
+          description: Domain creation date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Domain last update date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        tags:
+          type: array
+          description: A list of arbitrary tags associated with the domain.
+          items:
+            type: string
+      x-properties-order:
+      - id
+      - container_id
+      - hostname
+      - status
+      - error_message
+      - created_at
+      - updated_at
+      - tags
+    scaleway.containers.v1.ListContainersRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      - name_asc
+      - name_desc
+      default: created_at_asc
+    scaleway.containers.v1.ListContainersResponse:
+      type: object
+      properties:
+        containers:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.containers.v1.Container'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - containers
+      - total_count
+    scaleway.containers.v1.ListDomainsRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      - hostname_asc
+      - hostname_desc
+      default: created_at_asc
+    scaleway.containers.v1.ListDomainsResponse:
+      type: object
+      properties:
+        domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.containers.v1.Domain'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - domains
+      - total_count
+    scaleway.containers.v1.ListNamespacesRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      - name_asc
+      - name_desc
+      default: created_at_asc
+    scaleway.containers.v1.ListNamespacesResponse:
+      type: object
+      properties:
+        namespaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.containers.v1.Namespace'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - namespaces
+      - total_count
+    scaleway.containers.v1.ListTriggersRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      - name_asc
+      - name_desc
+      default: created_at_asc
+    scaleway.containers.v1.ListTriggersResponse:
+      type: object
+      properties:
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.containers.v1.Trigger'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - triggers
+      - total_count
+    scaleway.containers.v1.Namespace:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Namespace unique ID. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        name:
+          type: string
+          description: Namespace name.
+        organization_id:
+          type: string
+          description: Unique ID of the Organization the namespace belongs to. (UUID
+            format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        project_id:
+          type: string
+          description: Unique ID of the Project the namespace belongs to. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        description:
+          type: string
+          description: Namespace description.
+        status:
+          type: string
+          description: Namespace status.
+          enum:
+          - unknown_status
+          - updating
+          - deleting
+          - locking
+          - ready
+          - error
+          - locked
+          - creating
+          - upgrading
+          x-enum-descriptions:
+            values:
+              unknown_status: Unknown status
+              updating: Updating status. Resource is being redeployed to match the
+                desired configuration
+              deleting: Deleting status
+              locking: Locking status
+              ready: Ready status
+              error: Error status
+              locked: Locked status. Resource cannot be modified
+              creating: Creating status. Resource is being created
+              upgrading: Upgrading status. Resource is being upgraded as part of a
+                planned maintenance. No downtime is expected
+          default: unknown_status
+        error_message:
+          type: string
+          description: Namespace last error message.
+          nullable: true
+        environment_variables:
+          type: object
+          description: Namespace environment variables.
+          properties:
+            <environment_variableKey>:
+              type: string
+              description: Namespace environment variables.
+          additionalProperties: true
+        secret_environment_variables:
+          type: object
+          description: Namespace secret environment variables.
+          properties:
+            <secret_environment_variableKey>:
+              type: string
+              description: Namespace secret environment variables.
+          additionalProperties: true
+        tags:
+          type: array
+          description: A list of arbitrary tags associated with the namespace.
+          items:
+            type: string
+        created_at:
+          type: string
+          description: Namespace creation date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Namespace last update date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        region:
+          type: string
+          description: Region in which the namespace will be created.
+      x-properties-order:
+      - id
+      - name
+      - organization_id
+      - project_id
+      - description
+      - status
+      - error_message
+      - environment_variables
+      - secret_environment_variables
+      - tags
+      - created_at
+      - updated_at
+      - region
+    scaleway.containers.v1.Trigger:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Trigger unique ID. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        name:
+          type: string
+          description: Name of the trigger.
+        description:
+          type: string
+          description: Description of the trigger.
+        tags:
+          type: array
+          description: Tags of the trigger.
+          items:
+            type: string
+        status:
+          type: string
+          description: Trigger status.
+          enum:
+          - unknown_status
+          - ready
+          - deleting
+          - error
+          - updating
+          - creating
+          - locking
+          - locked
+          - upgrading
+          x-enum-descriptions:
+            values:
+              unknown_status: Unknown status
+              ready: Ready status
+              deleting: Deleting status
+              error: Error status
+              updating: Updating status. Resource is being redeployed to match the
+                desired configuration
+              creating: Creating status. Resource is being created
+              locking: Locking status
+              locked: Locked status. Resource cannot be modified
+              upgrading: Upgrading status. Resource is being upgraded as part of a
+                planned maintenance. No downtime is expected
+          default: unknown_status
+        error_message:
+          type: string
+          description: Trigger last error message.
+          nullable: true
+        container_id:
+          type: string
+          description: ID of the container to trigger. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        destination_config:
+          type: object
+          description: Configuration of the destination to trigger.
+          properties:
+            http_path:
+              type: string
+              description: The HTTP path to send the request to (e.g., "/my-webhook-endpoint").
+            http_method:
+              type: string
+              description: The HTTP method to use when sending the request (e.g.,
+                get, post, put, patch, delete). Must be specified as lowercase.
+              enum:
+              - unknown_http_method
+              - get
+              - post
+              - put
+              - patch
+              - delete
+              default: unknown_http_method
+          x-properties-order:
+          - http_path
+          - http_method
+        source_type:
+          type: string
+          description: Type of source that will trigger the container.
+          enum:
+          - unknown_source_type
+          - cron
+          - sqs
+          - nats
+          x-enum-descriptions:
+            values:
+              unknown_source_type: Unknown source type
+              cron: Cron source type
+              sqs: SQS source type
+              nats: NATS source type
+          default: unknown_source_type
+        cron_config:
+          type: object
+          description: Configuration for a cron source.
+          properties:
+            schedule:
+              type: string
+              description: UNIX cron schedule to run job (e.g., "* * * * *").
+            timezone:
+              type: string
+              description: Timezone for the cron schedule, in tz database format (e.g.,
+                "Europe/Paris").
+            body:
+              type: string
+              description: Body to send to the container when the trigger is invoked.
+            headers:
+              type: object
+              description: Additional headers to send to the container when the trigger
+                is invoked.
+              properties:
+                <headerKey>:
+                  type: string
+                  description: Additional headers to send to the container when the
+                    trigger is invoked.
+              additionalProperties: true
+          nullable: true
+          x-properties-order:
+          - schedule
+          - timezone
+          - body
+          - headers
+          x-one-of: source_config
+        sqs_config:
+          type: object
+          description: Configuration for an SQS queue source.
+          properties:
+            region:
+              type: string
+              description: The region where the SQS queue is hosted (e.g., "fr-par",
+                "nl-ams").
+            endpoint:
+              type: string
+              description: Endpoint URL to use to access SQS (e.g., "https://sqs.mnq.fr-par.scaleway.com").
+            access_key_id:
+              type: string
+              description: The access key for accessing the SQS queue.
+            queue_url:
+              type: string
+              description: The URL of the SQS queue to monitor for messages.
+          nullable: true
+          x-properties-order:
+          - region
+          - endpoint
+          - access_key_id
+          - queue_url
+          x-one-of: source_config
+        nats_config:
+          type: object
+          description: Configuration for a NATS source.
+          properties:
+            server_urls:
+              type: array
+              description: The URLs of the NATS servers (e.g., "nats://nats.mnq.fr-par.scaleway.com:4222").
+              items:
+                type: string
+            subject:
+              type: string
+              description: NATS subject to subscribe to (e.g., "my-subject").
+          nullable: true
+          x-properties-order:
+          - server_urls
+          - subject
+          x-one-of: source_config
+        created_at:
+          type: string
+          description: Trigger creation date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Trigger last update date. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+      x-properties-order:
+      - id
+      - name
+      - description
+      - tags
+      - status
+      - error_message
+      - container_id
+      - destination_config
+      - source_type
+      - cron_config
+      - sqs_config
+      - nats_config
+      - created_at
+      - updated_at
+    scaleway.containers.v1.Trigger.SourceType:
+      type: string
+      enum:
+      - unknown_source_type
+      - cron
+      - sqs
+      - nats
+      x-enum-descriptions:
+        values:
+          unknown_source_type: Unknown source type
+          cron: Cron source type
+          sqs: SQS source type
+          nats: NATS source type
+      default: unknown_source_type
+  securitySchemes:
+    scaleway:
+      in: header
+      name: X-Auth-Token
+      type: apiKey
+paths:
+  /containers/v1/regions/{region}/containers:
+    get:
+      tags:
+      - Containers
+      operationId: ListContainers
+      summary: List all containers the caller can access (read permission).
+      description: |-
+        By default, the containers listed are ordered by creation date in ascending order. This can be modified via the `order_by` field.
+
+        Additional parameters can be set in the query to filter, such as `organization_id`, `project_id`, and `name`.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.containers.v1.ListContainersRequest.OrderBy'
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: namespace_id
+        schema:
+          type: string
+      - in: query
+        name: name
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.ListContainersResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/containers" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    post:
+      tags:
+      - Containers
+      operationId: CreateContainer
+      summary: Create a new container in a namespace.
+      description: Name must be unique inside the given namespace.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Container'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespace_id:
+                  type: string
+                  description: Unique ID of the namespace the container belongs to.
+                name:
+                  type: string
+                  description: Container name.
+                environment_variables:
+                  type: object
+                  description: Environment variables of the container.
+                  properties:
+                    <environment_variableKey>:
+                      type: string
+                      description: Environment variables of the container.
+                  additionalProperties: true
+                secret_environment_variables:
+                  type: object
+                  description: Secret environment variables of the container.
+                  properties:
+                    <secret_environment_variableKey>:
+                      type: string
+                      description: Secret environment variables of the container.
+                  additionalProperties: true
+                min_scale:
+                  type: integer
+                  description: Minimum number of instances to scale the container
+                    to.
+                  format: uint32
+                  nullable: true
+                max_scale:
+                  type: integer
+                  description: Maximum number of instances to scale the container
+                    to.
+                  format: uint32
+                  nullable: true
+                memory_limit_bytes:
+                  type: integer
+                  description: Memory limit of the container in bytes. (in bytes)
+                  format: uint64
+                  nullable: true
+                mvcpu_limit:
+                  type: integer
+                  description: CPU limit of the container in mvCPU.
+                  format: uint32
+                  nullable: true
+                timeout:
+                  type: string
+                  description: Processing time limit for the container. (in seconds)
+                  example: 2.5s
+                  nullable: true
+                privacy:
+                  type: string
+                  description: Privacy policy of the container.
+                  enum:
+                  - unknown_privacy
+                  - public
+                  - private
+                  x-enum-descriptions:
+                    values:
+                      unknown_privacy: Unknown privacy
+                      public: Container is public, and can be accessed without authentication
+                      private: Container is private, and can only be accessed by providing
+                        an authentication token (IAM or legacy JWTs)
+                  default: unknown_privacy
+                description:
+                  type: string
+                  description: Container description.
+                  nullable: true
+                image:
+                  type: string
+                  description: Image reference (e.g. "rg.fr-par.scw.cloud/my-registry-namespace/image:tag").
+                protocol:
+                  type: string
+                  description: Protocol the container uses.
+                  enum:
+                  - unknown_protocol
+                  - http1
+                  - h2c
+                  x-enum-descriptions:
+                    values:
+                      unknown_protocol: Unknown protocol
+                      http1: HTTP/1 protocol. Recommended for most use cases
+                      h2c: HTTP/2 protocol. Useful for gRPC applications. Requires
+                        that the container explicitly supports HTTP/2 (e.g. Nginx's
+                        `listen 80 http2` directive).
+                  default: unknown_protocol
+                port:
+                  type: integer
+                  description: Port the container listens on.
+                  format: uint32
+                  nullable: true
+                https_connections_only:
+                  type: boolean
+                  description: If true, it will allow only HTTPS connections to access
+                    your container to prevent it from being triggered by insecure
+                    connections (HTTP).
+                  nullable: true
+                sandbox:
+                  type: string
+                  description: Execution environment of the container.
+                  enum:
+                  - unknown_sandbox
+                  - v1
+                  - v2
+                  x-enum-descriptions:
+                    values:
+                      unknown_sandbox: Unknown sandbox
+                      v1: Legacy sandbox with slower cold starts. Fully supports the
+                        Linux system call interface
+                      v2: Recommended sandbox with faster cold starts
+                  default: unknown_sandbox
+                local_storage_limit_bytes:
+                  type: integer
+                  description: Local storage limit of the container (in bytes). (in
+                    bytes)
+                  format: uint64
+                  nullable: true
+                scaling_option:
+                  type: object
+                  description: Parameter used to decide when to scale up or down.
+                  properties:
+                    concurrent_requests_threshold:
+                      type: integer
+                      description: Scale depending on the number of concurrent requests
+                        being processed per container instance. The threshold value
+                        is the number of concurrent requests above which the container
+                        will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                    cpu_usage_threshold:
+                      type: integer
+                      description: Scale depending on the CPU usage of a container
+                        instance. The threshold value is the percentage of CPU usage
+                        above which the container will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                    memory_usage_threshold:
+                      type: integer
+                      description: Scale depending on the memory usage of a container
+                        instance. The threshold value is the percentage of memory
+                        usage above which the container will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                  x-properties-order:
+                  - concurrent_requests_threshold
+                  - cpu_usage_threshold
+                  - memory_usage_threshold
+                liveness_probe:
+                  type: object
+                  description: |-
+                    Defines how to check if the container is running and healthy.
+                    If the liveness probe fails, the container will be restarted.
+                    It is performed periodically during the container's lifetime. The liveness probe is not executed until the startup probe (if defined) is successful.
+
+                    Possible check types:
+                    - http: Perform HTTP check on the container with the specified path.
+                    - tcp: Perform TCP check on the container.
+                  properties:
+                    failure_threshold:
+                      type: integer
+                      description: |-
+                        Number of consecutive failures before considering the container as unhealthy.
+                        Unhealthy containers do not receive traffic from incoming requests.
+                      format: uint32
+                    interval:
+                      type: string
+                      description: Time interval between checks. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    timeout:
+                      type: string
+                      description: Duration before the check times out. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    tcp:
+                      type: object
+                      description: |-
+                        Perform TCP check on the container.
+                        The check is successful if a TCP connection can be established with the container within the specified timeout.
+                      nullable: true
+                      x-one-of: probe
+                    http:
+                      type: object
+                      description: |-
+                        Perform HTTP check on the container.
+                        The check is successful if an HTTP request to the specified path returns a successful status code (e.g. 2XX or 3XX) within the specified timeout.
+                      properties:
+                        path:
+                          type: string
+                          description: HTTP path to perform the check on.
+                      nullable: true
+                      x-properties-order:
+                      - path
+                      x-one-of: probe
+                  x-properties-order:
+                  - failure_threshold
+                  - interval
+                  - timeout
+                  - tcp
+                  - http
+                startup_probe:
+                  type: object
+                  description: |-
+                    Defines how to check if the container has started successfully.
+                    If the startup probe fails, the container will be restarted.
+                    This check is useful for applications that might take a long time to start. It is only performed when the container is starting.
+
+                    Possible check types:
+                    - http: Perform HTTP check on the container with the specified path.
+                    - tcp: Perform TCP check on the container.
+                  properties:
+                    failure_threshold:
+                      type: integer
+                      description: |-
+                        Number of consecutive failures before considering the container as unhealthy.
+                        Unhealthy containers do not receive traffic from incoming requests.
+                      format: uint32
+                    interval:
+                      type: string
+                      description: Time interval between checks. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    timeout:
+                      type: string
+                      description: Duration before the check times out. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    tcp:
+                      type: object
+                      description: |-
+                        Perform TCP check on the container.
+                        The check is successful if a TCP connection can be established with the container within the specified timeout.
+                      nullable: true
+                      x-one-of: probe
+                    http:
+                      type: object
+                      description: |-
+                        Perform HTTP check on the container.
+                        The check is successful if an HTTP request to the specified path returns a successful status code (e.g. 2XX or 3XX) within the specified timeout.
+                      properties:
+                        path:
+                          type: string
+                          description: HTTP path to perform the check on.
+                      nullable: true
+                      x-properties-order:
+                      - path
+                      x-one-of: probe
+                  x-properties-order:
+                  - failure_threshold
+                  - interval
+                  - timeout
+                  - tcp
+                  - http
+                tags:
+                  type: array
+                  description: Tags of the Serverless Container.
+                  items:
+                    type: string
+                private_network_id:
+                  type: string
+                  description: |-
+                    ID of the Private Network the container is connected to.
+                    When connected to a Private Network, the container can access other Scaleway resources in this Private Network.
+                  nullable: true
+                command:
+                  type: array
+                  description: |-
+                    Container command.
+                    Command executed when the container starts. This overrides the default command defined in the container image. This is usually the main executable, or ENTRYPOINT script to run.
+                  items:
+                    type: string
+                args:
+                  type: array
+                  description: |-
+                    Container arguments.
+                    Arguments passed to the command specified in the "command" field. These override the default arguments from the container image, and behave like command-line parameters.
+                  items:
+                    type: string
+              required:
+              - namespace_id
+              - name
+              - image
+              x-properties-order:
+              - namespace_id
+              - name
+              - environment_variables
+              - secret_environment_variables
+              - min_scale
+              - max_scale
+              - memory_limit_bytes
+              - mvcpu_limit
+              - timeout
+              - privacy
+              - description
+              - image
+              - protocol
+              - port
+              - https_connections_only
+              - sandbox
+              - local_storage_limit_bytes
+              - scaling_option
+              - liveness_probe
+              - startup_probe
+              - tags
+              - private_network_id
+              - command
+              - args
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "environment_variables": {
+                  "<environment_variableKey>": "string"
+              },
+              "image": "string",
+              "name": "string",
+              "namespace_id": "string",
+              "secret_environment_variables": {
+                  "<secret_environment_variableKey>": "string"
+              }
+            }' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/containers/v1/regions/{region}/containers" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            environment_variables:='{
+              "<environment_variableKey>": "string"
+            }' \
+            image="string" \
+            name="string" \
+            namespace_id="string" \
+            secret_environment_variables:='{
+              "<secret_environment_variableKey>": "string"
+            }'
+  /containers/v1/regions/{region}/containers/{container_id}:
+    get:
+      tags:
+      - Containers
+      operationId: GetContainer
+      summary: Get the container associated with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: container_id
+        description: UUID of the container to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Container'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Containers
+      operationId: UpdateContainer
+      summary: Update the container associated with the specified ID.
+      description: Only fields present in the request are updated; others are left
+        untouched.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: container_id
+        description: UUID of the container to update.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Container'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                environment_variables:
+                  type: object
+                  description: Environment variables of the container.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                secret_environment_variables:
+                  type: object
+                  description: Secret environment variables of the container.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                min_scale:
+                  type: integer
+                  description: Minimum number of instances to scale the container
+                    to.
+                  format: uint32
+                  nullable: true
+                max_scale:
+                  type: integer
+                  description: Maximum number of instances to scale the container
+                    to.
+                  format: uint32
+                  nullable: true
+                memory_limit_bytes:
+                  type: integer
+                  description: Memory limit of the container in bytes. (in bytes)
+                  format: uint64
+                  nullable: true
+                mvcpu_limit:
+                  type: integer
+                  description: CPU limit of the container in mvCPU.
+                  format: uint32
+                  nullable: true
+                timeout:
+                  type: string
+                  description: Processing time limit for the container. (in seconds)
+                  example: 2.5s
+                  nullable: true
+                privacy:
+                  type: string
+                  description: Privacy policy of the container.
+                  enum:
+                  - unknown_privacy
+                  - public
+                  - private
+                  x-enum-descriptions:
+                    values:
+                      unknown_privacy: Unknown privacy
+                      public: Container is public, and can be accessed without authentication
+                      private: Container is private, and can only be accessed by providing
+                        an authentication token (IAM or legacy JWTs)
+                  default: unknown_privacy
+                description:
+                  type: string
+                  description: Container description.
+                  nullable: true
+                image:
+                  type: string
+                  description: Image reference (e.g. "rg.fr-par.scw.cloud/my-registry-namespace/image:tag").
+                  nullable: true
+                protocol:
+                  type: string
+                  description: Protocol the container uses.
+                  enum:
+                  - unknown_protocol
+                  - http1
+                  - h2c
+                  x-enum-descriptions:
+                    values:
+                      unknown_protocol: Unknown protocol
+                      http1: HTTP/1 protocol. Recommended for most use cases
+                      h2c: HTTP/2 protocol. Useful for gRPC applications. Requires
+                        that the container explicitly supports HTTP/2 (e.g. Nginx's
+                        `listen 80 http2` directive).
+                  default: unknown_protocol
+                port:
+                  type: integer
+                  description: Port the container listens on.
+                  format: uint32
+                  nullable: true
+                https_connection_only:
+                  type: boolean
+                  description: If true, it will allow only HTTPS connections to access
+                    your container to prevent it from being triggered by insecure
+                    connections (HTTP).
+                  nullable: true
+                sandbox:
+                  type: string
+                  description: Execution environment of the container.
+                  enum:
+                  - unknown_sandbox
+                  - v1
+                  - v2
+                  x-enum-descriptions:
+                    values:
+                      unknown_sandbox: Unknown sandbox
+                      v1: Legacy sandbox with slower cold starts. Fully supports the
+                        Linux system call interface
+                      v2: Recommended sandbox with faster cold starts
+                  default: unknown_sandbox
+                local_storage_limit_bytes:
+                  type: integer
+                  description: Local storage limit of the container (in bytes). (in
+                    bytes)
+                  format: uint64
+                  nullable: true
+                scaling_option:
+                  type: object
+                  description: Parameter used to decide when to scale up or down.
+                  properties:
+                    concurrent_requests_threshold:
+                      type: integer
+                      description: Scale depending on the number of concurrent requests
+                        being processed per container instance. The threshold value
+                        is the number of concurrent requests above which the container
+                        will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                    cpu_usage_threshold:
+                      type: integer
+                      description: Scale depending on the CPU usage of a container
+                        instance. The threshold value is the percentage of CPU usage
+                        above which the container will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                    memory_usage_threshold:
+                      type: integer
+                      description: Scale depending on the memory usage of a container
+                        instance. The threshold value is the percentage of memory
+                        usage above which the container will be scaled up.
+                      format: uint32
+                      nullable: true
+                      x-one-of: scaling_rule
+                  x-properties-order:
+                  - concurrent_requests_threshold
+                  - cpu_usage_threshold
+                  - memory_usage_threshold
+                liveness_probe:
+                  type: object
+                  description: |-
+                    Defines how to check if the container is running and healthy.
+                    If the liveness probe fails, the container will be restarted.
+                    It is performed periodically during the container's lifetime. The liveness probe is not executed until the startup probe (if defined) is successful.
+
+                    Possible check types:
+                    - http: Perform HTTP check on the container with the specified path.
+                    - tcp: Perform TCP check on the container.
+                  properties:
+                    failure_threshold:
+                      type: integer
+                      description: |-
+                        Number of consecutive failures before considering the container as unhealthy.
+                        Unhealthy containers do not receive traffic from incoming requests.
+                      format: uint32
+                    interval:
+                      type: string
+                      description: Time interval between checks. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    timeout:
+                      type: string
+                      description: Duration before the check times out. (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    tcp:
+                      type: object
+                      description: |-
+                        Perform TCP check on the container.
+                        The check is successful if a TCP connection can be established with the container within the specified timeout.
+                      nullable: true
+                      x-one-of: probe
+                    http:
+                      type: object
+                      description: |-
+                        Perform HTTP check on the container.
+                        The check is successful if an HTTP request to the specified path returns a successful status code (e.g. 2XX or 3XX) within the specified timeout.
+                      properties:
+                        path:
+                          type: string
+                          description: HTTP path to perform the check on.
+                      nullable: true
+                      x-properties-order:
+                      - path
+                      x-one-of: probe
+                  x-properties-order:
+                  - failure_threshold
+                  - interval
+                  - timeout
+                  - tcp
+                  - http
+                startup_probe:
+                  type: object
+                  description: |-
+                    Defines how to check if the container has started successfully.
+                    If the startup probe fails, the container will be restarted.
+                    This check is useful for applications that might take a long time to start. It is only performed when the container is starting.
+
+                    Possible check types:
+                    - http: Perform HTTP check on the container with the specified path.
+                    - tcp: Perform TCP check on the container.
+                  properties:
+                    failure_threshold:
+                      type: integer
+                      format: uint32
+                      nullable: true
+                    interval:
+                      type: string
+                      description: (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    timeout:
+                      type: string
+                      description: (in seconds)
+                      example: 2.5s
+                      nullable: true
+                    http:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                          nullable: true
+                      nullable: true
+                      x-properties-order:
+                      - path
+                      x-one-of: probe
+                    tcp:
+                      type: object
+                      nullable: true
+                      x-one-of: probe
+                  x-properties-order:
+                  - failure_threshold
+                  - interval
+                  - timeout
+                  - http
+                  - tcp
+                tags:
+                  type: array
+                  description: Tags of the Serverless Container.
+                  nullable: true
+                  items:
+                    type: string
+                private_network_id:
+                  type: string
+                  description: |-
+                    ID of the Private Network the container is connected to.
+                    When connected to a Private Network, the container can access other Scaleway resources in this Private Network.
+                  nullable: true
+                command:
+                  type: array
+                  description: |-
+                    Container command.
+                    Command executed when the container starts. This overrides the default command defined in the container image. This is usually the main executable, or ENTRYPOINT script to run.
+                  nullable: true
+                  items:
+                    type: string
+                args:
+                  type: array
+                  description: |-
+                    Container arguments.
+                    Arguments passed to the command specified in the "command" field. These override the default arguments from the container image, and behave like command-line parameters.
+                  nullable: true
+                  items:
+                    type: string
+              x-properties-order:
+              - environment_variables
+              - secret_environment_variables
+              - min_scale
+              - max_scale
+              - memory_limit_bytes
+              - mvcpu_limit
+              - timeout
+              - privacy
+              - description
+              - image
+              - protocol
+              - port
+              - https_connection_only
+              - sandbox
+              - local_storage_limit_bytes
+              - scaling_option
+              - liveness_probe
+              - startup_probe
+              - tags
+              - private_network_id
+              - command
+              - args
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Containers
+      operationId: DeleteContainer
+      summary: Delete the container associated with the specified ID.
+      description: |-
+        It also deletes in cascade any resource linked to the container (crons, tokens, etc.).
+
+        This action **cannot** be undone.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: container_id
+        description: UUID of the container to delete.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Container'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /containers/v1/regions/{region}/containers/{container_id}/redeploy:
+    post:
+      tags:
+      - Containers
+      operationId: RedeployContainer
+      summary: Redeploy a container
+      description: |-
+        Performs a rollout of the container by creating new instances with the latest image version and terminating the old instances.
+        When using mutable registry image references (e.g. `my-registry-namespace/image:tag`), this endpoint can be used to force the container to use
+        the most recent image version available in the registry.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: container_id
+        description: ID of the container to redeploy.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Container'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}/redeploy"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/containers/v1/regions/{region}/containers/{container_id}/redeploy" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /containers/v1/regions/{region}/domains:
+    get:
+      tags:
+      - Domains
+      operationId: ListDomains
+      summary: List all custom domains the caller can access (read permission).
+      description: "By default, the custom domains listed are ordered by creation
+        date in ascending order. This can be modified via the `order_by` field.\n
+        \   \nAdditional parameters can be set in the query to filter the output,
+        such as `organization_id`, `project_id`, `namespace_id`, or `container_id`."
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.containers.v1.ListDomainsRequest.OrderBy'
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: namespace_id
+        schema:
+          type: string
+      - in: query
+        name: container_id
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.ListDomainsResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/domains"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/domains" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    post:
+      tags:
+      - Domains
+      operationId: CreateDomain
+      summary: Create a new custom domain for the container with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Domain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                container_id:
+                  type: string
+                  description: Unique ID of the container the domain will be assigned
+                    to.
+                hostname:
+                  type: string
+                  description: Domain assigned to the container.
+                tags:
+                  type: array
+                  description: A list of arbitrary tags associated with the domain.
+                  items:
+                    type: string
+              required:
+              - container_id
+              - hostname
+              x-properties-order:
+              - container_id
+              - hostname
+              - tags
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"container_id":"string","hostname":"string"}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/domains"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/containers/v1/regions/{region}/domains" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            container_id="string" \
+            hostname="string"
+  /containers/v1/regions/{region}/domains/{domain_id}:
+    get:
+      tags:
+      - Domains
+      operationId: GetDomain
+      summary: Get the custom domain associated with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: domain_id
+        description: UUID of the domain to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Domain'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Domains
+      operationId: UpdateDomain
+      summary: Update the domain associated with the specified ID.
+      description: Only fields present in the request are updated; others are left
+        untouched.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: domain_id
+        description: UUID of the domain to update.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Domain'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  description: A list of arbitrary tags associated with the domain.
+                  nullable: true
+                  items:
+                    type: string
+              x-properties-order:
+              - tags
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Domains
+      operationId: DeleteDomain
+      summary: Delete the custom domain associated with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: domain_id
+        description: UUID of the domain to delete.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Domain'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/containers/v1/regions/{region}/domains/{domain_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /containers/v1/regions/{region}/namespaces:
+    get:
+      tags:
+      - Namespaces
+      operationId: ListNamespaces
+      summary: List all namespaces the caller can access (read permission).
+      description: |-
+        By default, the namespaces listed are ordered by creation date in ascending order. This can be modified via the `order_by` field.
+
+        Additional parameters can be set in the query to filter, such as `organization_id`, `project_id`, and `name`.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.containers.v1.ListNamespacesRequest.OrderBy'
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: name
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.ListNamespacesResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/namespaces"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/namespaces" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    post:
+      tags:
+      - Namespaces
+      operationId: CreateNamespace
+      summary: Create a new namespace.
+      description: Namespace name must be unique inside a project.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Namespace'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project_id:
+                  type: string
+                  description: Unique ID of the Project the namespace belongs to.
+                name:
+                  type: string
+                  description: Namespace name.
+                description:
+                  type: string
+                  description: Namespace description.
+                  nullable: true
+                environment_variables:
+                  type: object
+                  description: Namespace environment variables.
+                  properties:
+                    <environment_variableKey>:
+                      type: string
+                      description: Namespace environment variables.
+                  additionalProperties: true
+                secret_environment_variables:
+                  type: object
+                  description: Namespace secret environment variables.
+                  properties:
+                    <secret_environment_variableKey>:
+                      type: string
+                      description: Namespace secret environment variables.
+                  additionalProperties: true
+                tags:
+                  type: array
+                  description: A list of arbitrary tags associated with the namespace.
+                  items:
+                    type: string
+              required:
+              - project_id
+              - name
+              x-properties-order:
+              - project_id
+              - name
+              - description
+              - environment_variables
+              - secret_environment_variables
+              - tags
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "environment_variables": {
+                  "<environment_variableKey>": "string"
+              },
+              "name": "string",
+              "project_id": "string",
+              "secret_environment_variables": {
+                  "<secret_environment_variableKey>": "string"
+              }
+            }' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/namespaces"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/containers/v1/regions/{region}/namespaces" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            environment_variables:='{
+              "<environment_variableKey>": "string"
+            }' \
+            name="string" \
+            project_id="string" \
+            secret_environment_variables:='{
+              "<secret_environment_variableKey>": "string"
+            }'
+  /containers/v1/regions/{region}/namespaces/{namespace_id}:
+    get:
+      tags:
+      - Namespaces
+      operationId: GetNamespace
+      summary: Get the namespace associated with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: namespace_id
+        description: UUID of the namespace to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Namespace'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Namespaces
+      operationId: UpdateNamespace
+      summary: Update the namespace associated with the specified ID.
+      description: Only fields present in the request are updated; others are left
+        untouched.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: namespace_id
+        description: UUID of the namespace to update.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Namespace'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Namespace description.
+                  nullable: true
+                environment_variables:
+                  type: object
+                  description: Namespace environment variables.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                secret_environment_variables:
+                  type: object
+                  description: Namespace secret environment variables.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                tags:
+                  type: array
+                  description: A list of arbitrary tags associated with the namespace.
+                  nullable: true
+                  items:
+                    type: string
+              x-properties-order:
+              - description
+              - environment_variables
+              - secret_environment_variables
+              - tags
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Namespaces
+      operationId: DeleteNamespace
+      summary: Delete the namespace associated with the specified ID.
+      description: |-
+        It also deletes in cascade any resource inside the namespace.
+
+        This action **cannot** be undone.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: namespace_id
+        description: UUID of the namespace to delete.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Namespace'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/containers/v1/regions/{region}/namespaces/{namespace_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /containers/v1/regions/{region}/triggers:
+    get:
+      tags:
+      - Triggers
+      operationId: ListTriggers
+      summary: List all triggers the caller can access (read permission).
+      description: |-
+        By default, the triggers listed are ordered by creation date in ascending order. This can be modified via the `order_by` field.
+
+        Additional parameters can be set in the query to filter, such as `organization_id`, `project_id`, `namespace_id`, `container_id` or `trigger_type`.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.containers.v1.ListTriggersRequest.OrderBy'
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: namespace_id
+        schema:
+          type: string
+      - in: query
+        name: container_id
+        schema:
+          type: string
+      - in: query
+        name: trigger_type
+        schema:
+          $ref: '#/components/schemas/scaleway.containers.v1.Trigger.SourceType'
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.ListTriggersResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/triggers"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/triggers" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    post:
+      tags:
+      - Triggers
+      operationId: CreateTrigger
+      summary: Create a new trigger for the container with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Trigger'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                container_id:
+                  type: string
+                  description: ID of the container to trigger.
+                name:
+                  type: string
+                  description: Name of the trigger.
+                description:
+                  type: string
+                  description: Description of the trigger.
+                  nullable: true
+                tags:
+                  type: array
+                  description: Tags of the trigger.
+                  items:
+                    type: string
+                destination_config:
+                  type: object
+                  description: Configuration of the destination to trigger.
+                  properties:
+                    http_path:
+                      type: string
+                      description: The HTTP path to send the request to (e.g., "/my-webhook-endpoint").
+                    http_method:
+                      type: string
+                      description: The HTTP method to use when sending the request
+                        (e.g., get, post, put, patch, delete). Must be specified as
+                        lowercase.
+                      enum:
+                      - unknown_http_method
+                      - get
+                      - post
+                      - put
+                      - patch
+                      - delete
+                      default: unknown_http_method
+                  required:
+                  - http_path
+                  - http_method
+                  x-properties-order:
+                  - http_path
+                  - http_method
+                cron_config:
+                  type: object
+                  description: Configuration for a cron source.
+                  properties:
+                    schedule:
+                      type: string
+                      description: UNIX cron schedule to run job (e.g., "* * * * *").
+                    timezone:
+                      type: string
+                      description: Timezone for the cron schedule, in tz database
+                        format (e.g., "Europe/Paris").
+                    body:
+                      type: string
+                      description: Body to send to the container when the trigger
+                        is invoked.
+                    headers:
+                      type: object
+                      description: Additional headers to send to the container when
+                        the trigger is invoked.
+                      properties:
+                        <headerKey>:
+                          type: string
+                          description: Additional headers to send to the container
+                            when the trigger is invoked.
+                      additionalProperties: true
+                  nullable: true
+                  required:
+                  - schedule
+                  - timezone
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                  - body
+                  - headers
+                  x-one-of: source_config
+                sqs_config:
+                  type: object
+                  description: Configuration for an SQS queue source.
+                  properties:
+                    region:
+                      type: string
+                      description: The region where the SQS queue is hosted (e.g.,
+                        "fr-par", "nl-ams").
+                    endpoint:
+                      type: string
+                      description: Endpoint URL to use to access SQS (e.g., "https://sqs.mnq.fr-par.scaleway.com").
+                    access_key_id:
+                      type: string
+                      description: The access key for accessing the SQS queue.
+                    secret_access_key:
+                      type: string
+                      description: The secret key for accessing the SQS queue.
+                    queue_url:
+                      type: string
+                      description: The URL of the SQS queue to monitor for messages.
+                  nullable: true
+                  required:
+                  - region
+                  - endpoint
+                  - access_key_id
+                  - secret_access_key
+                  - queue_url
+                  x-properties-order:
+                  - region
+                  - endpoint
+                  - access_key_id
+                  - secret_access_key
+                  - queue_url
+                  x-one-of: source_config
+                nats_config:
+                  type: object
+                  description: Configuration for a NATS source.
+                  properties:
+                    server_urls:
+                      type: array
+                      description: The URLs of the NATS server (e.g., "nats://nats.mnq.fr-par.scaleway.com:4222").
+                      items:
+                        type: string
+                    subject:
+                      type: string
+                      description: NATS subject to subscribe to (e.g., "my-subject").
+                    credentials_file_content:
+                      type: string
+                      description: |-
+                        The content of the NATS credentials file.
+                        The credentials from this file will be used to authenticate with the NATS server and subscribe to the specified subject.
+                  nullable: true
+                  required:
+                  - server_urls
+                  - subject
+                  - credentials_file_content
+                  x-properties-order:
+                  - server_urls
+                  - subject
+                  - credentials_file_content
+                  x-one-of: source_config
+              required:
+              - container_id
+              - name
+              x-properties-order:
+              - container_id
+              - name
+              - description
+              - tags
+              - destination_config
+              - cron_config
+              - sqs_config
+              - nats_config
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"container_id":"string","name":"string"}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/triggers"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/containers/v1/regions/{region}/triggers" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            container_id="string" \
+            name="string"
+  /containers/v1/regions/{region}/triggers/{trigger_id}:
+    get:
+      tags:
+      - Triggers
+      operationId: GetTrigger
+      summary: Get the trigger associated with the specified ID.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: ID of the trigger to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Trigger'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Triggers
+      operationId: UpdateTrigger
+      summary: Update the trigger associated with the specified ID.
+      description: |-
+        When updating a trigger, you cannot specify a different source type than the one already set.
+        Only fields present in the request are updated; others are left untouched.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: ID of the trigger to update.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Trigger'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the trigger.
+                  nullable: true
+                description:
+                  type: string
+                  description: Description of the trigger.
+                  nullable: true
+                tags:
+                  type: array
+                  description: Tags of the trigger.
+                  nullable: true
+                  items:
+                    type: string
+                destination_config:
+                  type: object
+                  description: Configuration of the destination to trigger.
+                  properties:
+                    http_path:
+                      type: string
+                      description: The HTTP path to send the request to (e.g., "/my-webhook-endpoint").
+                      nullable: true
+                    http_method:
+                      type: string
+                      description: The HTTP method to use when sending the request
+                        (e.g., get, post, put, patch, delete). Must be specified as
+                        lowercase.
+                      enum:
+                      - unknown_http_method
+                      - get
+                      - post
+                      - put
+                      - patch
+                      - delete
+                      default: unknown_http_method
+                  x-properties-order:
+                  - http_path
+                  - http_method
+                cron_config:
+                  type: object
+                  description: Configuration for a cron source.
+                  properties:
+                    schedule:
+                      type: string
+                      description: UNIX cron schedule to run job (e.g., "* * * * *").
+                      nullable: true
+                    timezone:
+                      type: string
+                      description: Timezone for the cron schedule, in tz database
+                        format (e.g., "Europe/Paris").
+                      nullable: true
+                    body:
+                      type: string
+                      description: Body to send to the container when the trigger
+                        is invoked.
+                      nullable: true
+                    headers:
+                      type: object
+                      description: Additional headers to send to the container when
+                        the trigger is invoked.
+                      properties:
+                        <key>:
+                          type: string
+                      nullable: true
+                  nullable: true
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                  - body
+                  - headers
+                  x-one-of: source_config
+                sqs_config:
+                  type: object
+                  description: Configuration for an SQS queue source.
+                  properties:
+                    region:
+                      type: string
+                      description: The region where the SQS queue is hosted (e.g.,
+                        "fr-par", "nl-ams").
+                      nullable: true
+                    endpoint:
+                      type: string
+                      description: Endpoint URL to use to access SQS (e.g., "https://sqs.mnq.fr-par.scaleway.com").
+                      nullable: true
+                    access_key_id:
+                      type: string
+                      description: The access key for accessing the SQS queue.
+                      nullable: true
+                    secret_access_key:
+                      type: string
+                      description: The secret key for accessing the SQS queue.
+                      nullable: true
+                    queue_url:
+                      type: string
+                      description: The URL of the SQS queue to monitor for messages.
+                      nullable: true
+                  nullable: true
+                  x-properties-order:
+                  - region
+                  - endpoint
+                  - access_key_id
+                  - secret_access_key
+                  - queue_url
+                  x-one-of: source_config
+                nats_config:
+                  type: object
+                  description: Configuration for a NATS source.
+                  properties:
+                    server_urls:
+                      type: array
+                      description: The URLs of the NATS server (e.g., "nats://nats.mnq.fr-par.scaleway.com:4222").
+                      nullable: true
+                      items:
+                        type: string
+                    subject:
+                      type: string
+                      description: NATS subject to subscribe to (e.g., "my-subject").
+                      nullable: true
+                    credentials_file_content:
+                      type: string
+                      description: |-
+                        The content of the NATS credentials file.
+                        The credentials from this file will be used to authenticate with the NATS server and subscribe to the specified subject.
+                      nullable: true
+                  nullable: true
+                  x-properties-order:
+                  - server_urls
+                  - subject
+                  - credentials_file_content
+                  x-one-of: source_config
+              x-properties-order:
+              - name
+              - description
+              - tags
+              - destination_config
+              - cron_config
+              - sqs_config
+              - nats_config
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Triggers
+      operationId: DeleteTrigger
+      summary: Delete the trigger associated with the specified ID.
+      description: This action **cannot** be undone.
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: ID of the trigger to delete.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.containers.v1.Trigger'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/containers/v1/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY

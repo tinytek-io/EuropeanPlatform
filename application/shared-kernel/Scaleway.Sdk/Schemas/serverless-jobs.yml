@@ -1,0 +1,1877 @@
+openapi: 3.1.0
+info:
+  title: Serverless Jobs API
+  description: |-
+    Serverless Jobs is a fully managed solution that enables you to plan, schedule, and run batch processing workloads without needing to provision or scale any infrastructure. Each job is run from a job definition, which includes the image used to run the job, as well as its resources.
+
+    ## Concepts
+
+    Refer to our [dedicated concepts](https://www.scaleway.com/en/docs/serverless/jobs/concepts/) page to find definitions of all terminology related to Scaleway Serverless Jobs.
+
+    ## Quickstart
+
+    <Message type="note">
+      For jobs concepts and advanced documentation, please refer to [Scaleway Quickstart for Jobs](https://www.scaleway.com/en/docs/serverless/jobs/quickstart/).
+    </Message>
+
+    ## Technical information
+
+    ### Regions
+
+    Serverless Jobs is available in the Paris, Amsterdam and Warsaw regions, which are represented by the following path parameters:
+
+    - `fr-par`
+    - `nl-ams`
+    - `pl-waw`
+
+    ## Going further
+
+    For more information on Scaleway Serverless Jobs, check out the following resources:
+
+    - Our [main documentation](https://www.scaleway.com/en/docs/serverless/jobs/)
+    - The `#serverless-jobs` channel on our [Slack Community](https://www.scaleway.com/en/docs/tutorials/scaleway-slack-community/)
+    - Our [support ticketing system](https://www.scaleway.com/en/docs/account/how-to/open-a-support-ticket).
+  version: v1alpha2
+servers:
+- url: https://api.scaleway.com
+tags:
+- name: Job definitions
+  description: A job definition is a template that contains all the information necessary
+    to run a job
+- name: Job runs
+  description: A job run is the execution of a job definition
+- name: Secrets
+  description: A secret reference is a logical reference to a secret stored in Scaleway
+    Secret Manager, and it can only be managed within the context of a job definition.
+- name: triggers
+  description: A trigger is an object that specifies an automatic execution of a job
+    definition, for example with a periodic CRON schedule
+components:
+  schemas:
+    scaleway.serverless_jobs.v1alpha2.CreateSecretsRequest.SecretConfig:
+      type: object
+      properties:
+        secret_manager_id:
+          type: string
+        secret_manager_version:
+          type: string
+        path:
+          type: string
+          nullable: true
+          x-one-of: path_or_env_var
+        env_var_name:
+          type: string
+          nullable: true
+          x-one-of: path_or_env_var
+      x-properties-order:
+      - secret_manager_id
+      - secret_manager_version
+      - path
+      - env_var_name
+    scaleway.serverless_jobs.v1alpha2.CreateSecretsResponse:
+      type: object
+      properties:
+        secrets:
+          type: array
+          description: List of secrets created.
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Secret'
+      x-properties-order:
+      - secrets
+    scaleway.serverless_jobs.v1alpha2.JobDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID of the job definition. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        name:
+          type: string
+          description: Name of the job definition.
+        project_id:
+          type: string
+          description: UUID of the Scaleway Project containing the job. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        created_at:
+          type: string
+          description: Creation date of the job definition. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Last update date of the job definition. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        cpu_limit:
+          type: integer
+          description: CPU limit of the job (in mvCPU).
+          format: uint32
+        memory_limit:
+          type: integer
+          description: Memory limit of the job (in MiB).
+          format: uint32
+        local_storage_capacity:
+          type: integer
+          description: Local storage capacity of the job (in MiB).
+          format: uint32
+        image_uri:
+          type: string
+          description: Image to use for the job.
+        command:
+          type: string
+          description: Deprecated, please use startup_command instead.
+          deprecated: true
+        environment_variables:
+          type: object
+          description: Environment variables of the job.
+          properties:
+            <environment_variableKey>:
+              type: string
+              description: Environment variables of the job.
+          additionalProperties: true
+        job_timeout:
+          type: string
+          description: Timeout of the job in seconds. (in seconds)
+          example: 2.5s
+          nullable: true
+        description:
+          type: string
+          description: Description of the job.
+        cron_schedule:
+          type: object
+          description: Configure a cron for the job.
+          properties:
+            schedule:
+              type: string
+              description: UNIX cron schedule to run job (e.g., '* * * * *').
+            timezone:
+              type: string
+              description: Timezone for the cron schedule, in tz database format (e.g.,
+                'Europe/Paris').
+          required:
+          - schedule
+          - timezone
+          x-properties-order:
+          - schedule
+          - timezone
+        startup_command:
+          type: array
+          description: Job startup command.
+          items:
+            type: string
+        args:
+          type: array
+          description: Job arguments passed to the startup command at runtime.
+          items:
+            type: string
+        retry_policy:
+          type: object
+          description: Retry behaviour in case of job failure.
+          properties:
+            max_retries:
+              type: integer
+              description: Maximum number of retries upon a job failure.
+              format: uint32
+          required:
+          - max_retries
+          x-properties-order:
+          - max_retries
+        region:
+          type: string
+          description: The region you want to target
+      x-properties-order:
+      - id
+      - name
+      - project_id
+      - created_at
+      - updated_at
+      - cpu_limit
+      - memory_limit
+      - local_storage_capacity
+      - image_uri
+      - command
+      - environment_variables
+      - job_timeout
+      - description
+      - cron_schedule
+      - startup_command
+      - args
+      - retry_policy
+      - region
+    scaleway.serverless_jobs.v1alpha2.JobRun:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID of the job run. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        job_definition_id:
+          type: string
+          description: UUID of the job definition. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        created_at:
+          type: string
+          description: Creation date of the job run. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Last update date of the job run. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        started_at:
+          type: string
+          description: Start date of the job run. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        terminated_at:
+          type: string
+          description: Termination date of the job run. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        run_duration:
+          type: string
+          description: Duration of the job run. (in seconds)
+          example: 2.5s
+          nullable: true
+        state:
+          type: string
+          description: State of the job run.
+          enum:
+          - unknown_state
+          - initialized
+          - validated
+          - queued
+          - running
+          - succeeded
+          - failed
+          - interrupting
+          - interrupted
+          - retrying
+          default: unknown_state
+        reason:
+          type: string
+          description: Reason for failure if the job failed.
+          enum:
+          - unknown_reason
+          - invalid_request
+          - timeout
+          - cancellation
+          - technical_error
+          - image_not_found
+          - invalid_image
+          - memory_usage_exceeded
+          - storage_usage_exceeded
+          - exited_with_error
+          - secret_disabled
+          - secret_not_found
+          - quota_exceeded
+          default: unknown_reason
+        exit_code:
+          type: integer
+          description: Exit code of the job.
+          format: int32
+          nullable: true
+        error_message:
+          type: string
+          description: Error message if the job failed.
+          nullable: true
+        cpu_limit:
+          type: integer
+          description: CPU limit of the job (in mvCPU).
+          format: uint32
+        memory_limit:
+          type: integer
+          description: Memory limit of the job (in MiB).
+          format: uint32
+        local_storage_capacity:
+          type: integer
+          description: Local storage capacity of the job (in MiB).
+          format: uint32
+        command:
+          type: string
+          description: Deprecated, please use startup_command instead.
+          deprecated: true
+        environment_variables:
+          type: object
+          description: Environment variables of the job run.
+          properties:
+            <environment_variableKey>:
+              type: string
+              description: Environment variables of the job run.
+          additionalProperties: true
+        startup_command:
+          type: array
+          description: Job startup command.
+          items:
+            type: string
+        args:
+          type: array
+          description: Job arguments passed to the startup command at runtime.
+          items:
+            type: string
+        attempts:
+          type: integer
+          description: Number of run attempts.
+          format: uint32
+          nullable: true
+        region:
+          type: string
+          description: The region you want to target
+      x-properties-order:
+      - id
+      - job_definition_id
+      - created_at
+      - updated_at
+      - started_at
+      - terminated_at
+      - run_duration
+      - state
+      - reason
+      - exit_code
+      - error_message
+      - cpu_limit
+      - memory_limit
+      - local_storage_capacity
+      - command
+      - environment_variables
+      - startup_command
+      - args
+      - attempts
+      - region
+    scaleway.serverless_jobs.v1alpha2.JobRun.Reason:
+      type: string
+      enum:
+      - unknown_reason
+      - invalid_request
+      - timeout
+      - cancellation
+      - technical_error
+      - image_not_found
+      - invalid_image
+      - memory_usage_exceeded
+      - storage_usage_exceeded
+      - exited_with_error
+      - secret_disabled
+      - secret_not_found
+      - quota_exceeded
+      default: unknown_reason
+    scaleway.serverless_jobs.v1alpha2.JobRun.State:
+      type: string
+      enum:
+      - unknown_state
+      - initialized
+      - validated
+      - queued
+      - running
+      - succeeded
+      - failed
+      - interrupting
+      - interrupted
+      - retrying
+      default: unknown_state
+    scaleway.serverless_jobs.v1alpha2.ListJobDefinitionsRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      default: created_at_asc
+    scaleway.serverless_jobs.v1alpha2.ListJobDefinitionsResponse:
+      type: object
+      properties:
+        job_definitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobDefinition'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - job_definitions
+      - total_count
+    scaleway.serverless_jobs.v1alpha2.ListJobRunsRequest.OrderBy:
+      type: string
+      enum:
+      - created_at_asc
+      - created_at_desc
+      default: created_at_asc
+    scaleway.serverless_jobs.v1alpha2.ListJobRunsResponse:
+      type: object
+      properties:
+        job_runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun'
+        total_count:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - job_runs
+      - total_count
+    scaleway.serverless_jobs.v1alpha2.ListSecretsResponse:
+      type: object
+      properties:
+        secrets:
+          type: array
+          description: List of secret references within a job definition.
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Secret'
+        total_count:
+          type: integer
+          description: Total count of secret references within a job definition.
+          format: uint64
+      x-properties-order:
+      - secrets
+      - total_count
+    scaleway.serverless_jobs.v1alpha2.ListTriggersResponse:
+      type: object
+      properties:
+        triggers:
+          type: array
+          description: List of triggers.
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Trigger'
+        total_count:
+          type: integer
+          description: Total count of triggers.
+          format: uint64
+      x-properties-order:
+      - triggers
+      - total_count
+    scaleway.serverless_jobs.v1alpha2.Secret:
+      type: object
+      properties:
+        secret_id:
+          type: string
+          description: UUID of the secret reference within the job. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        secret_manager_id:
+          type: string
+          description: UUID of the secret in Secret Manager. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        secret_manager_version:
+          type: string
+          description: Version of the secret in Secret Manager.
+        job_definition_id:
+          type: string
+          description: UUID of the job definition. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        file:
+          type: object
+          description: File secret mounted inside the job.
+          properties:
+            path:
+              type: string
+          nullable: true
+          x-properties-order:
+          - path
+          x-one-of: secret_config
+        env_var:
+          type: object
+          description: Environment variable used to expose the secret.
+          properties:
+            name:
+              type: string
+          nullable: true
+          x-properties-order:
+          - name
+          x-one-of: secret_config
+      required:
+      - job_definition_id
+      x-properties-order:
+      - secret_id
+      - secret_manager_id
+      - secret_manager_version
+      - job_definition_id
+      - file
+      - env_var
+    scaleway.serverless_jobs.v1alpha2.StartJobDefinitionResponse:
+      type: object
+      properties:
+        job_runs:
+          type: array
+          description: List of started job runs.
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun'
+      required:
+      - job_runs
+      x-properties-order:
+      - job_runs
+    scaleway.serverless_jobs.v1alpha2.Trigger:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID of the trigger. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        job_definition_id:
+          type: string
+          description: UUID of the job definition. (UUID format)
+          example: 6170692e-7363-616c-6577-61792e636f6d
+        name:
+          type: string
+          description: Human readable name of the trigger.
+        created_at:
+          type: string
+          description: Creation time of the trigger. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        updated_at:
+          type: string
+          description: Last update time of the trigger. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+          nullable: true
+        cron_config:
+          type: object
+          description: Configuration of the CRON trigger.
+          properties:
+            schedule:
+              type: string
+              description: CRON schedule in UNIX format.
+            timezone:
+              type: string
+              description: Time zone for the CRON schedule.
+            startup_command:
+              type: array
+              description: Startup command that will be used by the triggered job.
+              items:
+                type: string
+            args:
+              type: array
+              description: Arguments passed to the startup command used by the triggered
+                job.
+              items:
+                type: string
+          nullable: true
+          x-properties-order:
+          - schedule
+          - timezone
+          - startup_command
+          - args
+          x-one-of: config
+      x-properties-order:
+      - id
+      - job_definition_id
+      - name
+      - created_at
+      - updated_at
+      - cron_config
+  securitySchemes:
+    scaleway:
+      in: header
+      name: X-Auth-Token
+      type: apiKey
+paths:
+  /serverless-jobs/v1alpha2/regions/{region}/job-definitions:
+    get:
+      tags:
+      - Job definitions
+      operationId: ListJobDefinitions
+      summary: List all your job definitions with filters
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListJobDefinitionsRequest.OrderBy'
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListJobDefinitionsResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    post:
+      tags:
+      - Job definitions
+      operationId: CreateJobDefinition
+      summary: Create a new job definition in a specified Project
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobDefinition'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the job definition.
+                cpu_limit:
+                  type: integer
+                  description: CPU limit of the job (in mvCPU).
+                  format: uint32
+                memory_limit:
+                  type: integer
+                  description: Memory limit of the job (in MiB).
+                  format: uint32
+                local_storage_capacity:
+                  type: integer
+                  description: Local storage capacity of the job (in MiB).
+                  format: uint32
+                image_uri:
+                  type: string
+                  description: Image to use for the job.
+                command:
+                  type: string
+                  description: |-
+                    Startup command. If empty or not defined, the image's default command is used.
+                    Deprecated: please use startup_command instead.
+                  deprecated: true
+                startup_command:
+                  type: array
+                  description: |-
+                    Job startup command. Overrides the default defined in the job image.
+                    The main executable or entrypoint script to run.
+                    If both command and startup_command are provided, only startup_command will be used.
+                  items:
+                    type: string
+                args:
+                  type: array
+                  description: |-
+                    Job arguments. Overrides the default arguments defined in the job image.
+                    Passed to the startup command at runtime.
+                    Environment variables and secrets can be included, and will be expanded before the arguments are used.
+                  items:
+                    type: string
+                project_id:
+                  type: string
+                  description: UUID of the Scaleway Project containing the job.
+                environment_variables:
+                  type: object
+                  description: Environment variables of the job.
+                  properties:
+                    <environment_variableKey>:
+                      type: string
+                      description: Environment variables of the job.
+                  additionalProperties: true
+                description:
+                  type: string
+                  description: Description of the job.
+                job_timeout:
+                  type: string
+                  description: Timeout of the job in seconds. (in seconds)
+                  example: 2.5s
+                  nullable: true
+                cron_schedule:
+                  type: object
+                  description: Configure a cron for the job.
+                  properties:
+                    schedule:
+                      type: string
+                    timezone:
+                      type: string
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                retry_policy:
+                  type: object
+                  description: Retry policy upon a job failure.
+                  properties:
+                    max_retries:
+                      type: integer
+                      description: Maximum number of retries upon a job failure.
+                      format: uint32
+                  required:
+                  - max_retries
+                  x-properties-order:
+                  - max_retries
+              required:
+              - name
+              - cpu_limit
+              - memory_limit
+              - local_storage_capacity
+              - image_uri
+              - project_id
+              x-properties-order:
+              - name
+              - cpu_limit
+              - memory_limit
+              - local_storage_capacity
+              - image_uri
+              - command
+              - startup_command
+              - args
+              - project_id
+              - environment_variables
+              - description
+              - job_timeout
+              - cron_schedule
+              - retry_policy
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "command": "string",
+              "cpu_limit": 42,
+              "description": "string",
+              "environment_variables": {
+                  "<environment_variableKey>": "string"
+              },
+              "image_uri": "string",
+              "local_storage_capacity": 42,
+              "memory_limit": 42,
+              "name": "string",
+              "project_id": "string"
+            }' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            command="string" \
+            cpu_limit:=42 \
+            description="string" \
+            environment_variables:='{
+              "<environment_variableKey>": "string"
+            }' \
+            image_uri="string" \
+            local_storage_capacity:=42 \
+            memory_limit:=42 \
+            name="string" \
+            project_id="string"
+  /serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}:
+    get:
+      tags:
+      - Job definitions
+      operationId: GetJobDefinition
+      summary: Get a job definition by its unique identifier
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_definition_id
+        description: UUID of the job definition to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobDefinition'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Job definitions
+      operationId: UpdateJobDefinition
+      summary: Update an existing job definition associated with the specified unique
+        identifier
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_definition_id
+        description: UUID of the job definition to update.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobDefinition'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the job definition.
+                  nullable: true
+                cpu_limit:
+                  type: integer
+                  description: CPU limit of the job (in mvCPU).
+                  format: uint32
+                  nullable: true
+                memory_limit:
+                  type: integer
+                  description: Memory limit of the job (in MiB).
+                  format: uint32
+                  nullable: true
+                local_storage_capacity:
+                  type: integer
+                  description: Local storage capacity of the job (in MiB).
+                  format: uint32
+                  nullable: true
+                image_uri:
+                  type: string
+                  description: Image to use for the job.
+                  nullable: true
+                command:
+                  type: string
+                  description: |-
+                    Startup command. If empty or not defined, the image's default command is used.
+                    Deprecated: please use startup_command instead.
+                  deprecated: true
+                  nullable: true
+                startup_command:
+                  type: array
+                  description: |-
+                    Job startup command. Overrides the default defined in the job image.
+                    The main executable or entrypoint script to run.
+                    If both command and startup_command are provided, only startup_command will be used.
+                  nullable: true
+                  items:
+                    type: string
+                args:
+                  type: array
+                  description: |-
+                    Job arguments. Overrides the default arguments defined in the job image.
+                    Passed to the startup command at runtime.
+                    Environment variables and secrets can be included, and will be expanded before the arguments are used.
+                  nullable: true
+                  items:
+                    type: string
+                environment_variables:
+                  type: object
+                  description: Environment variables of the job.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                description:
+                  type: string
+                  description: Description of the job.
+                  nullable: true
+                job_timeout:
+                  type: string
+                  description: Timeout of the job in seconds. (in seconds)
+                  example: 2.5s
+                  nullable: true
+                cron_schedule:
+                  type: object
+                  description: Configure a cron for the job.
+                  properties:
+                    schedule:
+                      type: string
+                      nullable: true
+                    timezone:
+                      type: string
+                      nullable: true
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                retry_policy:
+                  type: object
+                  description: Retry policy upon a job failure.
+                  properties:
+                    max_retries:
+                      type: integer
+                      format: uint32
+                      nullable: true
+                  x-properties-order:
+                  - max_retries
+              x-properties-order:
+              - name
+              - cpu_limit
+              - memory_limit
+              - local_storage_capacity
+              - image_uri
+              - command
+              - startup_command
+              - args
+              - environment_variables
+              - description
+              - job_timeout
+              - cron_schedule
+              - retry_policy
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Job definitions
+      operationId: DeleteJobDefinition
+      summary: Delete an existing job definition by its unique identifier
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_definition_id
+        description: UUID of the job definition to delete.
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: ""
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}/start:
+    post:
+      tags:
+      - Job definitions
+      operationId: StartJobDefinition
+      summary: Run an existing job definition using its unique identifier and create
+        a new job run
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_definition_id
+        description: UUID of the job definition to start.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.StartJobDefinitionResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                command:
+                  type: string
+                  description: |-
+                    Contextual startup command for this specific job run.
+                    If empty or not defined, the image's default command is used.
+                    Deprecated: please use startup_command instead.
+                  deprecated: true
+                  nullable: true
+                startup_command:
+                  type: array
+                  description: |-
+                    Contextual startup command for this specific job run.
+                    Overrides the default defined in the job image.
+                    The main executable or entrypoint script to run.
+                    If both command and startup_command are provided, only startup_command will be used.
+                  nullable: true
+                  items:
+                    type: string
+                args:
+                  type: array
+                  description: |-
+                    Contextual arguments for this specific job run.
+                    Overrides the default arguments defined in the job image.
+                    Passed to the contextual startup command at runtime.
+                    Environment variables and secrets can be included, and will be expanded before the arguments are used.
+                  nullable: true
+                  items:
+                    type: string
+                environment_variables:
+                  type: object
+                  description: Contextual environment variables for this specific
+                    job run.
+                  properties:
+                    <key>:
+                      type: string
+                  nullable: true
+                replicas:
+                  type: integer
+                  description: Number of jobs to run.
+                  format: uint32
+                  nullable: true
+              x-properties-order:
+              - command
+              - startup_command
+              - args
+              - environment_variables
+              - replicas
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}/start"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-definitions/{job_definition_id}/start" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/job-runs:
+    get:
+      tags:
+      - Job runs
+      operationId: ListJobRuns
+      summary: List all job runs with filters
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: page
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        schema:
+          $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListJobRunsRequest.OrderBy'
+      - in: query
+        name: job_definition_id
+        schema:
+          type: string
+      - in: query
+        name: project_id
+        schema:
+          type: string
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+      - in: query
+        name: state
+        schema:
+          $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun.State'
+      - in: query
+        name: states
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun.State'
+      - in: query
+        name: reasons
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun.Reason'
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListJobRunsResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}:
+    get:
+      tags:
+      - Job runs
+      operationId: GetJobRun
+      summary: Get a job run by its unique identifier
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_run_id
+        description: UUID of the job run to get.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}/stop:
+    post:
+      tags:
+      - Job runs
+      operationId: StopJobRun
+      summary: Stop a job run using its unique identifier
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: job_run_id
+        description: UUID of the job run to stop.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.JobRun'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}/stop"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/job-runs/{job_run_id}/stop" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/secrets:
+    get:
+      tags:
+      - Secrets
+      operationId: ListSecrets
+      summary: List secrets references within a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: job_definition_id
+        description: UUID of the job definition.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListSecretsResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets?job_definition_id=string"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            job_definition_id==string
+    post:
+      tags:
+      - Secrets
+      operationId: CreateSecrets
+      summary: Create a secret reference within a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.CreateSecretsResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_definition_id:
+                  type: string
+                  description: UUID of the job definition.
+                secrets:
+                  type: array
+                  description: List of secrets to inject into the job.
+                  items:
+                    $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.CreateSecretsRequest.SecretConfig'
+              required:
+              - job_definition_id
+              - secrets
+              x-properties-order:
+              - job_definition_id
+              - secrets
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"job_definition_id":"string","secrets":[""]}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            job_definition_id="string" \
+            secrets:='[""]'
+  /serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}:
+    get:
+      tags:
+      - Secrets
+      operationId: GetSecret
+      summary: Get a secret references within a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: secret_id
+        description: UUID of the secret reference within the job.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Secret'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - Secrets
+      operationId: UpdateSecret
+      summary: Update a secret reference within a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: secret_id
+        description: UUID of the secret reference within the job.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Secret'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secret_manager_version:
+                  type: string
+                  description: Version of the secret in Secret Manager.
+                  nullable: true
+                path:
+                  type: string
+                  description: Path of the secret to mount inside the job (either
+                    `path` or `env_var_name` must be set).
+                  nullable: true
+                  x-one-of: secret_config
+                env_var_name:
+                  type: string
+                  description: Environment variable name used to expose the secret
+                    inside the job (either `path` or `env_var_name` must be set).
+                  nullable: true
+                  x-one-of: secret_config
+              x-properties-order:
+              - secret_manager_version
+              - path
+              - env_var_name
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - Secrets
+      operationId: DeleteSecret
+      summary: Delete a secret reference within a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: secret_id
+        description: UUID of the secret reference within the job.
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: ""
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/secrets/{secret_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+  /serverless-jobs/v1alpha2/regions/{region}/triggers:
+    get:
+      tags:
+      - triggers
+      operationId: ListTriggers
+      summary: List triggers of a job definition
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: query
+        name: job_definition_id
+        description: UUID of the job definition.
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: page
+        description: Page number from paginated list of triggers.
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        description: Number of triggers per page.
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: order_by
+        description: Sorting order of triggers.
+        schema:
+          type: string
+          enum:
+          - created_at_asc
+          - created_at_desc
+          default: created_at_asc
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.ListTriggersResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers?job_definition_id=string"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            job_definition_id==string
+    post:
+      tags:
+      - triggers
+      operationId: CreateTrigger
+      summary: Create a trigger
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Trigger'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_definition_id:
+                  type: string
+                  description: UUID of the job definition.
+                name:
+                  type: string
+                  description: Name of the trigger.
+                cron_config:
+                  type: object
+                  description: Configuration of the CRON trigger.
+                  properties:
+                    schedule:
+                      type: string
+                      description: CRON schedule in UNIX format.
+                    timezone:
+                      type: string
+                      description: Time zone for the CRON schedule.
+                    startup_command:
+                      type: array
+                      description: Startup command that will be used by the triggered
+                        job.
+                      items:
+                        type: string
+                    args:
+                      type: array
+                      description: Arguments passed to the startup command used by
+                        the triggered job.
+                      items:
+                        type: string
+                  nullable: true
+                  required:
+                  - schedule
+                  - timezone
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                  - startup_command
+                  - args
+                  x-one-of: config
+              required:
+              - job_definition_id
+              - name
+              x-properties-order:
+              - job_definition_id
+              - name
+              - cron_config
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X POST \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"job_definition_id":"string","name":"string"}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers"
+      - lang: HTTPie
+        source: |-
+          http POST "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers" \
+            X-Auth-Token:$SCW_SECRET_KEY \
+            job_definition_id="string" \
+            name="string"
+  /serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}:
+    get:
+      tags:
+      - triggers
+      operationId: GetTrigger
+      summary: Get a trigger
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: UUID of the trigger.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Trigger'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    patch:
+      tags:
+      - triggers
+      operationId: UpdateTrigger
+      summary: Update a trigger
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: UUID of the trigger.
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.serverless_jobs.v1alpha2.Trigger'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the trigger.
+                  nullable: true
+                cron_config:
+                  type: object
+                  description: Configuration of the CRON trigger.
+                  properties:
+                    schedule:
+                      type: string
+                      description: CRON schedule in UNIX format.
+                      nullable: true
+                    timezone:
+                      type: string
+                      description: Time zone for the CRON schedule.
+                      nullable: true
+                    startup_command:
+                      type: array
+                      description: Startup command that will be used by the triggered
+                        job.
+                      nullable: true
+                      items:
+                        type: string
+                    args:
+                      type: array
+                      description: Arguments passed to the startup command used by
+                        the triggered job.
+                      nullable: true
+                      items:
+                        type: string
+                  nullable: true
+                  x-properties-order:
+                  - schedule
+                  - timezone
+                  - startup_command
+                  - args
+                  x-one-of: config
+              x-properties-order:
+              - name
+              - cron_config
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X PATCH \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http PATCH "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
+    delete:
+      tags:
+      - triggers
+      operationId: DeleteTrigger
+      summary: Delete a trigger
+      parameters:
+      - in: path
+        name: region
+        description: The region you want to target
+        required: true
+        schema:
+          type: string
+          enum:
+          - fr-par
+          - nl-ams
+          - pl-waw
+      - in: path
+        name: trigger_id
+        description: UUID of the trigger.
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: ""
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X DELETE \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}"
+      - lang: HTTPie
+        source: |-
+          http DELETE "https://api.scaleway.com/serverless-jobs/v1alpha2/regions/{region}/triggers/{trigger_id}" \
+            X-Auth-Token:$SCW_SECRET_KEY
