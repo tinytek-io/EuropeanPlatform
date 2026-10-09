@@ -52,21 +52,25 @@ var backOfficePublicUrl =
     ?? (appPublicUrl is null ? null : ReplaceHost(appPublicUrl, appHostname, backOfficeHostname));
 var backOfficeCdnUrl = Environment.GetEnvironmentVariable("BACK_OFFICE_CDN_URL") ?? backOfficePublicUrl;
 
-// Runtime feature flags injected into the SPA HTML so the React shell can branch on capability without
-// a separate config endpoint. Both flags must be wired into BOTH host-scoped SPAs because each one renders
-// its own HTML from its own StaticRuntimeEnvironment; omitting them on a host renders the gate as "disabled".
-var runtimeEnvironment = new Dictionary<string, string>
-{
-    ["PUBLIC_GOOGLE_OAUTH_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_GOOGLE_OAUTH_ENABLED") ?? "false",
-    ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false"
-};
-
 // The /login picker belongs to the MockEasyAuth identity selector: available during local
 // development and on staging where MockEasyAuth:Enabled explicitly opts in, blocked everywhere
 // else (removed from the auth-gate exemption list and short-circuited to 401 below to reject
 // even authenticated requests).
 var mockEasyAuthEnabled = app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>()
                           || SharedInfrastructureConfiguration.IsRunningInCloud is false;
+
+// Runtime feature flags injected into the SPA HTML so the React shell can branch on capability without
+// a separate config endpoint. Both flags must be wired into BOTH host-scoped SPAs because each one renders
+// its own HTML from its own StaticRuntimeEnvironment; omitting them on a host renders the gate as "disabled".
+// PUBLIC_MOCK_EASY_AUTH_ENABLED drives the SPA-side availability of the /login route: a production build of the
+// back-office renders it only on hosts where the server actually offers the mock identity selector.
+var runtimeEnvironment = new Dictionary<string, string>
+{
+    ["PUBLIC_GOOGLE_OAUTH_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_GOOGLE_OAUTH_ENABLED") ?? "false",
+    ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false",
+    ["PUBLIC_MOCK_EASY_AUTH_ENABLED"] = mockEasyAuthEnabled ? "true" : "false"
+};
+
 string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled ? ["/login"] : [];
 
 if (!mockEasyAuthEnabled)

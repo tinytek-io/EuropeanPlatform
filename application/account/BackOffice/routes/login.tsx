@@ -20,7 +20,9 @@ interface MockLoginSearch {
 export const Route = createFileRoute("/login")({
   staticData: { trackingTitle: "Mock login" },
   beforeLoad: () => {
-    if (process.env.NODE_ENV === "production") {
+    // Gated by the server-provided runtime flag, not the build type: staging runs a production
+    // build yet still offers the mock identity selector (MockEasyAuth:Enabled opts in).
+    if (import.meta.runtime_env.PUBLIC_MOCK_EASY_AUTH_ENABLED !== "true") {
       throw new NotFoundError();
     }
   },
@@ -52,10 +54,10 @@ function MockLoginPage() {
           <Logo variant="mark" className="size-12" alt={t`Logo`} />
         </Link>
         <h2>
-          <Trans>Back Office - Localhost</Trans>
+          <Trans>Back Office - Sign in</Trans>
         </h2>
         <div className="text-center text-sm text-muted-foreground">
-          <Trans>Local development sign-in. Production requires authenticated staff sign-in.</Trans>
+          <Trans>Sign in with a mock identity. Production requires authenticated staff sign-in.</Trans>
         </div>
 
         <RadioGroup className="w-full pt-2" value={selectedId} onValueChange={setSelectedId}>
