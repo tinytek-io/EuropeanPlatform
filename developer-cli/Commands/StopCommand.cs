@@ -350,15 +350,15 @@ public sealed class StopCommand : Command
     {
         var prefix = DockerVolumeNaming.ResolveVolumePrefix(repositoryRoot);
         var infix = portAllocation.VolumeNameInfix;
-        string[] worktreeVolumes = [$"{prefix}{infix}-postgres-data", $"{prefix}{infix}-azure-storage-data"];
+        string[] worktreeVolumes = [$"{prefix}{infix}-postgres-data", $"{prefix}{infix}-minio-data"];
 
         var sessionSuffix = FindAspireSessionSuffix(worktreeVolumes);
         return sessionSuffix is null ? [] : FindContainersBySessionSuffix(sessionSuffix);
     }
 
     // Aspire/DCP gives every container in a session a shared random suffix (e.g. "postgres-606c6219",
-    // "azure-storage-606c6219", "mail-server-606c6219"). The persistent volumes on postgres and
-    // azurite are named after the worktree's base port -- we use them to find one container in the
+    // "minio-606c6219", "mail-server-606c6219"). The persistent volumes on postgres and
+    // minio are named after the worktree's base port -- we use them to find one container in the
     // session, extract the suffix, then remove every container that shares it.
     private static void StopDockerContainers(PortAllocation portAllocation, string repositoryRoot)
     {

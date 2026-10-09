@@ -7,36 +7,6 @@
     "aspire": {
       "command": "aspire",
       "args": ["agent", "mcp"]
-    },
-    "azure-staging": {
-      "command": "npx",
-      "args": [
-        "-y", "@azure/mcp@latest", "server", "start",
-        "--read-only",
-        "--namespace", "monitor",
-        "--namespace", "applicationinsights",
-        "--namespace", "subscription",
-        "--namespace", "group"
-      ],
-      "env": {
-        "AZURE_TENANT_ID": "${AZURE_TENANT_ID}",
-        "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID_STAGING}"
-      }
-    },
-    "azure-production": {
-      "command": "npx",
-      "args": [
-        "-y", "@azure/mcp@latest", "server", "start",
-        "--read-only",
-        "--namespace", "monitor",
-        "--namespace", "applicationinsights",
-        "--namespace", "subscription",
-        "--namespace", "group"
-      ],
-      "env": {
-        "AZURE_TENANT_ID": "${AZURE_TENANT_ID}",
-        "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID_PRODUCTION}"
-      }
     }
   }
 }

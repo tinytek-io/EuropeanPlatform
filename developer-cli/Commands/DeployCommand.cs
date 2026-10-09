@@ -1,7 +1,6 @@
 using System.CommandLine;
 using System.Diagnostics;
-using System.Reflection;
-using System.Text;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
@@ -10,1401 +9,376 @@ using Spectre.Console;
 
 namespace DeveloperCli.Commands;
 
-public class DeployCommand : Command
+/// <summary>
+///     Deploys an environment to Scaleway through the Aspire publish/deploy pipeline. Everything the
+///     pipeline needs is derived, never hand-copied: the cluster kubeconfig and the per-workload
+///     Secret Manager keys come from Terraform outputs, and a convergence check refuses to deploy over
+///     infrastructure drift (the chart and the cloud must agree before containers roll out).
+/// </summary>
+/// <remarks>
+///     Prerequisites beyond the CLI tools: the bootstrap and environment Terraform modules must be
+///     applied (the command reads their state), and the Scaleway credentials for both modules must
+///     be in the environment — SCW_ACCESS_KEY/SCW_SECRET_KEY/SCW_DEFAULT_PROJECT_ID for the Scaleway
+///     provider and AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for the S3 state backend (see
+///     cloud-infrastructure/README.md).
+/// </remarks>
+public sealed partial class DeployCommand : Command
 {
-    private static readonly JsonSerializerOptions? JsonSerializerOptions = new() { PropertyNameCaseInsensitive = true };
+    private const string DefaultPrefix = "pp";
 
-    private static readonly Config Config = new();
+    /// <summary>
+    ///     Deletes stale deploy tags from the Container Registry, keeping the newest few per image.
+    ///     Every deploy pushes a full tag set; without pruning the registry fills its storage quota
+    ///     and pushes start failing with HTTP 500 (found live: 24 deploys filled 18 GB before the
+    ///     quota broke every subsequent deploy). The pipeline key's registry access authorizes the
+    ///     prune, so it runs as the last step of every deploy.
+    /// </summary>
+    private const int RegistryTagsToKeep = 3;
 
-    private static readonly Dictionary<string, string> AzureLocations = GetAzureLocations();
+    private const string RegistryApiBaseUrl = "https://api.scaleway.com/registry/v1/regions/fr-par";
 
-    private List<ConfigureContinuousDeployments>? _configureContinuousDeploymentsExtensions;
+    // Aspire environment name -> Terraform environment variable value (cloud-infrastructure/scaleway).
+    // Production is added here when that environment is provisioned.
+    private static readonly Dictionary<string, string> TerraformEnvironmentNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["staging"] = "stage"
+    };
 
     public DeployCommand() : base(
         "deploy",
-        "Set up trust between Azure and GitHub for passwordless deployments using OpenID Connect"
+        "Deploy an environment to Scaleway: verifies Terraform convergence, resolves deploy-time secrets from Terraform outputs, and runs the Aspire build/publish/deploy pipeline"
     )
     {
-        SetAction(_ => Execute());
-    }
-
-    private void Execute()
-    {
-        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.AzureCli, Prerequisite.GithubCli);
-
-        _configureContinuousDeploymentsExtensions = Assembly.GetExecutingAssembly().GetTypes()
-            .Where(t => t.IsSubclassOf(typeof(ConfigureContinuousDeployments)))
-            .Select(t => Activator.CreateInstance(t) as ConfigureContinuousDeployments)
-            .Where(t => t != null)
-            .ToList()!;
-
-        PrintHeader("Introduction");
-
-        ShowIntroPrompt();
-
-        PrintHeader("Collecting data");
-
-        SetGithubInfo();
-
-        LoginToGithub();
-
-        EnsureGithubWorkflowsAreEnabled();
-
-        PublishExistingGithubVariables();
-
-        ShowWarningIfGithubRepositoryIsAlreadyInitialized();
-
-        SelectAzureSubscriptions();
-
-        CollectLocations();
-
-        CollectUniquePrefix();
-
-        ConfirmReuseIfAppRegistrationsExist();
-
-        ConfirmReuseIfPostgresAdminSecurityGroupExists();
-
-        ConfirmReuseIfBackOfficeAdminsSecurityGroupExists();
-
-        CollectAdditionalInfo();
-
-        PrintHeader("Confirm changes");
-
-        ConfirmChangesPrompt();
-
-        var startTime = Stopwatch.GetTimestamp();
-
-        PrintHeader("Configuring Azure and GitHub");
-
-        PrepareSubscriptionsForContainerAppsEnvironment();
-
-        CreateAppRegistrationsIfNotExists();
-
-        CreateAppRegistrationCredentials();
-
-        GrantSubscriptionPermissionsToServicePrincipals();
-
-        CreateAzurePostgresAdminSecurityGroups();
-
-        CreateAzureBackOfficeAdminsSecurityGroups();
-
-        CreateGithubEnvironments();
-
-        CreateGithubSecretsAndVariables();
-
-        DisableReusableWorkflows();
-
-        TriggerAndMonitorWorkflows();
-
-        ApplyAdditionalConfigurations();
-
-        PrintHeader($"Configuration of GitHub and Azure completed in {Stopwatch.GetElapsedTime(startTime):g} 🎉");
-
-        ShowSuccessMessage();
-    }
-
-    private static void PrintHeader(string heading)
-    {
-        var separator = new string('-', Console.WindowWidth - heading.Length - 1);
-        AnsiConsole.MarkupLine($"\n[bold][green]{heading}[/] {separator}[/]\n");
-    }
-
-    private static void ShowIntroPrompt()
-    {
-        var loginToGitHub = Config.IsLoggedIn() ? "" : " * Prompt you to log in to GitHub\n";
-
-        var setupIntroPrompt =
-            $"""
-             This command will configure passwordless deployments from GitHub to Azure. If you continue, this command will do the following:
-
-             {loginToGitHub} * Prompt you to log in to Azure and select a subscription
-              * Collect information about your Azure subscription and other settings for setting up continuous deployments
-              * Confirm before you continue
-
-             [bold]Would you like to continue?[/]
-             """;
-
-        if (!AnsiConsole.Confirm(setupIntroPrompt.Replace("\n\n", "\n"))) Environment.Exit(0);
-        AnsiConsole.WriteLine();
-    }
-
-    private static void SetGithubInfo()
-    {
-        Config.SetGithubInfo();
-    }
-
-    private static void LoginToGithub()
-    {
-        if (!Config.IsLoggedIn())
+        var environmentOption = new Option<string>("--environment", "-e")
         {
-            ProcessHelper.StartProcess("gh auth login --git-protocol https --web");
-
-            if (!Config.IsLoggedIn()) Environment.Exit(0);
-
-            AnsiConsole.WriteLine();
-        }
-
-        var githubApiJson = ProcessHelper.StartProcess($"gh api repos/{Config.GithubInfo!.Path}", redirectOutput: true);
-
-        using var githubApi = JsonDocument.Parse(githubApiJson);
-
-        githubApi.RootElement.TryGetProperty("permissions", out var githubRepositoryPermissions);
-        if (!githubRepositoryPermissions.GetProperty("admin").GetBoolean())
+            Description = "The environment to deploy (staging)",
+            DefaultValueFactory = _ => "staging"
+        };
+        var prefixOption = new Option<string>("--prefix")
         {
-            AnsiConsole.MarkupLine("[red]ERROR: You do not have admin permissions on the repository. Please ensure you have the required permissions and try again. Run 'gh auth logout' to log in with a different account.[/]");
-            Environment.Exit(0);
-        }
-    }
-
-    private static void EnsureGithubWorkflowsAreEnabled()
-    {
-        while (true)
+            Description = $"The infrastructure prefix shared with the Terraform modules ({DefaultPrefix})",
+            DefaultValueFactory = _ => DefaultPrefix
+        };
+        var skipPlanCheckOption = new Option<bool>("--skip-plan-check")
         {
-            var listWorkflowsCommand = $"gh workflow list --json name,state,id --repo={Config.GithubInfo!.Path}";
-            var result = ProcessHelper.StartProcess(listWorkflowsCommand, Configuration.CliFolder, true).Trim();
+            Description = "Deploy even when `terraform plan` reports infrastructure drift"
+        };
 
-            if (result.StartsWith('[') && result.EndsWith(']'))
-            {
-                break;
-            }
+        Options.Add(environmentOption);
+        Options.Add(prefixOption);
+        Options.Add(skipPlanCheckOption);
 
-            if (AnsiConsole.Confirm("[yellow]GitHub Actions are currently disabled for this repository. Press Enter to open your browser and enable GitHub Actions.[/]"))
-            {
-                ProcessHelper.OpenBrowser($"https://github.com/{Config.GithubInfo!.Path}/actions");
-                AnsiConsole.MarkupLine("[blue]Please enable the workflows and press any key to continue...[/]");
-                Console.ReadKey();
-            }
-            else
-            {
-                Environment.Exit(0);
-            }
-        }
-    }
-
-    private static void PublishExistingGithubVariables()
-    {
-        var githubVariablesJson = ProcessHelper.StartProcess(
-            $"gh api repos/{Config.GithubInfo!.Path}/actions/variables --paginate",
-            redirectOutput: true
+        SetAction(parseResult => Execute(
+                parseResult.GetValue(environmentOption)!,
+                parseResult.GetValue(prefixOption)!,
+                parseResult.GetValue(skipPlanCheckOption)
+            ).GetAwaiter().GetResult()
         );
-
-        var configGithubVariables = JsonDocument.Parse(githubVariablesJson).RootElement.GetProperty("variables").EnumerateArray();
-        foreach (var variable in configGithubVariables)
-        {
-            var variableName = variable.GetProperty("name").GetString()!;
-            var variableValue = variable.GetProperty("value").GetString()!;
-
-            Config.GithubVariables.Add(variableName, variableValue);
-        }
     }
 
-    private static void ShowWarningIfGithubRepositoryIsAlreadyInitialized()
+    [GeneratedRegex("^(?:\\s*)(\\w+_image):\\s*\"([^\"]+)\"")]
+    private static partial Regex ChartImagePattern { get; }
+
+    private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck)
     {
-        if (!Config.GithubVariables.Any(variable => Enum.GetNames<VariableNames>().Contains(variable.Key)))
+        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform);
+
+        if (!TerraformEnvironmentNames.TryGetValue(aspireEnvironment, out var terraformEnvironment))
         {
-            return;
-        }
-
-        AnsiConsole.MarkupLine("[yellow]This Github Repository has already been initialized. If you continue existing GitHub variables will be overridden.[/]");
-        if (AnsiConsole.Confirm("Do you want to continue and override existing GitHub variables?"))
-        {
-            AnsiConsole.WriteLine();
-            return;
-        }
-
-        Environment.Exit(0);
-    }
-
-    private void SelectAzureSubscriptions()
-    {
-        // `az login` returns a JSON array of subscriptions
-        var subscriptionListJson = RunAzureCliCommand("login");
-
-        // Regular expression to match JSON part
-        var jsonRegex = new Regex(@"\[.*\]", RegexOptions.Singleline);
-        var match = jsonRegex.Match(subscriptionListJson);
-
-        List<AzureSubscription>? azureSubscriptions = null;
-        if (match.Success)
-        {
-            azureSubscriptions = JsonSerializer.Deserialize<List<AzureSubscription>>(match.Value, JsonSerializerOptions);
-        }
-
-        if (azureSubscriptions == null)
-        {
-            AnsiConsole.MarkupLine("[red]ERROR:[/] No subscriptions found.");
+            AnsiConsole.MarkupLine($"[red]Unknown environment '{aspireEnvironment}'.[/] Known environments: {string.Join(", ", TerraformEnvironmentNames.Keys)}.");
             Environment.Exit(1);
         }
 
-        Config.StagingSubscription = SelectSubscription("Staging");
-        Config.ProductionSubscription = SelectSubscription("Production");
+        var repositoryRoot = Configuration.SourceCodeFolder;
+        var bootstrapModuleFolder = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "bootstrap");
+        var environmentModuleFolder = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "environment");
+        var applicationFolder = Path.Combine(repositoryRoot, "application");
 
-        if (Config.StagingSubscription.TenantId != Config.ProductionSubscription.TenantId)
+        PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
+
+        // The environment module needs the project id from the bootstrap module's (local) state.
+        var projectId = RunTerraform(bootstrapModuleFolder, "output -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)").Trim();
+
+        if (!skipPlanCheck)
         {
-            AnsiConsole.MarkupLine("[red]ERROR:[/] Please select two subscriptions from the same tenant, and try again.");
+            PrintHeader("Checking Terraform convergence");
+            var plan = ProcessHelper.ExecuteQuietly(
+                $"terraform plan -detailed-exitcode -input=false -no-color -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
+                environmentModuleFolder,
+                ("SCW_DEFAULT_PROJECT_ID", projectId)
+            );
+            // -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes present.
+            if (plan.ExitCode == 2)
+            {
+                AnsiConsole.MarkupLine("[red]terraform plan reports pending changes.[/] The deployment chart and the cloud infrastructure must agree before deploying — run `terraform apply` first, or pass --skip-plan-check to deploy anyway.");
+                AnsiConsole.MarkupLine($"[dim]Plan output: {Markup.Escape(plan.TempFilePathWithSize)}[/]");
+                Environment.Exit(1);
+            }
+
+            if (plan.ExitCode != 0)
+            {
+                AnsiConsole.MarkupLine("[red]terraform plan failed:[/] " + Markup.Escape(plan.GetErrorSummary("plan")));
+                Environment.Exit(plan.ExitCode);
+            }
+
+            AnsiConsole.MarkupLine("[green]Infrastructure matches the configuration.[/]");
+        }
+
+        PrintHeader("Resolving deploy-time inputs from Terraform outputs");
+
+        // A deploy that was killed mid-run leaves its temp kubeconfig behind; clean those up before
+        // creating this run's file.
+        foreach (var stale in Directory.GetFiles(Path.GetTempPath(), $"pp-{terraformEnvironment}-kubeconfig-*.yaml"))
+        {
+            File.Delete(stale);
+        }
+
+        // The cluster kubeconfig is a sensitive Terraform output; it goes to a temp file that only
+        // the deploy process reads and is deleted afterwards.
+        var kubeconfigPath = Path.Combine(Path.GetTempPath(), $"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml");
+        var kubeconfig = RunTerraform(environmentModuleFolder, "output -raw kubeconfig", "read the cluster kubeconfig output");
+        File.WriteAllText(kubeconfigPath, kubeconfig);
+
+        // Per-workload Secret Manager keys are deploy-time parameters of the Aspire pipeline
+        // (env-shaped names, read by the AppHost parameter resolution — same shape as the
+        // deploy script always used, but never hand-copied).
+        var workloadKeysJson = RunTerraform(environmentModuleFolder, "output -json workload_secret_manager_keys", "read the workload Secret Manager keys");
+        var workloadKeys = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(workloadKeysJson)
+                           ?? throw new InvalidOperationException("Could not parse workload_secret_manager_keys output.");
+
+        foreach (var workload in workloadKeys.Keys)
+        {
+            AnsiConsole.MarkupLine($"  [green]✓[/] {workload} deploy key resolved");
+        }
+
+        // Cockpit telemetry endpoints (per signal) are not secret — they pass as plain environment
+        // values that the AppHost wires into every workload. Environments without Cockpit
+        // telemetry simply leave this output absent.
+        var cockpitEndpointsJson = RunTerraform(environmentModuleFolder, "output -json cockpit_otlp_endpoints", "read the Cockpit OTLP endpoints");
+        var cockpitEndpoints = JsonSerializer.Deserialize<Dictionary<string, string>>(cockpitEndpointsJson)
+                               ?? throw new InvalidOperationException("Could not parse cockpit_otlp_endpoints output.");
+
+        PrintHeader("Running the Aspire deploy pipeline");
+
+        // The Aspire chart is regenerated on every deploy; a stale chart folder confuses
+        // the publish step, so start clean.
+        var aspireOutputFolder = Path.Combine(applicationFolder, "AppHost", "aspire-output");
+        if (Directory.Exists(aspireOutputFolder))
+        {
+            Directory.Delete(aspireOutputFolder, true);
+        }
+
+        // The deploy runs with a fresh environment: the kubeconfig points at this cluster,
+        // OpenAPI document generation is skipped for speed, and Docker builds target the
+        // cluster's architecture regardless of the machine running the deploy.
+        var environmentVariables = new List<(string Name, string Value)>
+        {
+            ("KUBECONFIG", kubeconfigPath),
+            ("SKIP_OPENAPI_DOCUMENTS", "true"),
+            ("DOCKER_DEFAULT_PLATFORM", "linux/amd64"),
+            ("SCW_DEFAULT_PROJECT_ID", projectId)
+        };
+        environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
+        environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
+
+        int exitCode;
+        try
+        {
+            // Live output: the Aspire pipeline renders its own progress, so it streams straight to
+            // the console instead of being captured.
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"aspire deploy -e {aspireEnvironment} --non-interactive",
+                WorkingDirectory = applicationFolder
+            };
+            foreach (var (name, value) in environmentVariables)
+            {
+                processStartInfo.Environment[name] = value;
+            }
+
+            using var process = Process.Start(processStartInfo)!;
+            process.WaitForExit();
+            exitCode = process.ExitCode;
+        }
+        finally
+        {
+            File.Delete(kubeconfigPath);
+        }
+
+        if (exitCode != 0)
+        {
+            AnsiConsole.MarkupLine($"[red]Aspire deploy failed with exit code {exitCode}.[/] The pipeline output above has the failing step; Aspire also writes full logs to ~/.aspire/logs.");
+            Environment.Exit(exitCode);
+        }
+
+        ValidateDeployedChartImages(applicationFolder);
+        ValidateChartRolloutStrategy(applicationFolder);
+
+        await PruneRegistryTagsAsync(bootstrapModuleFolder);
+
+        AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
+    }
+
+    /// <summary>
+    ///     Guards against the upstream Aspire regression where image references fail to reach the
+    ///     generated chart (everything stays a local `name:latest` reference): the chart that just
+    ///     deployed must reference registry-qualified images with deploy-specific tags. A silent
+    ///     regression here means pods run stale or missing images, so it fails the deploy loudly.
+    /// </summary>
+    private static void ValidateDeployedChartImages(string applicationFolder)
+    {
+        var valuesPath = Path.Combine(applicationFolder, "AppHost", "aspire-output", "values.kubernetes.yaml");
+        if (!File.Exists(valuesPath))
+        {
+            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] {Markup.Escape(valuesPath)} does not exist — the generated chart layout changed, update the deploy command.");
             Environment.Exit(1);
         }
 
-        RunAzureCliCommand($"""account set --subscription "{Config.StagingSubscription.Id}" """);
+        var images = File.ReadAllLines(valuesPath)
+            .Select(line => ChartImagePattern.Match(line))
+            .Where(match => match.Success)
+            .Select(match => (Name: match.Groups[1].Value, Image: match.Groups[2].Value))
+            .ToList();
 
-        return;
-
-        Subscription SelectSubscription(string environmentName)
+        if (images.Count == 0)
         {
-            var activeSubscriptions = azureSubscriptions.Where(s => s.State == "Enabled").ToList();
-
-            var selectedDisplayName = AnsiConsole.Prompt(new SelectionPrompt<string>()
-                .Title($"[bold]Please select an Azure subscription for [yellow]{environmentName}[/][/]")
-                .AddChoices(activeSubscriptions.Select(s => s.Name))
-            );
-
-            var selectedSubscriptions = activeSubscriptions.Where(s => s.Name == selectedDisplayName).ToArray();
-            if (selectedSubscriptions.Length > 1)
-            {
-                AnsiConsole.MarkupLine($"[red]ERROR:[/] Found two subscriptions with the name {selectedDisplayName}.");
-                Environment.Exit(1);
-            }
-
-            var azureSubscription = selectedSubscriptions.Single();
-
-            return new Subscription(
-                azureSubscription.Id,
-                azureSubscription.Name,
-                azureSubscription.TenantId,
-                Config.GithubInfo!,
-                environmentName
-            );
-        }
-    }
-
-    private static void CollectLocations()
-    {
-        var location = CollectLocation();
-
-        Config.StagingLocation = location;
-        Config.ProductionLocation = location;
-
-        Location CollectLocation()
-        {
-            var locationDisplayName = AnsiConsole.Prompt(new SelectionPrompt<string>()
-                .Title("[bold]Please select a location where Azure Resource can be deployed [/]")
-                .AddChoices(AzureLocations.Keys)
-            );
-
-            var locationAcronym = AzureLocations[locationDisplayName];
-            var locationCode = locationDisplayName.Replace(" ", "").ToLower();
-            return new Location(locationCode, locationCode, locationAcronym);
-        }
-    }
-
-    private void CollectUniquePrefix()
-    {
-        var uniquePrefix = Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.UNIQUE_PREFIX));
-
-        AnsiConsole.MarkupLine(
-            "When creating Azure resources like Azure Container Registry, PostgreSQL, Blob storage, Service Bus, Key Vaults, etc., a global unique name is required. To do this we use a prefix of 2-6 characters, which allows for flexibility for the rest of the name. E.g. if you select 'acme' the production PostgreSQL server in West Europe will be named 'acme-prod-euw'."
-        );
-
-        if (uniquePrefix is not null)
-        {
-            AnsiConsole.MarkupLine($"[yellow]The unique prefix '{uniquePrefix}' already specified. Changing this will recreate all Azure resources![/]");
-        }
-        else
-        {
-            uniquePrefix = Config.GithubInfo!.OrganizationName.ToLower().Substring(0, Math.Min(6, Config.GithubInfo.OrganizationName.Length));
-        }
-
-        while (true)
-        {
-            uniquePrefix = AnsiConsole.Prompt(
-                new TextPrompt<string>("[bold]Please enter a unique prefix between 2-6 characters (e.g. an acronym for your product or company).[/]")
-                    .DefaultValue(uniquePrefix)
-                    .Validate(input =>
-                        Regex.IsMatch(input, "^[a-z0-9]{2,6}$")
-                            ? ValidationResult.Success()
-                            : ValidationResult.Error("[red]ERROR:[/]The unique prefix must be 2-6 characters and contain only lowercase letters a-z or numbers 0-9.")
-                    )
-            );
-
-            if (IsContainerRegistryNameConflicting(Config.StagingSubscription.Id, Config.StagingLocation.SharedLocation, $"{uniquePrefix}-stage-global", $"{uniquePrefix}stage") ||
-                IsContainerRegistryNameConflicting(Config.ProductionSubscription.Id, Config.ProductionLocation.SharedLocation, $"{uniquePrefix}-prod-global", $"{uniquePrefix}prod"))
-            {
-                AnsiConsole.MarkupLine(
-                    "[red]ERROR:[/]Azure resources conflicting with this prefix is already in use, possibly in [bold]another subscription[/] or in [bold]another location[/]. Please enter a unique name."
-                );
-                continue;
-            }
-
-            AnsiConsole.WriteLine();
-            Config.UniquePrefix = uniquePrefix;
-            return;
-        }
-
-        bool IsContainerRegistryNameConflicting(string subscriptionId, string location, string resourceGroup, string azureContainerRegistryName)
-        {
-            var checkAvailability = RunAzureCliCommand($"acr check-name --name {azureContainerRegistryName} --query \"nameAvailable\" -o tsv");
-            if (bool.Parse(checkAvailability)) return false;
-
-            var showExistingRegistry = RunAzureCliCommand($"acr show --name {azureContainerRegistryName} --subscription {subscriptionId} --output json");
-
-            var jsonRegex = new Regex(@"\{.*\}", RegexOptions.Singleline);
-            var match = jsonRegex.Match(showExistingRegistry);
-
-            if (!match.Success) return true;
-            var jsonDocument = JsonDocument.Parse(match.Value);
-            var sameSubscription = jsonDocument.RootElement.GetProperty("id").GetString()?.Contains(subscriptionId) == true;
-            var sameResourceGroup = jsonDocument.RootElement.GetProperty("resourceGroup").GetString() == resourceGroup;
-            var sameLocation = jsonDocument.RootElement.GetProperty("location").GetString() == location;
-
-            return !(sameSubscription && sameResourceGroup && sameLocation);
-        }
-    }
-
-    private void ConfirmReuseIfAppRegistrationsExist()
-    {
-        ConfirmReuseIfAppRegistrationExist(Config.StagingSubscription.AppRegistration);
-        ConfirmReuseIfAppRegistrationExist(Config.ProductionSubscription.AppRegistration);
-        ConfirmReuseIfBackOfficeAppRegistrationExist(Config.StagingSubscription.BackOfficeAppRegistration);
-        ConfirmReuseIfBackOfficeAppRegistrationExist(Config.ProductionSubscription.BackOfficeAppRegistration);
-        return;
-
-        void ConfirmReuseIfAppRegistrationExist(AppRegistration appRegistration)
-        {
-            appRegistration.AppRegistrationId = RunAzureCliCommand(
-                $"""ad app list --display-name "{appRegistration.Name}" --query "[].appId" -o tsv"""
-            ).Trim();
-
-            appRegistration.ServicePrincipalId = RunAzureCliCommand(
-                $"""ad sp list --display-name "{appRegistration.Name}" --query "[].appId" -o tsv"""
-            ).Trim();
-
-            if (appRegistration.AppRegistrationId != string.Empty)
-            {
-                appRegistration.ServicePrincipalObjectId = RunAzureCliCommand(
-                    $"""ad sp list --filter "appId eq '{appRegistration.AppRegistrationId}'" --query "[].id" -o tsv"""
-                ).Trim();
-            }
-
-            if (appRegistration.AppRegistrationId != string.Empty && appRegistration.ServicePrincipalId != string.Empty)
-            {
-                AnsiConsole.MarkupLine(
-                    $"[yellow]The App Registration '{appRegistration.Name}' already exists with App ID: {appRegistration.ServicePrincipalId}[/]"
-                );
-
-                if (AnsiConsole.Confirm("The existing App Registration will be reused. Do you want to continue?"))
-                {
-                    AnsiConsole.WriteLine();
-                    return;
-                }
-
-                AnsiConsole.MarkupLine("[red]Please delete the existing App Registration and try again.[/]");
-                Environment.Exit(1);
-            }
-
-            if (appRegistration.AppRegistrationId != string.Empty || appRegistration.ServicePrincipalId != string.Empty)
-            {
-                AnsiConsole.MarkupLine($"[red]The App Registration or Service Principal '{appRegistration}' exists, but not both. Please manually delete and retry.[/]");
-                Environment.Exit(1);
-            }
-        }
-
-        void ConfirmReuseIfBackOfficeAppRegistrationExist(BackOfficeAppRegistration appRegistration)
-        {
-            appRegistration.AppRegistrationId = RunAzureCliCommand(
-                $"""ad app list --display-name "{appRegistration.Name}" --query "[].appId" -o tsv"""
-            ).Trim();
-
-            if (appRegistration.AppRegistrationId == string.Empty) return;
-
-            AnsiConsole.MarkupLine(
-                $"[yellow]The App Registration '{appRegistration.Name}' already exists with App ID: {appRegistration.AppRegistrationId}[/]"
-            );
-
-            if (AnsiConsole.Confirm("The existing App Registration will be reused. Do you want to continue?"))
-            {
-                AnsiConsole.WriteLine();
-                return;
-            }
-
-            AnsiConsole.MarkupLine("[red]Please delete the existing App Registration and try again.[/]");
+            AnsiConsole.MarkupLine("[red]Chart validation failed:[/] no image references found in the chart values — the generated chart layout changed, update the deploy command.");
             Environment.Exit(1);
         }
+
+        var invalidImages = images.Where(image => !image.Image.Contains('/') || image.Image.EndsWith(":latest")).ToList();
+        foreach (var image in invalidImages)
+        {
+            AnsiConsole.MarkupLine($"  [red]✗[/] {image.Name} = '{Markup.Escape(image.Image)}' — expected a registry-qualified image with a deploy-specific tag");
+        }
+
+        if (invalidImages.Count > 0)
+        {
+            AnsiConsole.MarkupLine("[red]Chart validation failed:[/] the deployed chart references non-registry images (an upstream Aspire regression?).");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
     }
 
-    private void ConfirmReuseIfPostgresAdminSecurityGroupExists()
+    /// <summary>
+    ///     Guards the AppHost's rollout patch (see Program.cs): every deployment in the deployed
+    ///     chart must roll out with maxUnavailable 0, otherwise a single-replica workload drops its
+    ///     last ready pod before the replacement is ready — deploys surface as edge 504 windows.
+    /// </summary>
+    private static void ValidateChartRolloutStrategy(string applicationFolder)
     {
-        Config.StagingSubscription.PostgresAdminsGroup.ObjectId = ConfirmReuseIfSecurityGroupExists(Config.StagingSubscription.PostgresAdminsGroup.Name);
-        Config.ProductionSubscription.PostgresAdminsGroup.ObjectId = ConfirmReuseIfSecurityGroupExists(Config.ProductionSubscription.PostgresAdminsGroup.Name);
-    }
-
-    private void ConfirmReuseIfBackOfficeAdminsSecurityGroupExists()
-    {
-        Config.StagingSubscription.BackOfficeAdminsGroup.ObjectId = ConfirmReuseIfSecurityGroupExists(Config.StagingSubscription.BackOfficeAdminsGroup.Name);
-        Config.ProductionSubscription.BackOfficeAdminsGroup.ObjectId = ConfirmReuseIfSecurityGroupExists(Config.ProductionSubscription.BackOfficeAdminsGroup.Name);
-    }
-
-    private static string? ConfirmReuseIfSecurityGroupExists(string securityGroupName)
-    {
-        var existingObjectId = RunAzureCliCommand(
-            $"""ad group list --display-name "{securityGroupName}" --query "[].id" -o tsv"""
-        ).Trim();
-
-        if (existingObjectId == string.Empty)
-        {
-            return null;
-        }
-
-        AnsiConsole.MarkupLine(
-            $"[yellow]The AD Security Group '{securityGroupName}' already exists with ID: {existingObjectId}[/]"
-        );
-
-        if (!AnsiConsole.Confirm("The existing AD Security Group will be reused. Do you want to continue?"))
-        {
-            AnsiConsole.MarkupLine("[red]Please delete the existing AD Security Group and try again.[/]");
-            Environment.Exit(0);
-        }
-
-        AnsiConsole.WriteLine();
-
-        return existingObjectId;
-    }
-
-    private void CollectAdditionalInfo()
-    {
-        foreach (var instance in _configureContinuousDeploymentsExtensions!)
-        {
-            var method = instance.GetType().GetMethod("CollectDetails");
-            method?.Invoke(instance, [Config]);
-        }
-    }
-
-    private void ConfirmChangesPrompt()
-    {
-        var stagingServicePrincipal = Config.StagingSubscription.AppRegistration.Exists
-            ? Config.StagingSubscription.AppRegistration.ServicePrincipalId
-            : "Will be generated";
-        var productionServicePrincipal = Config.ProductionSubscription.AppRegistration.Exists
-            ? Config.ProductionSubscription.AppRegistration.ServicePrincipalId
-            : "Will be generated";
-        var stagingPostgresAdminObject = Config.StagingSubscription.PostgresAdminsGroup.Exists
-            ? Config.StagingSubscription.PostgresAdminsGroup.ObjectId
-            : "Will be generated";
-        var productionPostgresAdminObject = Config.ProductionSubscription.PostgresAdminsGroup.Exists
-            ? Config.ProductionSubscription.PostgresAdminsGroup.ObjectId
-            : "Will be generated";
-        var stagingBackOfficeClientId = Config.StagingSubscription.BackOfficeAppRegistration.Exists
-            ? Config.StagingSubscription.BackOfficeAppRegistration.AppRegistrationId
-            : "Will be generated";
-        var productionBackOfficeClientId = Config.ProductionSubscription.BackOfficeAppRegistration.Exists
-            ? Config.ProductionSubscription.BackOfficeAppRegistration.AppRegistrationId
-            : "Will be generated";
-        var stagingBackOfficeAdminsGroup = Config.StagingSubscription.BackOfficeAdminsGroup.Exists
-            ? Config.StagingSubscription.BackOfficeAdminsGroup.ObjectId
-            : "Will be generated";
-        var productionBackOfficeAdminsGroup = Config.ProductionSubscription.BackOfficeAdminsGroup.Exists
-            ? Config.ProductionSubscription.BackOfficeAdminsGroup.ObjectId
-            : "Will be generated";
-        var stagingDomainName = Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.STAGING_DOMAIN_NAME), "-");
-        var stagingBackOfficeDomainName = Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.STAGING_BACK_OFFICE_DOMAIN_NAME), "-");
-        var productionDomainName = Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.PRODUCTION_DOMAIN_NAME), "-");
-        var productionBackOfficeDomainName = Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.PRODUCTION_BACK_OFFICE_DOMAIN_NAME), "-");
-
-        var setupConfirmPrompt =
-            $"""
-             [bold]Please review planned changes before continuing.[/]
-
-             1. The following will be created or updated in Azure:
-
-                [bold]Active Directory App Registrations/Service Principals:[/]
-                * [blue]{Config.StagingSubscription.AppRegistration.Name}[/] with access to the [blue]{Config.StagingSubscription.Name}[/] subscription.
-                * [blue]{Config.ProductionSubscription.AppRegistration.Name}[/] with access to the [blue]{Config.ProductionSubscription.Name}[/] subscription.
-                * [blue]{Config.StagingSubscription.BackOfficeAppRegistration.Name}[/] for back-office Easy Auth on the [blue]{Config.StagingSubscription.Name}[/] subscription.
-                * [blue]{Config.ProductionSubscription.BackOfficeAppRegistration.Name}[/] for back-office Easy Auth on the [blue]{Config.ProductionSubscription.Name}[/] subscription.
-
-                [yellow]** The Service Principals will get 'Contributor' and 'User Access Administrator' role on the Azure Subscriptions.[/]
-
-                [bold]Active Directory Security Groups:[/]
-                * [blue]{Config.StagingSubscription.PostgresAdminsGroup.Name}[/]
-                * [blue]{Config.ProductionSubscription.PostgresAdminsGroup.Name}[/]
-                * [blue]{Config.StagingSubscription.BackOfficeAdminsGroup.Name}[/]
-                * [blue]{Config.ProductionSubscription.BackOfficeAdminsGroup.Name}[/]
-
-                [yellow]** The PostgreSQL Admins Security Groups are used to grant Managed Identities and CI/CD permissions to PostgreSQL databases.[/]
-                [yellow]** The BackOffice Admins Security Groups grant admin rights inside the back-office app. Add members manually in Azure Portal as people are granted admin rights.[/]
-
-             2. The following GitHub environments will be created if not exists:
-                * [blue]staging[/]
-                * [blue]production[/]
-
-                [yellow]** Environments are used to require approval when infrastructure is deployed. In private GitHub repositories, this requires a paid plan.[/]
-
-             3. The following GitHub repository variables will be created:
-
-                [bold]Shared Variables:[/]
-                * TENANT_ID: [blue]{Config.TenantId}[/]
-                * UNIQUE_PREFIX: [blue]{Config.UniquePrefix}[/]
-
-                [bold]Staging Shared Variables:[/]
-                * STAGING_SUBSCRIPTION_ID: [blue]{Config.StagingSubscription.Id}[/]
-                * STAGING_SHARED_LOCATION: [blue]{Config.StagingLocation.SharedLocation}[/]
-                * STAGING_SERVICE_PRINCIPAL_ID: [blue]{stagingServicePrincipal}[/]
-                * STAGING_POSTGRES_ADMIN_OBJECT_ID: [blue]{stagingPostgresAdminObject}[/]
-                * STAGING_DOMAIN_NAME: [blue]{stagingDomainName}[/] ([yellow]Manually changed this and triggered deployment to set up the domain[/])
-                * STAGING_BACK_OFFICE_DOMAIN_NAME: [blue]{stagingBackOfficeDomainName}[/] ([yellow]Manually change this to enable the back-office subdomain (e.g. back-office.staging.your-saas-company.com)[/])
-                * STAGING_BACK_OFFICE_ENTRA_CLIENT_ID: [blue]{stagingBackOfficeClientId}[/]
-                * STAGING_BACK_OFFICE_ADMINS_GROUP_ID: [blue]{stagingBackOfficeAdminsGroup}[/]
-
-                [bold]Staging Cluster Variables:[/]
-                * STAGING_CLUSTER_ENABLED: [blue]true[/]
-                * STAGING_CLUSTER_LOCATION: [blue]{Config.StagingLocation.ClusterLocation}[/]
-                * STAGING_CLUSTER_LOCATION_ACRONYM: [blue]{Config.StagingLocation.ClusterLocationAcronym}[/]
-
-                [bold]Production Shared Variables:[/]
-                * PRODUCTION_SUBSCRIPTION_ID: [blue]{Config.ProductionSubscription.Id}[/]
-                * PRODUCTION_SHARED_LOCATION: [blue]{Config.ProductionLocation.SharedLocation}[/]
-                * PRODUCTION_SERVICE_PRINCIPAL_ID: [blue]{productionServicePrincipal}[/]
-                * PRODUCTION_SERVICE_PRINCIPAL_OBJECT_ID: [blue]{Config.ProductionSubscription.AppRegistration.ServicePrincipalObjectId}[/]
-                * PRODUCTION_POSTGRES_ADMIN_OBJECT_ID: [blue]{productionPostgresAdminObject}[/]
-                * PRODUCTION_DOMAIN_NAME: [blue]{productionDomainName}[/] ([yellow]Manually changed this and triggered deployment to set up the domain[/])
-                * PRODUCTION_BACK_OFFICE_DOMAIN_NAME: [blue]{productionBackOfficeDomainName}[/] ([yellow]Manually change this to enable the back-office subdomain (e.g. back-office.your-saas-company.com)[/])
-                * PRODUCTION_BACK_OFFICE_ENTRA_CLIENT_ID: [blue]{productionBackOfficeClientId}[/]
-                * PRODUCTION_BACK_OFFICE_ADMINS_GROUP_ID: [blue]{productionBackOfficeAdminsGroup}[/]
-
-                [bold]Production Cluster 1 Variables:[/]
-                * PRODUCTION_CLUSTER1_ENABLED: [blue]false[/] ([yellow]Change this to 'true' when ready to deploy to production[/])
-                * PRODUCTION_CLUSTER1_LOCATION: [blue]{Config.ProductionLocation.ClusterLocation}[/]
-                * PRODUCTION_CLUSTER1_LOCATION_ACRONYM: [blue]{Config.ProductionLocation.ClusterLocationAcronym}[/]
-
-                [yellow]** All variables can be changed on the GitHub Settings page. For example, if you want to deploy production or staging to different locations.[/]
-
-             4. Disable the reusable GitHub workflows [blue]Deploy Container[/] and [blue]Plan and Deploy Infrastructure[/].
-
-             5. The [blue]Cloud Infrastructure - Deployment[/] GitHub Actions will be triggered deployment of Azure Infrastructure. This will take [yellow]between 15 and 45 minutes[/].
-
-             6. The [blue]Build and Deploy[/] GitHub Action will be triggered to deploy the Application Code. This will take [yellow]between 5 and 10 minutes[/].
-
-             7. You will receive recommendations on how to further secure and optimize your setup.
-
-             {ConfirmAdditionalInfo()}
-             [bold]Would you like to continue?[/]
-             """;
-
-        if (!AnsiConsole.Confirm($"{setupConfirmPrompt}", false)) Environment.Exit(0);
-
-        return;
-
-        string ConfirmAdditionalInfo()
-        {
-            var stringBuilder = new StringBuilder();
-            foreach (var instance in _configureContinuousDeploymentsExtensions!)
-            {
-                var method = instance.GetType().GetMethod("ConfirmChanges");
-                var result = method?.Invoke(instance, [Config]);
-                stringBuilder.AppendLine(result?.ToString());
-            }
-
-            return stringBuilder.ToString();
-        }
-    }
-
-    private void PrepareSubscriptionsForContainerAppsEnvironment()
-    {
-        PrepareSubscription(Config.StagingSubscription.Id);
-        PrepareSubscription(Config.ProductionSubscription.Id);
-
-        AnsiConsole.MarkupLine("[green]Successfully ensured deployment of Azure Container Apps Environment is enabled on Azure Subscriptions.[/]");
-        return;
-
-        void PrepareSubscription(string subscriptionId)
-        {
-            RunAzureCliCommand(
-                $"provider register --namespace Microsoft.ContainerService --subscription {subscriptionId}",
-                !Configuration.TraceEnabled
-            );
-        }
-    }
-
-    private void CreateAppRegistrationsIfNotExists()
-    {
-        if (!Config.StagingSubscription.AppRegistration.Exists)
-        {
-            CreateAppRegistration(Config.StagingSubscription.AppRegistration);
-        }
-
-        if (!Config.ProductionSubscription.AppRegistration.Exists)
-        {
-            CreateAppRegistration(Config.ProductionSubscription.AppRegistration);
-        }
-
-        if (!Config.StagingSubscription.BackOfficeAppRegistration.Exists)
-        {
-            CreateBackOfficeAppRegistration(Config.StagingSubscription.BackOfficeAppRegistration);
-        }
-
-        if (!Config.ProductionSubscription.BackOfficeAppRegistration.Exists)
-        {
-            CreateBackOfficeAppRegistration(Config.ProductionSubscription.BackOfficeAppRegistration);
-        }
-
-        // ACA Easy Auth uses the OAuth implicit flow and requires the app registration to issue ID tokens
-        // and have its callback URL registered as a reply URL. Self-heal both on every run for fresh and reused app registrations.
-        var stagingRedirectUris = ResolveBackOfficeRedirectUris(
-            Config.StagingSubscription.Id,
-            Config.UniquePrefix,
-            "stage",
-            Config.StagingLocation.ClusterLocationAcronym,
-            Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.STAGING_BACK_OFFICE_DOMAIN_NAME), string.Empty)
-        );
-        var productionRedirectUris = ResolveBackOfficeRedirectUris(
-            Config.ProductionSubscription.Id,
-            Config.UniquePrefix,
-            "prod",
-            Config.ProductionLocation.ClusterLocationAcronym,
-            Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.PRODUCTION_BACK_OFFICE_DOMAIN_NAME), string.Empty)
-        );
-        EnsureBackOfficeAppRegistrationConfiguration(Config.StagingSubscription.BackOfficeAppRegistration, stagingRedirectUris);
-        EnsureBackOfficeAppRegistrationConfiguration(Config.ProductionSubscription.BackOfficeAppRegistration, productionRedirectUris);
-
-        return;
-
-        void CreateAppRegistration(AppRegistration appRegistration)
-        {
-            appRegistration.AppRegistrationId = RequireAzureValue(
-                RunAzureCliCommand($"""ad app create --display-name "{appRegistration.Name}" --query appId -o tsv""").Trim(),
-                $"Creating App Registration '{appRegistration.Name}'"
-            );
-
-            appRegistration.ServicePrincipalId = RequireAzureValue(
-                RunAzureCliCommand($"ad sp create --id {appRegistration.AppRegistrationId} --query appId -o tsv").Trim(),
-                $"Creating Service Principal for '{appRegistration.Name}'"
-            );
-
-            appRegistration.ServicePrincipalObjectId = RequireAzureValue(
-                RunAzureCliCommand($"""ad sp list --filter "appId eq '{appRegistration.AppRegistrationId}'" --query "[].id" -o tsv""").Trim(),
-                $"Looking up Service Principal object id for '{appRegistration.Name}'"
-            );
-
-            AnsiConsole.MarkupLine(
-                $"[green]Successfully created an App Registration '{appRegistration.Name}' ({appRegistration.AppRegistrationId}).[/]"
-            );
-        }
-
-        void CreateBackOfficeAppRegistration(BackOfficeAppRegistration appRegistration)
-        {
-            appRegistration.AppRegistrationId = RequireAzureValue(
-                RunAzureCliCommand($"""ad app create --display-name "{appRegistration.Name}" --query appId -o tsv""").Trim(),
-                $"Creating App Registration '{appRegistration.Name}'"
-            );
-
-            AnsiConsole.MarkupLine(
-                $"[green]Successfully created an App Registration '{appRegistration.Name}' ({appRegistration.AppRegistrationId}).[/]"
-            );
-        }
-    }
-
-    private static string[] ResolveBackOfficeRedirectUris(string subscriptionId, string uniquePrefix, string environment, string clusterLocationAcronym, string backOfficeDomainName)
-    {
-        var redirectUris = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(backOfficeDomainName) && backOfficeDomainName != "-")
-        {
-            redirectUris.Add($"https://{backOfficeDomainName}/.auth/login/aad/callback");
-        }
-
-        var clusterResourceGroupName = $"{uniquePrefix}-{environment}-{clusterLocationAcronym}";
-        var defaultDomain = RunAzureCliCommand(
-            $"""containerapp env show --subscription "{subscriptionId}" --resource-group {clusterResourceGroupName} --name {clusterResourceGroupName} --query properties.defaultDomain -o tsv"""
-        ).Trim();
-
-        if (!string.IsNullOrWhiteSpace(defaultDomain))
-        {
-            redirectUris.Add($"https://back-office.{defaultDomain}/.auth/login/aad/callback");
-        }
-
-        return redirectUris.ToArray();
-    }
-
-    private static void EnsureBackOfficeAppRegistrationConfiguration(BackOfficeAppRegistration appRegistration, string[] expectedRedirectUris)
-    {
-        var objectId = RequireAzureValue(
-            RunAzureCliCommand($"ad app show --id {appRegistration.AppRegistrationId} --query id -o tsv").Trim(),
-            $"Looking up object id for App Registration '{appRegistration.Name}'"
-        );
-
-        var appJson = RunAzureCliCommand(
-            $"""rest --method GET --url "https://graph.microsoft.com/v1.0/applications/{objectId}" -o json"""
-        );
-
-        using var appDocument = JsonDocument.Parse(appJson);
-        var appRoot = appDocument.RootElement;
-        var webRoot = appRoot.TryGetProperty("web", out var webElement) ? webElement : default;
-
-        var idTokenIssuanceEnabled =
-            webRoot.ValueKind == JsonValueKind.Object &&
-            webRoot.TryGetProperty("implicitGrantSettings", out var implicitGrantElement) &&
-            implicitGrantElement.TryGetProperty("enableIdTokenIssuance", out var idTokenElement) &&
-            idTokenElement.ValueKind == JsonValueKind.True;
-
-        var existingRedirectUris = webRoot.ValueKind == JsonValueKind.Object &&
-                                   webRoot.TryGetProperty("redirectUris", out var redirectUrisElement) &&
-                                   redirectUrisElement.ValueKind == JsonValueKind.Array
-            ? redirectUrisElement.EnumerateArray().Select(uri => uri.GetString() ?? string.Empty).Where(uri => uri.Length > 0).ToArray()
+        var templatesFolder = Path.Combine(applicationFolder, "AppHost", "aspire-output", "templates");
+        var deployments = Directory.Exists(templatesFolder)
+            ? Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories)
             : [];
 
-        var missingRedirectUris = expectedRedirectUris.Where(uri => !existingRedirectUris.Contains(uri)).ToArray();
-
-        // Entra defaults to no group claims in ID tokens. ACA Easy Auth surfaces what's in the token,
-        // so the back-office app sees no `groups` claim until we set this. "SecurityGroup" is the most
-        // conservative value that still includes the BackOfficeAdmins group; "All" is also acceptable
-        // and preserved if a user has manually picked it.
-        var existingGroupMembershipClaims = appRoot.TryGetProperty("groupMembershipClaims", out var claimsElement) && claimsElement.ValueKind == JsonValueKind.String
-            ? claimsElement.GetString()
-            : null;
-        var groupClaimsAcceptable = existingGroupMembershipClaims is "SecurityGroup" or "All";
-
-        if (idTokenIssuanceEnabled && missingRedirectUris.Length == 0 && groupClaimsAcceptable)
+        if (deployments.Length == 0)
         {
+            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] no deployment.yaml found under {Markup.Escape(templatesFolder)} — the generated chart layout changed, update the deploy command.");
+            Environment.Exit(1);
+        }
+
+        var unpatched = deployments.Where(deployment => !File.ReadAllText(deployment).Contains("maxUnavailable: 0")).ToList();
+        if (unpatched.Count > 0)
+        {
+            foreach (var deployment in unpatched)
+            {
+                AnsiConsole.MarkupLine($"  [red]✗[/] {Markup.Escape(Path.GetFileName(Path.GetDirectoryName(deployment)))} rolls out with unavailable pods");
+            }
+
+            AnsiConsole.MarkupLine("[red]Chart validation failed:[/] the AppHost rollout patch did not reach every deployment — deploys would cause 504 windows.");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {deployments.Length} deployments roll out with zero unavailable pods.");
+    }
+
+    private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder)
+    {
+        var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
+        if (string.IsNullOrWhiteSpace(secretKey))
+        {
+            AnsiConsole.MarkupLine("[yellow]Registry prune skipped:[/] SCW_SECRET_KEY is not set.");
             return;
         }
 
-        var mergedRedirectUris = existingRedirectUris.Concat(missingRedirectUris).ToArray();
-        var groupMembershipClaims = groupClaimsAcceptable ? existingGroupMembershipClaims! : "SecurityGroup";
+        var namespaceId = RunTerraform(bootstrapModuleFolder, "output -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)").Trim();
+        if (string.IsNullOrWhiteSpace(namespaceId))
+        {
+            AnsiConsole.MarkupLine("[yellow]Registry prune skipped:[/] no registry namespace output.");
+            return;
+        }
 
-        var patchBody = JsonSerializer.Serialize(new
+        // Registry namespace IDs are region-qualified (fr-par/<uuid>); the API takes the bare uuid.
+        namespaceId = namespaceId.Split('/').Last();
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
+            httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
+            var kept = 0;
+            var deleted = 0;
+            foreach (var image in images)
             {
-                groupMembershipClaims,
-                web = new
+                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
+                foreach (var tag in tags.Skip(RegistryTagsToKeep))
                 {
-                    redirectUris = mergedRedirectUris,
-                    implicitGrantSettings = new { enableIdTokenIssuance = true }
-                }
-            }
-        );
-
-        ProcessHelper.StartProcess(new ProcessStartInfo
-            {
-                FileName = Configuration.IsWindows ? "cmd.exe" : "az",
-                Arguments =
-                    $"""{(Configuration.IsWindows ? "/C az" : string.Empty)} rest --method PATCH --url "https://graph.microsoft.com/v1.0/applications/{objectId}" --body @-""",
-                RedirectStandardInput = true,
-                RedirectStandardOutput = !Configuration.TraceEnabled,
-                RedirectStandardError = !Configuration.TraceEnabled
-            },
-            patchBody,
-            exitOnError: false
-        );
-
-        AnsiConsole.MarkupLine(
-            $"[green]Configured App Registration '{appRegistration.Name}' for ACA Easy Auth (ID token issuance + reply URLs + group claims).[/]"
-        );
-    }
-
-    private static void CreateAppRegistrationCredentials()
-    {
-        // Staging
-        CreateFederatedCredential(Config.StagingSubscription.AppRegistration.AppRegistrationId!, "MainBranch", "ref:refs/heads/main");
-        CreateFederatedCredential(Config.StagingSubscription.AppRegistration.AppRegistrationId!, "StagingEnvironment", "environment:staging");
-        CreateFederatedCredential(Config.StagingSubscription.AppRegistration.AppRegistrationId!, "PullRequests", "pull_request");
-
-        // Production
-        CreateFederatedCredential(Config.ProductionSubscription.AppRegistration.AppRegistrationId!, "MainBranch", "ref:refs/heads/main");
-        CreateFederatedCredential(Config.ProductionSubscription.AppRegistration.AppRegistrationId!, "ProductionEnvironment", "environment:production");
-
-        AnsiConsole.MarkupLine(
-            $"[green]Successfully created App Registration with Federated Credentials allowing passwordless deployments from {Config.GithubInfo!.Url}.[/]"
-        );
-
-        void CreateFederatedCredential(string appRegistrationId, string displayName, string refRefsHeadsMain)
-        {
-            var parameters = JsonSerializer.Serialize(new
-                {
-                    name = displayName,
-                    issuer = "https://token.actions.githubusercontent.com",
-                    subject = $"""repo:{Config.GithubInfo!.Path}:{refRefsHeadsMain}""",
-                    audiences = new[] { "api://AzureADTokenExchange" }
-                }
-            );
-
-            ProcessHelper.StartProcess(new ProcessStartInfo
-                {
-                    FileName = Configuration.IsWindows ? "cmd.exe" : "az",
-                    Arguments =
-                        $"{(Configuration.IsWindows ? "/C az" : string.Empty)} ad app federated-credential create --id {appRegistrationId} --parameters  @-",
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = !Configuration.TraceEnabled,
-                    RedirectStandardError = !Configuration.TraceEnabled
-                },
-                parameters,
-                exitOnError: false
-            );
-        }
-    }
-
-    private void GrantSubscriptionPermissionsToServicePrincipals()
-    {
-        GrantAccess(Config.StagingSubscription, Config.StagingSubscription.AppRegistration.Name);
-        GrantAccess(Config.ProductionSubscription, Config.ProductionSubscription.AppRegistration.Name);
-
-        void GrantAccess(Subscription subscription, string appRegistrationName)
-        {
-            var servicePrincipalId = subscription.AppRegistration.ServicePrincipalId!;
-
-            RunAzureCliCommand(
-                $"role assignment create --assignee {servicePrincipalId} --role \"Contributor\" --scope /subscriptions/{subscription.Id}",
-                !Configuration.TraceEnabled
-            );
-            RunAzureCliCommand(
-                $"role assignment create --assignee {servicePrincipalId} --role \"User Access Administrator\" --scope /subscriptions/{subscription.Id}",
-                !Configuration.TraceEnabled
-            );
-
-            AnsiConsole.MarkupLine(
-                $"[green]Successfully granted Service Principal ('{appRegistrationName}') 'Contributor' and `User Access Administrator` rights to Azure Subscription '{subscription.Name}'.[/]"
-            );
-        }
-    }
-
-    private void CreateAzurePostgresAdminSecurityGroups()
-    {
-        CreateAzurePostgresAdminSecurityGroup(Config.StagingSubscription.PostgresAdminsGroup, Config.StagingSubscription.AppRegistration);
-        CreateAzurePostgresAdminSecurityGroup(Config.ProductionSubscription.PostgresAdminsGroup, Config.ProductionSubscription.AppRegistration);
-
-        void CreateAzurePostgresAdminSecurityGroup(PostgresAdminsGroup dbAdminGroup, AppRegistration appRegistration)
-        {
-            if (!dbAdminGroup.Exists)
-            {
-                dbAdminGroup.ObjectId = RequireAzureValue(
-                    RunAzureCliCommand($"""ad group create --display-name "{dbAdminGroup.Name}" --mail-nickname "{dbAdminGroup.NickName}" --query "id" -o tsv""").Trim(),
-                    $"Creating PostgreSQL Admins group '{dbAdminGroup.Name}'"
-                );
-            }
-
-            RunAzureCliCommand(
-                $"ad group member add --group {dbAdminGroup.ObjectId} --member-id {appRegistration.ServicePrincipalObjectId}",
-                !Configuration.TraceEnabled
-            );
-
-            AnsiConsole.MarkupLine(
-                $"[green]Successfully created AD Security Group '{dbAdminGroup.Name}' and assigned the App Registration '{appRegistration.Name}' owner role.[/]"
-            );
-        }
-    }
-
-    private void CreateAzureBackOfficeAdminsSecurityGroups()
-    {
-        CreateAzureBackOfficeAdminsSecurityGroup(Config.StagingSubscription.BackOfficeAdminsGroup);
-        CreateAzureBackOfficeAdminsSecurityGroup(Config.ProductionSubscription.BackOfficeAdminsGroup);
-
-        void CreateAzureBackOfficeAdminsSecurityGroup(BackOfficeAdminsGroup adminsGroup)
-        {
-            if (adminsGroup.Exists) return;
-
-            adminsGroup.ObjectId = RequireAzureValue(
-                RunAzureCliCommand($"""ad group create --display-name "{adminsGroup.Name}" --mail-nickname "{adminsGroup.NickName}" --query "id" -o tsv""").Trim(),
-                $"Creating BackOffice Admins group '{adminsGroup.Name}'"
-            );
-
-            AnsiConsole.MarkupLine(
-                $"[green]Successfully created AD Security Group '{adminsGroup.Name}'.[/]"
-            );
-        }
-    }
-
-    private static void CreateGithubEnvironments()
-    {
-        var stagingResult = ProcessHelper.StartProcess(
-            $"""gh api --method PUT -H "Accept: application/vnd.github+json" repos/{Config.GithubInfo!.Path}/environments/staging""",
-            redirectOutput: true,
-            exitOnError: false
-        );
-
-        var productionResult = ProcessHelper.StartProcess(
-            $"""gh api --method PUT -H "Accept: application/vnd.github+json" repos/{Config.GithubInfo!.Path}/environments/production""",
-            redirectOutput: true,
-            exitOnError: false
-        );
-
-        if (stagingResult.Contains("Not Found") || productionResult.Contains("Not Found"))
-        {
-            AnsiConsole.MarkupLine(
-                "[yellow]Warning: Could not create GitHub environments. This is normal for free accounts or public repositories. You can manually create environments later in GitHub repository settings if needed.[/]"
-            );
-        }
-        else
-        {
-            AnsiConsole.MarkupLine(
-                "[green]Successfully created 'staging' and 'production' environments in the GitHub repository.[/]"
-            );
-        }
-    }
-
-    private static void CreateGithubSecretsAndVariables()
-    {
-        SetGithubVariable(VariableNames.TENANT_ID, Config.TenantId);
-        SetGithubVariable(VariableNames.UNIQUE_PREFIX, Config.UniquePrefix);
-
-        SetGithubVariable(VariableNames.STAGING_SUBSCRIPTION_ID, Config.StagingSubscription.Id);
-        SetGithubVariable(VariableNames.STAGING_SERVICE_PRINCIPAL_ID, Config.StagingSubscription.AppRegistration.ServicePrincipalId!);
-        SetGithubVariable(VariableNames.STAGING_SHARED_LOCATION, Config.StagingLocation.SharedLocation);
-        SetGithubVariable(VariableNames.STAGING_POSTGRES_ADMIN_OBJECT_ID, Config.StagingSubscription.PostgresAdminsGroup.ObjectId!);
-        SetGithubVariable(VariableNames.STAGING_DOMAIN_NAME, Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.STAGING_DOMAIN_NAME), "-"));
-        SetGithubVariable(VariableNames.STAGING_BACK_OFFICE_DOMAIN_NAME, Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.STAGING_BACK_OFFICE_DOMAIN_NAME), "-"));
-        SetGithubVariable(VariableNames.STAGING_BACK_OFFICE_ENTRA_CLIENT_ID, Config.StagingSubscription.BackOfficeAppRegistration.AppRegistrationId!);
-        SetGithubVariable(VariableNames.STAGING_BACK_OFFICE_ADMINS_GROUP_ID, Config.StagingSubscription.BackOfficeAdminsGroup.ObjectId!);
-
-        SetGithubVariable(VariableNames.STAGING_CLUSTER_ENABLED, "true");
-        SetGithubVariable(VariableNames.STAGING_CLUSTER_LOCATION, Config.StagingLocation.ClusterLocation);
-        SetGithubVariable(VariableNames.STAGING_CLUSTER_LOCATION_ACRONYM, Config.StagingLocation.ClusterLocationAcronym);
-
-        SetGithubVariable(VariableNames.PRODUCTION_SUBSCRIPTION_ID, Config.ProductionSubscription.Id);
-        SetGithubVariable(VariableNames.PRODUCTION_SERVICE_PRINCIPAL_ID, Config.ProductionSubscription.AppRegistration.ServicePrincipalId!);
-        SetGithubVariable(VariableNames.PRODUCTION_SERVICE_PRINCIPAL_OBJECT_ID, Config.ProductionSubscription.AppRegistration.ServicePrincipalObjectId!);
-        SetGithubVariable(VariableNames.PRODUCTION_SHARED_LOCATION, Config.ProductionLocation.SharedLocation);
-        SetGithubVariable(VariableNames.PRODUCTION_POSTGRES_ADMIN_OBJECT_ID, Config.ProductionSubscription.PostgresAdminsGroup.ObjectId!);
-        SetGithubVariable(VariableNames.PRODUCTION_DOMAIN_NAME, Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.PRODUCTION_DOMAIN_NAME), "-"));
-        SetGithubVariable(VariableNames.PRODUCTION_BACK_OFFICE_DOMAIN_NAME, Config.GithubVariables.GetValueOrDefault(nameof(VariableNames.PRODUCTION_BACK_OFFICE_DOMAIN_NAME), "-"));
-        SetGithubVariable(VariableNames.PRODUCTION_BACK_OFFICE_ENTRA_CLIENT_ID, Config.ProductionSubscription.BackOfficeAppRegistration.AppRegistrationId!);
-        SetGithubVariable(VariableNames.PRODUCTION_BACK_OFFICE_ADMINS_GROUP_ID, Config.ProductionSubscription.BackOfficeAdminsGroup.ObjectId!);
-
-        SetGithubVariable(VariableNames.PRODUCTION_CLUSTER1_ENABLED, "false");
-        SetGithubVariable(VariableNames.PRODUCTION_CLUSTER1_LOCATION, Config.ProductionLocation.ClusterLocation);
-        SetGithubVariable(VariableNames.PRODUCTION_CLUSTER1_LOCATION_ACRONYM, Config.ProductionLocation.ClusterLocationAcronym);
-
-        AnsiConsole.MarkupLine("[green]GitHub variables synchronised.[/]");
-        return;
-
-        // Idempotent: skips the GitHub API call when the existing value already matches. Config.GithubVariables
-        // is populated from a real GitHub API call in PublishExistingGithubVariables (line 180), so this only
-        // touches values that have actually changed.
-        void SetGithubVariable(VariableNames name, string value)
-        {
-            var variableName = Enum.GetName(name)!;
-            if (Config.GithubVariables.TryGetValue(variableName, out var existingValue))
-            {
-                if (existingValue == value)
-                {
-                    AnsiConsole.MarkupLine($"[blue]Variable {variableName} unchanged.[/]");
-                    return;
-                }
-
-                ProcessHelper.StartProcess($"gh variable set {variableName} -b\"{value}\" --repo={Config.GithubInfo!.Path}");
-                AnsiConsole.MarkupLine($"[green]Variable {variableName} updated.[/]");
-                return;
-            }
-
-            ProcessHelper.StartProcess($"gh variable set {variableName} -b\"{value}\" --repo={Config.GithubInfo!.Path}");
-            AnsiConsole.MarkupLine($"[green]Variable {variableName} created.[/]");
-        }
-    }
-
-    private static void DisableReusableWorkflows()
-    {
-        // Disable reusable workflows
-        DisableActiveWorkflow("Deploy Container");
-        DisableActiveWorkflow("Deploy Infrastructure");
-        DisableActiveWorkflow("Migrate Database");
-        return;
-
-        void DisableActiveWorkflow(string workflowName)
-        {
-            // Command to list workflows
-            var listWorkflowsCommand = $"gh workflow list --json name,state,id --repo={Config.GithubInfo!.Path}";
-            var workflowsJson = ProcessHelper.StartProcess(listWorkflowsCommand, Configuration.CliFolder, true);
-
-            // Parse JSON to find the specific workflow and check if it's active
-            using var jsonDocument = JsonDocument.Parse(workflowsJson);
-            foreach (var element in jsonDocument.RootElement.EnumerateArray())
-            {
-                var name = element.GetProperty("name").GetString()!;
-                var state = element.GetProperty("state").GetString()!;
-
-                if (name != workflowName || state != "active") continue;
-
-                // Disable the workflow if it is active
-                var workflowId = element.GetProperty("id").GetInt64();
-                var disableCommand = $"gh workflow disable {workflowId} --repo={Config.GithubInfo!.Path}";
-                ProcessHelper.StartProcess(disableCommand, Configuration.CliFolder, true);
-
-                AnsiConsole.MarkupLine($"[green]Reusable Git Workflow '{workflowName}' has been disabled.[/]");
-
-                break;
-            }
-        }
-    }
-
-    private static void TriggerAndMonitorWorkflows()
-    {
-        AnsiConsole.Status().Start("Begin deployment.", ctx =>
-            {
-                for (var i = 60; i >= 0; i--)
-                {
-                    if (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Enter)
+                    var response = await httpClient.DeleteAsync($"{RegistryApiBaseUrl}/tags/{tag.Id}");
+                    if (response.IsSuccessStatusCode)
                     {
-                        break;
-                    }
-
-                    ctx.Status($"Deployment of Cloud Infrastructure and Application code will automatically start in {i} seconds. Press 'Ctrl+C' to exit or 'Enter' to continue.");
-                    Thread.Sleep(TimeSpan.FromSeconds(1));
-                }
-            }
-        );
-
-        StartGithubWorkflow("Cloud Infrastructure - Deployment", "cloud-infrastructure.yml");
-        StartGithubWorkflow("Account - Build and Deploy", "account.yml");
-        StartGithubWorkflow("AppGateway - Build and Deploy", "app-gateway.yml");
-        return;
-
-        void StartGithubWorkflow(string workflowName, string workflowFileName)
-        {
-            try
-            {
-                AnsiConsole.MarkupLine($"[green]Starting {workflowName} GitHub workflow...[/]");
-
-                var runWorkflowCommand = $"gh workflow run {workflowFileName} --ref main --repo={Config.GithubInfo!.Path}";
-                ProcessHelper.StartProcess(runWorkflowCommand, Configuration.CliFolder, true);
-
-                // Wait briefly to ensure the run has started
-                Thread.Sleep(TimeSpan.FromSeconds(15));
-
-                // Fetch and filter the workflows to find a "running" one
-                var listWorkflowRunsCommand =
-                    $"gh run list --workflow={workflowFileName} --json databaseId,status --repo={Config.GithubInfo!.Path}";
-                var workflowsJson = ProcessHelper.StartProcess(listWorkflowRunsCommand, Configuration.CliFolder, true);
-
-                long? workflowId = null;
-                using (var jsonDocument = JsonDocument.Parse(workflowsJson))
-                {
-                    foreach (var element in jsonDocument.RootElement.EnumerateArray())
-                    {
-                        var status = element.GetProperty("status").GetString()!;
-
-                        if (status.Equals("in_progress", StringComparison.OrdinalIgnoreCase))
-                        {
-                            workflowId = element.GetProperty("databaseId").GetInt64();
-                            break;
-                        }
+                        deleted++;
                     }
                 }
 
-                if (workflowId is null)
-                {
-                    AnsiConsole.MarkupLine("[red]Failed to retrieve a running workflow ID. Please check the GitHub Actions page for more info.[/]");
-                    Environment.Exit(1);
-                }
-
-                var watchWorkflowRunCommand = $"gh run watch {workflowId.Value} --repo={Config.GithubInfo!.Path}";
-                ProcessHelper.StartProcessWithSystemShell(watchWorkflowRunCommand, Configuration.CliFolder);
-
-                // Run the command one more time to get the result
-                var runResult = ProcessHelper.StartProcess(watchWorkflowRunCommand, Configuration.CliFolder, true);
-                if (runResult.Contains("completed") && runResult.Contains("success")) return;
-
-                AnsiConsole.MarkupLine($"[red]Error: Failed to run the {workflowName} GitHub workflow.[/]");
-                AnsiConsole.MarkupLine($"[red]{runResult}[/]");
-                Environment.Exit(1);
+                kept += Math.Min(tags.Count, RegistryTagsToKeep);
             }
-            catch (Exception)
-            {
-                AnsiConsole.MarkupLine($"[red]Error: Failed to run the '{workflowName}' GitHub workflow.[/]");
-                Environment.Exit(1);
-            }
+
+            AnsiConsole.MarkupLine($"[green]Registry pruned:[/] kept {kept} tags, deleted {deleted} stale tags.");
         }
-    }
-
-    private void ApplyAdditionalConfigurations()
-    {
-        foreach (var instance in _configureContinuousDeploymentsExtensions!)
+        catch (Exception exception)
         {
-            var method = instance.GetType().GetMethod("ApplyConfigure");
-            method?.Invoke(instance, [Config]);
+            // Pruning is housekeeping: a failure must never fail an otherwise successful deploy.
+            AnsiConsole.MarkupLine($"[yellow]Registry prune failed[/] (the deploy itself succeeded): {Markup.Escape(exception.Message)}");
         }
     }
 
-    private void ShowSuccessMessage()
+    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string relativeUrl)
     {
-        var setupIntroPrompt =
-            $"""
-             So far so good. The configuration of GitHub and Azure is now complete. Here are some recommendations to further secure and optimize your setup:
+        var response = await httpClient.GetAsync($"{RegistryApiBaseUrl}/{relativeUrl}");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<T>();
+    }
 
-             - For protecting the [blue]main[/] branch, configure branch protection rules to necessitate pull request reviews before merging can occur. Visit [blue]{Config.GithubInfo!.Url}/settings/branches[/], click ""Add Branch protection rule"", and set it up for the [bold]main[/] branch. Requires a paid GitHub plan for private repositories.
+    private static string RunTerraform(string workingDirectory, string arguments, string failureHint)
+    {
+        var result = ProcessHelper.ExecuteQuietly($"terraform {arguments}", workingDirectory);
+        if (!result.Success)
+        {
+            AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.GetErrorSummary("terraform")));
+            AnsiConsole.MarkupLine($"[dim]{failureHint}[/]");
+            Environment.Exit(result.ExitCode);
+        }
 
-             - To add a step for manual approval during infrastructure deployment to the staging and production environments, set up required reviewers on GitHub environments. Visit [blue]{Config.GithubInfo!.Url}/settings/environments[/] and enable [blue]Required reviewers[/] for the [bold]staging[/] and [bold]production[/] environments. Requires a paid GitHub plan for private repositories.
+        return result.StdOut;
+    }
 
-             - Configure the Domain Name for the staging and production environments. This involves two steps:
-
-                 a. Go to [blue]{Config.GithubInfo!.Url}/settings/variables/actions[/] to set the [blue]STAGING_DOMAIN_NAME[/] and [blue]PRODUCTION_DOMAIN_NAME[/] variables. E.g. [blue]staging.your-saas-company.com[/] and [blue]your-saas-company.com[/]. To enable the back-office subdomain, also set the [blue]STAGING_BACK_OFFICE_DOMAIN_NAME[/] and [blue]PRODUCTION_BACK_OFFICE_DOMAIN_NAME[/] variables. E.g. [blue]back-office.staging.your-saas-company.com[/] and [blue]back-office.your-saas-company.com[/].
-
-                 b. Run the [blue]Cloud Infrastructure - Deployment[/] workflow again. Note that it might fail with an error message to set up a DNS TXT and CNAME record. Once done, re-run the failed jobs.
-
-             - To grant admin rights inside the back-office app, add members to the [blue]BackOffice Admins[/] security groups in Azure Portal (Microsoft Entra ID > Groups). Members will be granted admin capabilities through the [blue]BackOfficeAdmin[/] policy on their next sign-in. Easy Auth still gates access to the back-office app for all authenticated tenant users.
-
-             - Set up SonarCloud for code quality and security analysis. This service is free for public repositories. Visit [blue]https://sonarcloud.io[/] to connect your GitHub account. Add the [blue]SONAR_TOKEN[/] secret, and the [blue]SONAR_ORGANIZATION[/] and [blue]SONAR_PROJECT_KEY[/] variables to the GitHub repository. The workflows are already configured for SonarCloud analysis.
-
-             - Enable Microsoft Defender for Cloud (also known as Azure Security Center) once the system evolves for added security recommendations.
-
-             {ShowAdditionalInfoSuccessMessage()}
-             """;
-
-        AnsiConsole.MarkupLine($"{setupIntroPrompt}");
+    private static void PrintHeader(string title)
+    {
         AnsiConsole.WriteLine();
-
-        string ShowAdditionalInfoSuccessMessage()
-        {
-            var stringBuilder = new StringBuilder();
-            foreach (var instance in _configureContinuousDeploymentsExtensions!)
-            {
-                var method = instance.GetType().GetMethod("ShowSuccessMessage");
-                var result = method?.Invoke(instance, [Config]);
-                stringBuilder.AppendLine(result?.ToString());
-            }
-
-            return stringBuilder.ToString();
-        }
+        AnsiConsole.Write(new Rule($"[bold] {title} [/]"));
+        AnsiConsole.WriteLine();
     }
 
-    // Validates output of an Azure CLI call that produces a required identifier (App Registration ID,
-    // Service Principal ID, group object ID, etc.). When the user lacks permissions, az prints the
-    // error to stderr and exits non-zero, but ProcessHelper still returns the empty stdout — without
-    // this guard we'd persist the empty string to GitHub variables. Aborts before any GitHub write.
-    private static string RequireAzureValue(string value, string operation)
-    {
-        if (!string.IsNullOrWhiteSpace(value)) return value;
+    private sealed record RegistryImagePage(List<RegistryImage> Images);
 
-        AnsiConsole.MarkupLine(
-            $"[red]ERROR: {operation} returned no value. The current Azure user likely lacks the required permissions. Aborting before GitHub variables are touched.[/]"
-        );
-        Environment.Exit(1);
-        return value;
-    }
+    private sealed record RegistryTagPage(List<RegistryTag> Tags);
 
-    private static string RunAzureCliCommand(string arguments, bool redirectOutput = true)
-    {
-        return ProcessHelper.StartProcess(new ProcessStartInfo
-            {
-                FileName = Configuration.IsWindows ? "cmd.exe" : "az",
-                Arguments = Configuration.IsWindows ? $"/C az {arguments}" : arguments,
-                RedirectStandardOutput = redirectOutput,
-                RedirectStandardError = redirectOutput,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            },
-            exitOnError: false
-        );
-    }
+    private sealed record RegistryImage(string Id, string Name);
 
-    private static Dictionary<string, string> GetAzureLocations()
-    {
-        // List of global available regions extracted by running:
-        //  "az account list-locations --query "[?metadata.regionType == 'Physical'].{DisplayName:displayName}" --output table
-        // Location Acronyms are taken from here https://learn.microsoft.com/en-us/azure/backup/scripts/geo-code-list
-        return new Dictionary<string, string>
-        {
-            { "Australia Central", "au" },
-            { "Australia Central 2", "au" },
-            { "Australia East", "au" },
-            { "Australia Southeast", "au" },
-            { "Brazil South", "br" },
-            { "Brazil Southeast", "br" },
-            { "Canada Central", "ca" },
-            { "Canada East", "ca" },
-            { "Central India", "in" },
-            { "Central US", "us" },
-            { "East Asia", "as" },
-            { "East US", "us" },
-            { "East US 2", "us" },
-            { "France Central", "eu" },
-            { "France South", "eu" },
-            { "Germany North", "eu" },
-            { "Germany West Central", "eu" },
-            { "Japan East", "jp" },
-            { "Japan West", "jp" },
-            { "Jio India Central", "in" },
-            { "Jio India West", "in" },
-            { "Korea Central", "kr" },
-            { "Korea South", "kr" },
-            { "North Central US", "us" },
-            { "North Europe", "eu" },
-            { "Norway East", "no" },
-            { "Norway West", "no" },
-            { "South Africa North", "za" },
-            { "South Africa West", "za" },
-            { "South Central US", "us" },
-            { "South India", "in" },
-            { "Southeast Asia", "as" },
-            { "Sweden Central", "eu" },
-            { "Switzerland North", "ch" },
-            { "Switzerland West", "ch" },
-            { "UAE Central", "ae" },
-            { "UAE North", "ae" },
-            { "UK South", "uk" },
-            { "UK West", "uk" },
-            { "West Central US", "us" },
-            { "West Europe", "eu" },
-            { "West India", "in" },
-            { "West US", "us" },
-            { "West US 2", "us" },
-            { "West US 3", "us" }
-        };
-    }
-}
-
-public class Config
-{
-    public string TenantId => StagingSubscription.TenantId;
-
-    public string UniquePrefix { get; set; } = null!;
-
-    public GithubInfo? GithubInfo { get; private set; }
-
-    public Subscription StagingSubscription { get; set; } = null!;
-
-    public Location StagingLocation { get; set; } = null!;
-
-    public Subscription ProductionSubscription { get; set; } = null!;
-
-    public Location ProductionLocation { get; set; } = null!;
-
-    public Dictionary<string, string> GithubVariables { get; set; } = new();
-
-    public void SetGithubInfo()
-    {
-        var githubUri = GithubHelper.GetGithubUri();
-        GithubInfo = GithubHelper.GetGithubInfo(githubUri);
-    }
-
-    public bool IsLoggedIn()
-    {
-        var githubAuthStatus = ProcessHelper.StartProcess("gh auth status", redirectOutput: true, exitOnError: false);
-
-        return githubAuthStatus.Contains("Logged in to github.com");
-    }
-}
-
-public record AzureSubscription(string Id, string Name, string TenantId, string State);
-
-public class Subscription(string id, string name, string tenantId, GithubInfo githubInfo, string environmentName)
-{
-    public string Id { get; } = id;
-
-    public string Name { get; } = name;
-
-    public string TenantId { get; } = tenantId;
-
-    public AppRegistration AppRegistration { get; } = new(githubInfo, environmentName);
-
-    public BackOfficeAppRegistration BackOfficeAppRegistration { get; } = new(githubInfo, environmentName);
-
-    public PostgresAdminsGroup PostgresAdminsGroup { get; } = new(githubInfo, environmentName);
-
-    public BackOfficeAdminsGroup BackOfficeAdminsGroup { get; } = new(githubInfo, environmentName);
-}
-
-public class AppRegistration(GithubInfo githubInfo, string environmentName)
-{
-    public string Name => $"GitHub - {environmentName} - {githubInfo.OrganizationName}/{githubInfo.RepositoryName}";
-
-    public bool Exists => !string.IsNullOrEmpty(AppRegistrationId);
-
-    public string? AppRegistrationId { get; set; }
-
-    public string? ServicePrincipalId { get; set; }
-
-    public string? ServicePrincipalObjectId { get; set; }
-}
-
-// Bare app registration consumed by ACA Easy Auth (clientId only). No service principal, no federated
-// credentials, and no redirect URI at bootstrap — the redirect URI depends on the back-office hostname
-// (custom domain or auto-generated ACA FQDN) which is only known after the first cluster deploy and is
-// added in a later workflow step.
-public class BackOfficeAppRegistration(GithubInfo githubInfo, string environmentName)
-{
-    public string Name => $"BackOffice - {environmentName} - {githubInfo.OrganizationName}/{githubInfo.RepositoryName}";
-
-    public bool Exists => !string.IsNullOrEmpty(AppRegistrationId);
-
-    public string? AppRegistrationId { get; set; }
-}
-
-public class PostgresAdminsGroup(GithubInfo githubInfo, string environmentName)
-{
-    public string Name => $"PostgreSQL Admins - {environmentName} - {githubInfo.OrganizationName}/{githubInfo.RepositoryName}";
-
-    public string NickName => $"PostgreSQLAdmins{environmentName}{githubInfo.OrganizationName}{githubInfo.RepositoryName}";
-
-    public bool Exists => !string.IsNullOrEmpty(ObjectId);
-
-    public string? ObjectId { get; set; }
-}
-
-// Optional capability marker for back-office. Easy Auth gates the container app to authenticated tenant
-// users; this group's ObjectId flows through to BackOffice:AdminsGroupId so the BackOfficeAdminRequirement
-// policy passes for members. Members are added manually in Azure Portal as people are granted admin rights.
-public class BackOfficeAdminsGroup(GithubInfo githubInfo, string environmentName)
-{
-    public string Name => $"BackOffice Admins - {environmentName} - {githubInfo.OrganizationName}/{githubInfo.RepositoryName}";
-
-    public string NickName => $"BackOfficeAdmins{environmentName}{githubInfo.OrganizationName}{githubInfo.RepositoryName}";
-
-    public bool Exists => !string.IsNullOrEmpty(ObjectId);
-
-    public string? ObjectId { get; set; }
-}
-
-public record Location(string SharedLocation, string ClusterLocation, string ClusterLocationAcronym);
-
-public enum VariableNames
-{
-    // ReSharper disable InconsistentNaming
-    TENANT_ID,
-    UNIQUE_PREFIX,
-
-    STAGING_SUBSCRIPTION_ID,
-    STAGING_SERVICE_PRINCIPAL_ID,
-    STAGING_SHARED_LOCATION,
-    STAGING_POSTGRES_ADMIN_OBJECT_ID,
-    STAGING_DOMAIN_NAME,
-    STAGING_BACK_OFFICE_DOMAIN_NAME,
-    STAGING_BACK_OFFICE_ENTRA_CLIENT_ID,
-    STAGING_BACK_OFFICE_ADMINS_GROUP_ID,
-
-    STAGING_CLUSTER_ENABLED,
-    STAGING_CLUSTER_LOCATION,
-    STAGING_CLUSTER_LOCATION_ACRONYM,
-
-    PRODUCTION_SUBSCRIPTION_ID,
-    PRODUCTION_SERVICE_PRINCIPAL_ID,
-    PRODUCTION_SERVICE_PRINCIPAL_OBJECT_ID,
-    PRODUCTION_SHARED_LOCATION,
-    PRODUCTION_POSTGRES_ADMIN_OBJECT_ID,
-    PRODUCTION_DOMAIN_NAME,
-    PRODUCTION_BACK_OFFICE_DOMAIN_NAME,
-    PRODUCTION_BACK_OFFICE_ENTRA_CLIENT_ID,
-    PRODUCTION_BACK_OFFICE_ADMINS_GROUP_ID,
-
-    PRODUCTION_CLUSTER1_ENABLED,
-    PRODUCTION_CLUSTER1_LOCATION,
-
-    PRODUCTION_CLUSTER1_LOCATION_ACRONYM
-    // ReSharper restore InconsistentNaming
-}
-
-public abstract class ConfigureContinuousDeployments
-{
-    public virtual void CollectDetails(Config? config)
-    {
-    }
-
-    public virtual string ConfirmChanges(Config? config)
-    {
-        return string.Empty;
-    }
-
-    public virtual void ApplyConfigure(Config? config)
-    {
-    }
-
-    public virtual string ShowSuccessMessage(Config? config = null)
-    {
-        return string.Empty;
-    }
+    private sealed record RegistryTag(string Id, string Name);
 }
