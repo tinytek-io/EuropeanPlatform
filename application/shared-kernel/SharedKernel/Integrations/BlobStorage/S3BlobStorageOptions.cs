@@ -13,7 +13,14 @@ namespace SharedKernel.Integrations.BlobStorage;
 ///     "data-protection") and this prefix turns them into the actual, TF-owned bucket names. Local
 ///     development (MinIO) has no such constraint and omits the entry.
 /// </remarks>
-public sealed record S3BlobStorageOptions(string ServiceUrl, string AccessKey, string SecretKey, string Region, bool ForcePathStyle, string BucketPrefix = "")
+public sealed record S3BlobStorageOptions(
+    string ServiceUrl,
+    string AccessKey,
+    string SecretKey,
+    string Region,
+    bool ForcePathStyle,
+    string BucketPrefix = ""
+)
 {
     public static S3BlobStorageOptions Parse(string connectionString)
     {
