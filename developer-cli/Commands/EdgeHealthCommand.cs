@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Diagnostics;
 using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
@@ -6,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
+using DeveloperCli.Utilities;
 using Spectre.Console;
 
 namespace DeveloperCli.Commands;
@@ -33,7 +35,8 @@ public sealed class EdgeHealthCommand : Command
 
     public EdgeHealthCommand() : base(
         "edge-health",
-        "Verify the Scaleway Edge Services pipelines, their stage chains, and the public HTTPS endpoints (read-only). Requires SCW_SECRET_KEY.")
+        "Verify the Scaleway Edge Services pipelines, their stage chains, and the public HTTPS endpoints (read-only). Requires SCW_SECRET_KEY."
+    )
     {
         SetAction(_ => ExecuteAsync().GetAwaiter().GetResult());
     }
@@ -83,8 +86,20 @@ public sealed class EdgeHealthCommand : Command
                 .SelectMany(GetFqdns)
                 .ToList();
 
+            // The pipeline's endpoint: recreated pipelines get a new one, which silently orphans
+            // every CNAME still pointing at the old endpoint (the API exposes no stable alias).
+            var pipelineEndpoint = stages.DnsStages
+                .Where(stage => stage["type"]?.GetValue<string>() == "custom")
+                .Select(stage => stage["default_fqdn"]?.GetValue<string>())
+                .FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
+
             foreach (var hostname in hostnames)
             {
+                var dnsChecks = pipelineEndpoint is null
+                    ? [("dns record", false, "no active pipeline endpoint to point the DNS at — attach the head stage")]
+                    : await CheckDnsRecordAsync(hostname, pipelineEndpoint);
+                failures += RenderChecks(dnsChecks);
+
                 var endpointChecks = await CheckPublicEndpointAsync(hostname);
                 failures += RenderChecks(endpointChecks);
             }
@@ -126,7 +141,9 @@ public sealed class EdgeHealthCommand : Command
             if (errors is { Count: > 0 })
             {
                 var messages = string.Join("; ", errors.Select(error =>
-                    $"{error?["code"]?.GetValue<string>()}: {error?["message"]?.GetValue<string>()}"));
+                        $"{error?["code"]?.GetValue<string>()}: {error?["message"]?.GetValue<string>()}"
+                    )
+                );
                 return ("pipeline status", false, $"status ready but has errors: {messages}");
             }
 
@@ -138,18 +155,12 @@ public sealed class EdgeHealthCommand : Command
         }
     }
 
-    private sealed record PipelineStages(
-        List<JsonNode> DnsStages,
-        List<JsonNode> TlsStages,
-        List<JsonNode> CacheStages,
-        List<JsonNode> WafStages,
-        List<JsonNode> BackendStages,
-        List<JsonNode> HeadStages);
-
     private static async Task<PipelineStages> ListStagesAsync(HttpClient httpClient, string pipelineId)
     {
-        async Task<List<JsonNode>> StageList(string stageType) =>
-            await ReadJsonArrayAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}/{stageType}-stages", "stages");
+        async Task<List<JsonNode>> StageList(string stageType)
+        {
+            return await ReadJsonArrayAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}/{stageType}-stages", "stages");
+        }
 
         var dns = await StageList("dns");
         var tls = await StageList("tls");
@@ -237,6 +248,70 @@ public sealed class EdgeHealthCommand : Command
         }
     }
 
+    /// <summary>
+    ///     Verifies that the public hostname's CNAME points at the pipeline's current endpoint. A
+    ///     recreated pipeline gets a new &lt;id&gt;.svc.edge.scw.cloud endpoint, and every DNS record still
+    ///     pointing at the old one silently serves nothing — the edge API has no stable alias, so this
+    ///     drift must be caught on the DNS side.
+    /// </summary>
+    private static async Task<List<(string Check, bool Passed, string Detail)>> CheckDnsRecordAsync(string hostname, string endpoint)
+    {
+        var checks = new List<(string Check, bool Passed, string Detail)>();
+
+        try
+        {
+            var cname = await ResolveCnameAsync(hostname);
+            if (string.IsNullOrWhiteSpace(cname))
+            {
+                checks.Add(("dns record", false, $"no CNAME record for {hostname} — point it at {endpoint}"));
+                return checks;
+            }
+
+            if (string.Equals(cname, endpoint.TrimEnd('.'), StringComparison.OrdinalIgnoreCase))
+            {
+                checks.Add(("dns record", true, $"CNAME points at the pipeline endpoint ({endpoint})"));
+            }
+            else
+            {
+                checks.Add((
+                        "dns record",
+                        false,
+                        $"CNAME points at {cname} but the pipeline endpoint is {endpoint} — the pipeline was recreated; update the DNS record"
+                    )
+                );
+            }
+        }
+        catch (Exception exception)
+        {
+            checks.Add(("dns record", false, $"CNAME lookup failed: {exception.Message}"));
+        }
+
+        return checks;
+    }
+
+    /// <summary>
+    ///     Resolves the CNAME target of a hostname through `dig` (.NET's DNS client cannot see the
+    ///     CNAME chain, only the final addresses).
+    /// </summary>
+    private static async Task<string> ResolveCnameAsync(string hostname)
+    {
+        var output = await Task.Run(() => ProcessHelper.StartProcess(
+                new ProcessStartInfo
+                {
+                    FileName = "dig",
+                    Arguments = $"+short {hostname} CNAME",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                },
+                exitOnError: false
+            )
+        );
+
+        return output.Split('\n').FirstOrDefault(line => !string.IsNullOrWhiteSpace(line))?.Trim().TrimEnd('.') ?? "";
+    }
+
     private static async Task<List<(string Check, bool Passed, string Detail)>> CheckPublicEndpointAsync(string hostname)
     {
         var checks = new List<(string Check, bool Passed, string Detail)>();
@@ -257,23 +332,27 @@ public sealed class EdgeHealthCommand : Command
         try
         {
             using var tcpClient = new TcpClient(hostname, 443);
-            await using var sslStream = new SslStream(tcpClient.GetStream(), leaveInnerStreamOpen: false,
-                static (_, _, _, _) => true);
+            await using var sslStream = new SslStream(tcpClient.GetStream(), false,
+                static (_, _, _, _) => true
+            );
             await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
-            {
-                TargetHost = hostname,
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-            });
+                {
+                    TargetHost = hostname,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                }
+            );
 
             var certificate = new X509Certificate2(sslStream.RemoteCertificate!);
             var subjectMatches = CertificateMatchesHostname(certificate, hostname);
             var daysLeft = (certificate.NotAfter - DateTime.UtcNow).TotalDays;
             checks.Add(subjectMatches
                 ? ("certificate", true, $"issued for {hostname}, expires in {daysLeft:F0} day(s)")
-                : ("certificate", false, $"serves certificate for '{certificate.Subject}', which does not cover {hostname}"));
+                : ("certificate", false, $"serves certificate for '{certificate.Subject}', which does not cover {hostname}")
+            );
             checks.Add(daysLeft >= MinimumDaysBeforeCertificateExpiry
                 ? ("certificate expiry", true, $"{daysLeft:F0} day(s) left")
-                : ("certificate expiry", false, $"only {daysLeft:F0} day(s) left (threshold {MinimumDaysBeforeCertificateExpiry})"));
+                : ("certificate expiry", false, $"only {daysLeft:F0} day(s) left (threshold {MinimumDaysBeforeCertificateExpiry})")
+            );
         }
         catch (Exception exception)
         {
@@ -286,7 +365,8 @@ public sealed class EdgeHealthCommand : Command
             using var response = await EndpointHttpClient.GetAsync($"https://{hostname}/");
             checks.Add(response.IsSuccessStatusCode || (int)response.StatusCode < 500
                 ? ("endpoint", true, $"HTTPS {(int)response.StatusCode} {response.ReasonPhrase}")
-                : ("endpoint", false, $"HTTPS {(int)response.StatusCode} {response.ReasonPhrase}"));
+                : ("endpoint", false, $"HTTPS {(int)response.StatusCode} {response.ReasonPhrase}")
+            );
         }
         catch (Exception exception)
         {
@@ -370,4 +450,13 @@ public sealed class EdgeHealthCommand : Command
         var node = JsonNode.Parse(content) ?? throw new HttpRequestException($"empty response from {url}");
         return node[propertyName]?.AsArray().Where(item => item is not null).Select(item => item!).ToList() ?? [];
     }
+
+    private sealed record PipelineStages(
+        List<JsonNode> DnsStages,
+        List<JsonNode> TlsStages,
+        List<JsonNode> CacheStages,
+        List<JsonNode> WafStages,
+        List<JsonNode> BackendStages,
+        List<JsonNode> HeadStages
+    );
 }
