@@ -16,6 +16,7 @@
     </Folder>
     <Folder Name="/shared-kernel/">
         <Project Path="shared-kernel\SharedKernel\SharedKernel.csproj"/>
+        <Project Path="shared-kernel\Scaleway.Sdk\Scaleway.Sdk.csproj"/>
         <Project Path="shared-kernel\Tests\SharedKernel.Tests.csproj"/>
         <Project Path="shared-webapp\SharedKernel.WebApp.esproj"/>
     </Folder>
