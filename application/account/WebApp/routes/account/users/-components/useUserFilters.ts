@@ -1,4 +1,4 @@
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { useSidebarSafe } from "@repo/ui/components/Sidebar";
 import { useDebounce } from "@repo/ui/hooks/useDebounce";
 import { useLocation, useNavigate } from "@tanstack/react-router";

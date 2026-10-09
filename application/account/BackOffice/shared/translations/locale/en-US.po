@@ -1306,8 +1306,8 @@ msgstr "Link underline"
 msgid "Link variants"
 msgstr "Link variants"
 
-msgid "Local development sign-in. Production uses Azure Container Apps built-in Entra ID authentication."
-msgstr "Local development sign-in. Production uses Azure Container Apps built-in Entra ID authentication."
+msgid "Local development sign-in. Production requires authenticated staff sign-in."
+msgstr "Local development sign-in. Production requires authenticated staff sign-in."
 
 msgid "Local seasonal"
 msgstr "Local seasonal"
