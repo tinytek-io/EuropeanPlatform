@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
 using AppHost;
-using Azure.Storage.Blobs;
+using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.Configuration;
 using Projects;
 using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Configuration;
@@ -19,15 +21,101 @@ OverrideAspireDashboardEnvironmentVariables(ports);
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-CheckPortAvailability(ports);
+// Publish mode targets a real cluster, so the localhost-only concerns below (port probing, dev
+// certificates, Azurite bootstrapping) must not run. CheckPortAvailability in particular calls
+// Environment.Exit(1) when Aspire is already running locally, which would abort every publish.
+var isPublishMode = builder.ExecutionContext.IsPublishMode;
+
+if (!isPublishMode)
+{
+    CheckPortAvailability(ports);
+}
+
+IResourceBuilder<KubernetesEnvironmentResource>? kubernetes = null;
+
+if (isPublishMode)
+{
+    // frontend-build is a build-only container: Aspire wants its output composed into a consuming
+    // image via PublishWithStaticFiles/PublishWithContainerFiles rather than referenced as a service.
+    // Until the frontend packaging is remodelled, publish would abort on that validation.
+    builder.Pipeline.DisableBuildOnlyContainerValidation();
+
+    kubernetes = builder.AddKubernetesEnvironment("kubernetes")
+        .WithHelm(helm => helm
+            .WithChartName("platformplatform")
+            .WithChartDescription("PlatformPlatform self-contained systems on Kubernetes")
+        );
+
+    // Images publish to the Scaleway Container Registry created by the bootstrap Terraform module
+    // (cloud-infrastructure/scaleway/bootstrap). Non-secret environment values are resolved from
+    // AppHost configuration at publish time, e.g. appsettings.staging.json via
+    // `aspire publish --environment staging`. Secrets (connection strings, API keys) stay deploy-time
+    // inputs in the chart's values.yaml.
+    var registryEndpoint = builder.Configuration["Registry:Endpoint"]
+                           ?? throw new InvalidOperationException("Publish mode requires Registry:Endpoint (e.g. rg.fr-par.scw.cloud) in AppHost configuration.");
+    var registryRepository = builder.Configuration["Registry:Repository"]
+                             ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the Scaleway registry namespace) in AppHost configuration.");
+    builder.AddContainerRegistry("scaleway-registry", registryEndpoint, registryRepository);
+}
+
+// Deployed workloads read their secrets from Scaleway Secret Manager: each workload runs with its
+// own IAM key (a deploy-time secret parameter) whose policy only allows its own path. The
+// per-workload keys come from the environment module's workload_secret_manager_keys outputs.
+var secretManagerProjectId = isPublishMode
+    ? builder.Configuration["Scaleway:ProjectId"]
+      ?? throw new InvalidOperationException("Publish mode requires Scaleway:ProjectId in AppHost configuration.")
+    : string.Empty;
+
+// Transactional Email is sent through its HTTP API (see ScalewayTransactionalEmailClient), which
+// authenticates with the workload's IAM key — no SMTP settings or separate credentials exist.
+// Development delivers to the Mailpit container instead.
+var senderEmailAddress = isPublishMode
+    ? builder.Configuration["Email:Sender"]
+      ?? throw new InvalidOperationException("Publish mode requires Email:Sender (the From address) in AppHost configuration.")
+    : string.Empty;
 
 var appHostname = builder.Configuration["Hostnames:App"] ?? "app.dev.localhost";
 var backOfficeHostname = builder.Configuration["Hostnames:BackOffice"] ?? "back-office.dev.localhost";
+
+// Public hostnames: localhost in development; real DNS names in publish mode, where TLS
+// terminates at the cluster gateway instead of the Kestrel dev certificate.
+var appPublicHostname = isPublishMode
+    ? builder.Configuration["Hostnames:App"]
+      ?? throw new InvalidOperationException("Publish mode requires Hostnames:App (the public app hostname) in AppHost configuration.")
+    : appHostname;
+var backOfficePublicHostname = isPublishMode
+    ? builder.Configuration["Hostnames:BackOffice"]
+      ?? throw new InvalidOperationException("Publish mode requires Hostnames:BackOffice (the public back-office hostname) in AppHost configuration.")
+    : backOfficeHostname;
 
 var appBaseUrl = $"https://{appHostname}:{ports.AppGateway}";
 // Localhost mirrors the Azure post-split topology: back-office traffic bypasses AppGateway and
 // hits the consolidated account-api process directly on a dedicated Kestrel port.
 var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.BackOfficeApi}";
+// In publish mode the scheme+hostname is the public URL seen by browsers; internally the gateway
+// forwards plain HTTP to the workloads.
+var appPublicUrl = $"https://{appPublicHostname}";
+var backOfficePublicUrl = $"https://{backOfficePublicHostname}";
+
+// Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff exists;
+// production leaves MockEasyAuth:Enabled unset so the middleware and the /login picker stay off.
+var mockEasyAuthEnabled = isPublishMode && builder.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
+
+// cert-manager contact email for the Let's Encrypt issuer (publish mode only).
+var acmeEmail = isPublishMode
+    ? builder.Configuration["Acme:Email"]
+      ?? throw new InvalidOperationException("Publish mode requires Acme:Email (the ACME account contact) in AppHost configuration.")
+    : string.Empty;
+
+// Object storage URLs that AppGateway proxies avatars/logos through (publish mode only).
+var accountStorageUrl = isPublishMode
+    ? builder.Configuration["Storage:AccountUrl"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:AccountUrl in AppHost configuration.")
+    : string.Empty;
+var mainStorageUrl = isPublishMode
+    ? builder.Configuration["Storage:MainUrl"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:MainUrl in AppHost configuration.")
+    : string.Empty;
 
 var certificatePassword = await builder.CreateSslCertificateIfNotExists();
 
@@ -38,39 +126,73 @@ var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = Conf
 var (stripeConfigured, stripePublishableKey, stripeApiKey, stripeWebhookSecret) = ConfigureStripeParameters();
 var stripeFullyConfigured = stripeConfigured && builder.Configuration["Parameters:stripe-webhook-secret"] is not null and not "not-configured";
 
-var postgresPassword = builder.CreateStablePassword("postgres-password");
-var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: ports.Postgres)
-    .WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-postgres-data")
-    .WithLifetime(ContainerLifetime.Persistent)
-    .WithArgs("-c", "wal_level=logical");
+// Local development runs PostgreSQL as a container. Publish targets a managed database, so both
+// databases become externally supplied connection strings (same pattern as blob-storage below:
+// the values are filled from infrastructure outputs at deploy time).
+IResourceBuilder<IResourceWithConnectionString> accountDatabase;
+IResourceBuilder<IResourceWithConnectionString> mainDatabase;
 
-var azureStorage = builder
-    .AddAzureStorage("azure-storage")
-    .RunAsEmulator(resourceBuilder =>
-        {
-            resourceBuilder.WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-azure-storage-data");
-            resourceBuilder.WithBlobPort(ports.Blob);
-            resourceBuilder.WithLifetime(ContainerLifetime.Persistent);
-        }
-    )
-    .WithAnnotation(new ContainerImageAnnotation
-        {
-            Registry = "mcr.microsoft.com",
-            Image = "azure-storage/azurite",
-            Tag = "latest"
-        }
-    )
-    .AddBlobs("blob-storage");
+if (isPublishMode)
+{
+    accountDatabase = builder.AddConnectionString("account-database");
+    mainDatabase = builder.AddConnectionString("main-database");
+}
+else
+{
+    var postgresPassword = builder.CreateStablePassword("postgres-password");
+    var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: ports.Postgres)
+        .WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-postgres-data")
+        .WithLifetime(ContainerLifetime.Persistent)
+        .WithArgs("-c", "wal_level=logical");
 
-builder
-    .AddContainer("mail-server", "axllent/mailpit")
-    .WithHttpEndpoint(ports.MailpitHttp, 8025)
-    .WithEndpoint(ports.MailpitSmtp, 1025)
-    .WithLifetime(ContainerLifetime.Persistent)
-    .WithUrlForEndpoint("http", u => u.DisplayText = "Read mail here");
+    accountDatabase = postgres.AddDatabase("account-database", "account");
+    mainDatabase = postgres.AddDatabase("main-database", "main");
+}
 
-CreateBlobContainer("avatars");
-CreateBlobContainer("logos");
+// Object storage is S3 (Scaleway Object Storage when published, MinIO in local development).
+// MinIO implements the same API, so the connection string shape is identical in both modes;
+// publish mode consumes it as an externally supplied deploy-time secret.
+IResourceBuilder<IResourceWithConnectionString> blobStorage;
+
+if (isPublishMode)
+{
+    blobStorage = builder.AddConnectionString("blob-storage");
+}
+else
+{
+    // Fixed MinIO root credentials, safe for local development like the Azurite key they replace.
+    const string minioAccessKey = "minioadmin";
+    const string minioSecretKey = "minioadmin";
+
+    // MinIO is a local development S3 emulator; buckets are created lazily by the S3 client on
+    // first use, so no bootstrap task is needed.
+    builder
+        .AddContainer("minio", "minio/minio")
+        .WithHttpEndpoint(ports.Blob, 9000)
+        .WithArgs("server", "/data")
+        .WithEnvironment("MINIO_ROOT_USER", minioAccessKey)
+        .WithEnvironment("MINIO_ROOT_PASSWORD", minioSecretKey)
+        .WithVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-minio-data", "/data")
+        .WithLifetime(ContainerLifetime.Persistent)
+        .WithUrlForEndpoint("http", u => u.DisplayText = "Object storage (MinIO)");
+
+    blobStorage = builder.AddConnectionString(
+        "blob-storage",
+        $"ServiceUrl=http://localhost:{ports.Blob};AccessKey={minioAccessKey};SecretKey={minioSecretKey};ForcePathStyle=true;Region=fr-par"
+    );
+}
+
+// Mailpit is a local dev SMTP sink; in publish mode email is delivered by a transactional email
+// service, so there is nothing to deploy.
+if (!isPublishMode)
+{
+    builder
+        .AddContainer("mail-server", "axllent/mailpit")
+        .WithHttpEndpoint(ports.MailpitHttp, 8025)
+        .WithEndpoint(ports.MailpitSmtp, 1025)
+        .WithLifetime(ContainerLifetime.Persistent)
+        .WithUrlForEndpoint("http", u => u.DisplayText = "Read mail here");
+}
 
 var frontendBuild = builder
     .AddJavaScriptApp("frontend-build", "../")
@@ -79,14 +201,10 @@ var frontendBuild = builder
     .WithEnvironment("ACCOUNT_STATIC_PORT", ports.AccountStatic.ToString())
     .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
 
-var accountDatabase = postgres
-    .AddDatabase("account-database", "account");
-
 var accountWorkers = builder
     .AddProject<Account_Workers>("account-workers")
-    .WithEnvironment("KESTREL_PORT", ports.AccountWorkers.ToString())
     .WithReference(accountDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     // The BillingDriftWorker resolves StripeClientFactory which reads these. Without them the worker
     // process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and every
     // stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every worker start.
@@ -94,94 +212,286 @@ var accountWorkers = builder
     .WithEnvironment("Stripe__ApiKey", stripeApiKey)
     .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
     .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    .WithEnvironment("Stripe__AllowMockProvider", "true")
+    // Mock Stripe is a developer-machine convenience and throws when enabled in deployed environments.
+    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WaitFor(accountDatabase);
+
+// KESTREL_PORT is a development-only listener: AddDevelopmentPort binds it in Development only,
+// so in containers the image default (8080) applies and workers need no inbound listener at all.
+if (!isPublishMode)
+{
+    accountWorkers.WithEnvironment("KESTREL_PORT", ports.AccountWorkers.ToString());
+}
 
 var accountApi = builder
     .AddProject<Account_Api>("account-api")
-    .WithEnvironment("KESTREL_PORT", ports.AccountApi.ToString())
-    // Second Kestrel port for back-office.dev.localhost so localhost mirrors the Azure post-split
-    // topology where back-office has its own external ingress and AppGateway is not in the path.
-    .WithEnvironment("BACK_OFFICE_KESTREL_PORT", ports.BackOfficeApi.ToString())
-    // BackOfficeDevStaticProxy forwards /static/* and HMR traffic on the back-office Kestrel listener
-    // to the rsbuild dev server. Dev-only; production builds serve a baked bundle from disk.
-    .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString())
-    // Back-office bundle URLs target the dedicated Kestrel port directly (no AppGateway).
-    .WithEnvironment("BACK_OFFICE_PUBLIC_URL", backOfficeBaseUrl)
-    .WithEnvironment("BACK_OFFICE_CDN_URL", backOfficeBaseUrl)
-    .WithUrlConfiguration(appHostname, ports.AppGateway, "/account")
-    // Google OAuth's redirect_uri whitelist requires literal 'localhost', not subdomains like
-    // 'app.dev.localhost'. The callback then 301's via LocalhostRedirectMiddleware back to the
-    // canonical 'app.dev.localhost' so OAuth-state session cookies flow with the redirected request.
-    .WithEnvironment("OAUTH_PUBLIC_URL", "https://localhost:" + ports.AppGateway)
-    .WithEnvironment("Hostnames__App", appHostname)
-    .WithEnvironment("BackOffice__Host", backOfficeHostname)
+    // Back-office bundle URLs target the public back-office origin (dedicated Kestrel port on
+    // localhost, cluster gateway hostname in publish mode).
+    .WithEnvironment("BACK_OFFICE_PUBLIC_URL", backOfficePublicUrl)
+    .WithEnvironment("BACK_OFFICE_CDN_URL", backOfficePublicUrl)
+    .WithUrlConfiguration(appHostname, isPublishMode ? null : ports.AppGateway, "/account")
+    // Google OAuth's redirect_uri whitelist requires literal 'localhost' in development, not
+    // subdomains like 'app.dev.localhost'; the callback then 301's via LocalhostRedirectMiddleware
+    // back to the canonical dev hostname. In publish mode the public URL is the real one.
+    .WithEnvironment("OAUTH_PUBLIC_URL", isPublishMode ? appPublicUrl : "https://localhost:" + ports.AppGateway)
+    .WithEnvironment("Hostnames__App", appPublicHostname)
+    .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
     .WithReference(accountDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
     .WithEnvironment("OAuth__Google__ClientSecret", googleOAuthClientSecret)
-    .WithEnvironment("OAuth__AllowMockProvider", "true")
+    // The mock OAuth/Stripe providers are developer-machine conveniences; the Stripe mock throws
+    // when enabled in deployed environments, so publish mode pins both off explicitly.
+    .WithEnvironment("OAuth__AllowMockProvider", isPublishMode ? "false" : "true")
     .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
     .WithEnvironment("Stripe__ApiKey", stripeApiKey)
     .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
     .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    .WithEnvironment("Stripe__AllowMockProvider", "true")
+    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
     // Force-on so newcomers see the back-office billing UI without Stripe configured. Set to "false" (or
     // change back to `stripeFullyConfigured ? "true" : "false"`) to hide all billing/revenue/Stripe data.
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
     .WaitFor(accountWorkers);
 
-var mainDatabase = postgres
-    .AddDatabase("main-database", "main");
+// Second Kestrel port for back-office.dev.localhost so localhost mirrors the Azure post-split
+// topology where back-office has its own external ingress and AppGateway is not in the path.
+// BACK_OFFICE_STATIC_PORT drives the BackOfficeDevStaticProxy to the rsbuild dev server; both are
+// development-only listeners (bound by AddDevelopmentPort), so they stay out of published charts.
+if (!isPublishMode)
+{
+    accountApi
+        .WithEnvironment("KESTREL_PORT", ports.AccountApi.ToString())
+        .WithEnvironment("BACK_OFFICE_KESTREL_PORT", ports.BackOfficeApi.ToString())
+        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
+}
+
+// The container listens on the image default port 8080; the Service fronts it on 80. The
+// endpoints are marked external because the Cilium Gateway routes public traffic to them (both
+// the app hostname via YARP and the back-office hostname, which bypasses YARP just like the
+// Azure post-split topology).
+if (isPublishMode)
+{
+    accountApi
+        .WithHttpEndpoint(8080, 8080, "http")
+        .WithExternalHttpEndpoints()
+        .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
+
+    if (mockEasyAuthEnabled)
+    {
+        accountApi.WithEnvironment("MockEasyAuth__Enabled", "true");
+    }
+}
 
 var mainWorkers = builder
     .AddProject<Main_Workers>("main-workers")
-    .WithEnvironment("KESTREL_PORT", ports.MainWorkers.ToString())
     .WithReference(mainDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WaitFor(mainDatabase);
+
+if (!isPublishMode)
+{
+    mainWorkers.WithEnvironment("KESTREL_PORT", ports.MainWorkers.ToString());
+}
 
 var mainApi = builder
     .AddProject<Main_Api>("main-api")
-    .WithEnvironment("KESTREL_PORT", ports.MainApi.ToString())
-    .WithUrlConfiguration(appHostname, ports.AppGateway, "")
+    .WithUrlConfiguration(appHostname, isPublishMode ? null : ports.AppGateway, "")
     .WithReference(mainDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", stripeFullyConfigured ? "true" : "false")
     .WaitFor(mainWorkers);
 
-builder
+if (!isPublishMode)
+{
+    mainApi.WithEnvironment("KESTREL_PORT", ports.MainApi.ToString());
+}
+
+// Same port contract as account-api: container on 8080, Service fronting it on 80.
+if (isPublishMode)
+{
+    mainApi
+        .WithHttpEndpoint(8080, 8080, "http")
+        .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
+}
+
+var appGateway = builder
     .AddProject<AppGateway>("app-gateway")
     .WithReference(frontendBuild)
     .WithReference(accountApi)
     .WithReference(mainApi)
     .WaitFor(accountApi)
     .WaitFor(frontendBuild)
-    .WithEnvironment("ASPNETCORE_URLS", "https://localhost:" + ports.AppGateway)
-    .WithEnvironment("Hostnames__App", appHostname)
+    .WithEnvironment("Hostnames__App", appPublicHostname)
     .WithUrls(context =>
         {
             // Replace the auto-published "https" endpoint URL with three explicit dashboard URLs.
             // DisplayOrder: higher values sort higher in the list (Web App > Back Office > Open API).
             context.Urls.Clear();
+#pragma warning disable CS0618 // DisplayOrder is a field until a future Aspire version re-adds it as a property
             context.Urls.Add(new ResourceUrlAnnotation { Url = appBaseUrl, DisplayText = "Web App", DisplayOrder = 300 });
             context.Urls.Add(new ResourceUrlAnnotation { Url = backOfficeBaseUrl, DisplayText = "Back Office", DisplayOrder = 200 });
             context.Urls.Add(new ResourceUrlAnnotation { Url = $"{appBaseUrl}/openapi", DisplayText = "Open API", DisplayOrder = 100 });
+#pragma warning restore CS0618
         }
     );
+
+// ASPNETCORE_URLS is the dev HTTPS listener; in containers the image default port 8080 applies.
+if (!isPublishMode)
+{
+    appGateway.WithEnvironment("ASPNETCORE_URLS", "https://localhost:" + ports.AppGateway);
+}
+
+if (isPublishMode)
+{
+    // ClusterDestinationConfigFilter resolves YARP's upstream clusters from these URLs; the
+    // EndpointReferences resolve to the in-cluster Services (e.g. http://account-api-service:80).
+    // The storage URLs proxy avatars/logos from Object Storage; the bucket prefix rewrites those
+    // proxy paths to the physical bucket names (Scaleway's bucket namespace is shared across all
+    // customers of a region, so deployed buckets carry an environment prefix). The endpoint is
+    // external because the Cilium Gateway routes the public app hostname here. The gateway serves
+    // no health endpoints, so probes hit its Scalar OpenAPI page instead.
+    appGateway
+        .WithHttpEndpoint(8080, 8080, "http")
+        .WithExternalHttpEndpoints()
+        .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("http"))
+        .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("http"))
+        .WithEnvironment("ACCOUNT_STORAGE_URL", accountStorageUrl)
+        .WithEnvironment("MAIN_STORAGE_URL", mainStorageUrl)
+        .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", builder.Configuration["Storage:BucketPrefix"] ?? string.Empty)
+        .WithKubernetesProbes("/openapi", "/openapi");
+}
+
+// Deployed workloads share the HMAC token-signing key (tokens are issued and validated by the
+// APIs and validated by the gateway) and the Transactional Email SMTP settings.
+if (isPublishMode)
+{
+    var workloadBuilders = new (string Name, IResourceBuilder<IResourceWithEnvironment> Resource)[]
+    {
+        ("account-workers", accountWorkers),
+        ("account-api", accountApi),
+        ("main-workers", mainWorkers),
+        ("main-api", mainApi),
+        ("app-gateway", appGateway)
+    };
+
+    foreach (var (name, workload) in workloadBuilders)
+    {
+        var secretManagerKey = builder.AddParameter($"{name}-secret-manager-key", true);
+
+        // The chart carries no ASPNETCORE_/DOTNET_ENVIRONMENT, and SharedKernel reads the raw env
+        // var (not the host environment) for IsRunningInCloud — so publish mode pins it explicitly.
+        // Both spellings cover ASP.NET hosts and generic-host workers.
+        workload
+            .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Production")
+            .WithEnvironment("DOTNET_ENVIRONMENT", "Production")
+            .WithEnvironment("SCW_SECRET_KEY", secretManagerKey)
+            .WithEnvironment("SecretManager__Path", $"/{name}")
+            .WithEnvironment("SCW_DEFAULT_PROJECT_ID", secretManagerProjectId)
+            .WithEnvironment("SCW_DEFAULT_REGION", "fr-par")
+            .WithEnvironment("SENDER_EMAIL_ADDRESS", senderEmailAddress);
+
+        // Cockpit telemetry endpoints (per signal) arrive as plain environment values from the
+        // deploy pipeline; the authenticating token is the workload's Secret Manager secret.
+        // Absent locally (dashboard OTLP) and in environments without Cockpit.
+        foreach (var signal in new[] { "Metrics", "Logs", "Traces" })
+        {
+            var endpoint = builder.Configuration[$"Cockpit:{signal}OtlpEndpoint"];
+            if (!string.IsNullOrWhiteSpace(endpoint))
+            {
+                workload.WithEnvironment($"Cockpit__{signal}OtlpEndpoint", endpoint);
+            }
+        }
+
+        // Single-writer Data Protection keyring: main-api owns key generation and rotation (it mints
+        // the antiforgery tokens in the module-federated shell that account-api validates), every
+        // other API consumes the shared ring read-only.
+        if (name == "main-api")
+        {
+            workload.WithEnvironment("DATA_PROTECTION_KEY_RING_OWNER", "true");
+        }
+    }
+}
+
+// Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
+// the YARP gateway; the back-office hostname bypasses it and hits account-api directly,
+// mirroring the Azure post-split topology. cert-manager is installed BY THE CHART (same
+// upstream v1.20.2 the cluster-ops steps used to apply by hand, with CRDs and the Gateway API
+// shim enabled) and owns the production issuer: DNS/TLS bring-up is complete and the staging
+// endpoint's rate-limit protection is no longer needed.
+if (isPublishMode && kubernetes is not null)
+{
+    var certManager = kubernetes.AddCertManager("cert-manager");
+    var issuer = certManager
+        .AddIssuer("letsencrypt")
+        .WithLetsEncryptProduction(acmeEmail)
+        .WithHttp01Solver(); // ACME challenges route through the Gateway (HTTPRoute on /.well-known/acme-challenge)
+
+    var publicGateway = kubernetes
+        .AddGateway("public-gateway")
+        .WithGatewayClass("cilium")
+        .WithHostname(appPublicHostname)
+        .WithHostname(backOfficePublicHostname)
+        .WithTls(issuer);
+
+    publicGateway
+        .WithRoute(appPublicHostname, "/", appGateway.GetEndpoint("http"))
+        .WithRoute(backOfficePublicHostname, "/", accountApi.GetEndpoint("http"));
+
+    // The generated chart rolls out every Deployment with maxUnavailable: 1, which lets the last
+    // ready pod of a single-replica workload terminate before its replacement passes readiness —
+    // every deploy showed up as a window of edge 504s (found in the Cockpit access logs). The
+    // patch pins maxUnavailable: 0 (maxSurge stays 1) right after the chart is generated, so helm
+    // installs a chart whose rollouts are zero-gap at any replica count.
+    builder.Pipeline.WithFinalAction("publish-kubernetes", PatchChartRolloutStrategy);
+}
 
 AddStripeCliContainer();
 
 await builder.Build().RunAsync();
 
+// Runs as the final action of the chart-generation step (publish-kubernetes): by then the Helm
+// chart exists, and every step that consumes it — helm-deploy-kubernetes in a deploy — runs
+// after final actions complete.
+async Task PatchChartRolloutStrategy(PipelineStepContext context)
+{
+    var templatesFolder = Path.Combine(builder.AppHostDirectory, "aspire-output", "templates");
+    if (!Directory.Exists(templatesFolder))
+    {
+        throw new InvalidOperationException($"Chart templates folder not found at '{templatesFolder}'.");
+    }
+
+    var deployments = Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories);
+    if (deployments.Length == 0)
+    {
+        throw new InvalidOperationException("No deployment.yaml found in the generated chart — the chart layout changed, update the rollout patch.");
+    }
+
+    var patched = 0;
+    foreach (var deployment in deployments)
+    {
+        var yaml = await File.ReadAllTextAsync(deployment);
+        if (!yaml.Contains("maxUnavailable: 1"))
+        {
+            continue;
+        }
+
+        await File.WriteAllTextAsync(deployment, yaml.Replace("maxUnavailable: 1", "maxUnavailable: 0"));
+        patched++;
+    }
+
+    Console.WriteLine($"Rollout patch: {patched} of {deployments.Length} deployments pinned to maxUnavailable: 0.");
+}
+
 return;
 
 void AddStripeCliContainer()
 {
-    if (stripeConfigured)
+    // stripe-cli forwards webhook events to localhost; staging uses a real Stripe webhook endpoint, so
+// the forwarder stays out of the published topology.
+    if (stripeConfigured && !isPublishMode)
     {
         builder
             .AddContainer("stripe-cli", "stripe/stripe-cli:latest")
@@ -293,23 +603,6 @@ void AddStripeCliContainer()
         builder.CreateResourceBuilder(new ParameterResource("stripe-api-key", _ => "not-configured", true)),
         builder.CreateResourceBuilder(new ParameterResource("stripe-webhook-secret", _ => "not-configured", true))
     );
-}
-
-void CreateBlobContainer(string containerName)
-{
-    // Build the Azurite connection string dynamically from the actual blob port so this works on
-    // any base port (parallel stacks from git worktrees rely on this). The default development
-    // account key is the well-known Azurite credential and is safe to keep in source.
-    var connectionString =
-        $"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:{ports.Blob}/devstoreaccount1";
-
-    new Task(() =>
-        {
-            var blobServiceClient = new BlobServiceClient(connectionString);
-            var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
-            containerClient.CreateIfNotExists();
-        }
-    ).Start();
 }
 
 void OverrideAspireDashboardEnvironmentVariables(PortAllocation portAllocation)
