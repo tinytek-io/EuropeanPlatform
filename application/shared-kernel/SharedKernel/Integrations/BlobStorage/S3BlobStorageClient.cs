@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Text.Json;
-using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 
 namespace SharedKernel.Integrations.BlobStorage;
 
 /// <summary>
-///     S3-compatible implementation of <see cref="IBlobStorageClient"/>, used against Scaleway
+///     S3-compatible implementation of <see cref="IBlobStorageClient" />, used against Scaleway
 ///     Object Storage in production and MinIO in local development. Buckets are created lazily with
 ///     a public-read policy when requested, so avatars/logos can be served unsigned through AppGateway
 ///     exactly like the public containers they replace.
@@ -22,7 +22,7 @@ public sealed class S3BlobStorageClient(
 
     public async Task UploadAsync(string bucketName, string blobName, string contentType, Stream stream, CancellationToken cancellationToken)
     {
-        await CreateBucketIfNotExistsAsync(bucketName, publicRead: true, cancellationToken);
+        await CreateBucketIfNotExistsAsync(bucketName, true, cancellationToken);
 
         var request = new PutObjectRequest
         {
@@ -42,7 +42,7 @@ public sealed class S3BlobStorageClient(
             var response = await s3Client.ListObjectsV2Async(new ListObjectsV2Request { BucketName = options.ResolveBucketName(bucketName), Prefix = prefix }, cancellationToken);
             return response.S3Objects?.Select(s3Object => s3Object.Key).ToArray() ?? [];
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             return [];
         }
@@ -55,7 +55,7 @@ public sealed class S3BlobStorageClient(
             var response = await s3Client.GetObjectAsync(options.ResolveBucketName(bucketName), blobName, cancellationToken);
             return (response.ResponseStream, response.Metadata["Content-Type"]);
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
@@ -79,7 +79,7 @@ public sealed class S3BlobStorageClient(
             await s3Client.DeleteObjectAsync(options.ResolveBucketName(bucketName), blobName, cancellationToken);
             return true;
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -147,9 +147,10 @@ public sealed class S3BlobStorageClient(
         };
 
         await s3Client.PutBucketPolicyAsync(new PutBucketPolicyRequest
-        {
-            BucketName = bucketName,
-            Policy = JsonSerializer.Serialize(policy)
-        }, cancellationToken);
+            {
+                BucketName = bucketName,
+                Policy = JsonSerializer.Serialize(policy)
+            }, cancellationToken
+        );
     }
 }

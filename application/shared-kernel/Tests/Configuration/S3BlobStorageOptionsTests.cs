@@ -9,7 +9,8 @@ public class S3BlobStorageOptionsTests
     public void Parse_WithoutBucketPrefix_DefaultsToEmpty()
     {
         var options = S3BlobStorageOptions.Parse(
-            "ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret;ForcePathStyle=true;Region=fr-par");
+            "ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret;ForcePathStyle=true;Region=fr-par"
+        );
 
         Assert.Equal("", options.BucketPrefix);
         Assert.Equal("avatars", options.ResolveBucketName("avatars"));
@@ -19,7 +20,8 @@ public class S3BlobStorageOptionsTests
     public void Parse_WithBucketPrefix_ResolvesPhysicalBucketNames()
     {
         var options = S3BlobStorageOptions.Parse(
-            "ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=key;SecretKey=secret;ForcePathStyle=false;Region=fr-par;BucketPrefix=pp-stage-");
+            "ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=key;SecretKey=secret;ForcePathStyle=false;Region=fr-par;BucketPrefix=pp-stage-"
+        );
 
         Assert.Equal("pp-stage-", options.BucketPrefix);
         Assert.Equal("pp-stage-avatars", options.ResolveBucketName("avatars"));
@@ -31,7 +33,8 @@ public class S3BlobStorageOptionsTests
     {
         // Forward compatibility: a newer environment may append entries this version does not know.
         var options = S3BlobStorageOptions.Parse(
-            "ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret;Region=fr-par;SomeFutureEntry=value");
+            "ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret;Region=fr-par;SomeFutureEntry=value"
+        );
 
         Assert.Equal("http://localhost:9000", options.ServiceUrl);
     }
@@ -40,15 +43,15 @@ public class S3BlobStorageOptionsTests
     public void Parse_WithoutRegionOnRegionlessHost_Throws()
     {
         // The region can be derived from hosts like s3.fr-par.scw.cloud, but not from localhost.
-        Assert.Throws<InvalidOperationException>(
-            () => S3BlobStorageOptions.Parse("ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret"));
+        Assert.Throws<InvalidOperationException>(() => S3BlobStorageOptions.Parse("ServiceUrl=http://localhost:9000;AccessKey=key;SecretKey=secret"));
     }
 
     [Fact]
     public void Parse_WithoutRegion_DerivesItFromServiceUrlHost()
     {
         var options = S3BlobStorageOptions.Parse(
-            "ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=key;SecretKey=secret");
+            "ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=key;SecretKey=secret"
+        );
 
         Assert.Equal("fr-par", options.Region);
     }
