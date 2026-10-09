@@ -55,9 +55,7 @@ function MockLoginPage() {
           <Trans>Back Office - Localhost</Trans>
         </h2>
         <div className="text-center text-sm text-muted-foreground">
-          <Trans>
-            Local development sign-in. Production uses Azure Container Apps built-in Entra ID authentication.
-          </Trans>
+          <Trans>Local development sign-in. Production requires authenticated staff sign-in.</Trans>
         </div>
 
         <RadioGroup className="w-full pt-2" value={selectedId} onValueChange={setSelectedId}>
