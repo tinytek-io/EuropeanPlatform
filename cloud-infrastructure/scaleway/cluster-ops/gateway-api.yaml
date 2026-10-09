@@ -1,0 +1,77 @@
+# Kapsule cluster-ops: Cilium Gateway API enablement
+#
+# Kapsule ships a managed Cilium whose Gateway API controller is off and whose RBAC, CRDs, and
+# GatewayClass for gateway.networking.k8s.io are absent. This manifest covers the pieces that are
+# safe to apply idempotently with `kubectl apply -f`; the CRD installs and cilium-config changes
+# are documented in README.md and must run once per cluster (see that file for the exact steps).
+
+# Cilium's Gateway API implementation claims Gateways whose class is named "cilium" and controlled
+# by this controllerName (normally created by the Cilium helm chart, absent on Kapsule).
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: cilium
+spec:
+  controllerName: io.cilium/gateway-controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cilium-operator-gateway-api
+  labels:
+    app.kubernetes.io/part-of: cilium
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses", "httproutes", "tcproutes", "tlsroutes", "udproutes", "grpcroutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways/status", "gatewayclasses/status", "httproutes/status", "tcproutes/status", "tlsroutes/status", "udproutes/status", "grpcroutes/status"]
+    verbs: ["get", "update", "patch"]
+  # GEP-1494 style policies supported by Cilium 1.20
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["backendtlspolicies", "listenersets", "referencegrants"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["backendtlspolicies/status", "listenersets/status"]
+    verbs: ["get", "update", "patch"]
+  # Cilium's per-GatewayClass Envoy tuning resources
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumgatewayclassconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumgatewayclassconfigs/status"]
+    verbs: ["get", "update", "patch"]
+  # Cluster-scope configmaps are used by the gateway controller
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # The Envoy gateway deployments publish endpoints through EndpointSlices
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Gateway infrastructure: cilium creates a Deployment of Envoy per Gateway
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The cilium-gateway-* LoadBalancer services the operator creates for each Gateway
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cilium-operator-gateway-api
+  labels:
+    app.kubernetes.io/part-of: cilium
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cilium-operator-gateway-api
+subjects:
+  - kind: ServiceAccount
+    name: cilium-operator
+    namespace: kube-system
