@@ -37,7 +37,9 @@ if (isPublishMode)
 {
     // frontend-build is a build-only container: Aspire wants its output composed into a consuming
     // image via PublishWithStaticFiles/PublishWithContainerFiles rather than referenced as a service.
-    // Until the frontend packaging is remodelled, publish would abort on that validation.
+    // ExcludeFromManifest keeps it out of publish entirely; without it publish would abort on that
+    // validation, and until the frontend packaging is remodelled there is no consuming image to
+    // compose into.
     builder.Pipeline.DisableBuildOnlyContainerValidation();
 
     kubernetes = builder.AddKubernetesEnvironment("kubernetes")
@@ -200,6 +202,12 @@ var frontendBuild = builder
     .WithEnvironment("MAIN_STATIC_PORT", ports.MainStatic.ToString())
     .WithEnvironment("ACCOUNT_STATIC_PORT", ports.AccountStatic.ToString())
     .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
+
+// The SPA ships inside the API images (dotnet publish composes the WebApp dist), so the build-only
+// JS container must not reach the cluster: without this its generated Deployment runs a one-shot
+// build and crash-loops on restart, and the pipeline builds and pushes a multi-GB image nothing
+// consumes. Run mode is unaffected (the container still serves local development).
+frontendBuild.ExcludeFromManifest();
 
 var accountWorkers = builder
     .AddProject<Account_Workers>("account-workers")
