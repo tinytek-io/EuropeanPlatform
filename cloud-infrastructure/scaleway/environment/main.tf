@@ -194,6 +194,62 @@ resource "scaleway_rdb_privilege" "main" {
   permission    = "all"
 }
 
+# Least-privilege database roles: the running application connects as a readwrite user that can
+# never change database structure, while a dedicated migrator user owns the schema and is used
+# only by the pre-upgrade migration Job (MIGRATE_ONLY). The instance's admin user stays for
+# Terraform and operator access only — its credential no longer reaches the application.
+resource "random_password" "app_user" {
+  length  = 32
+  special = true
+}
+
+resource "random_password" "migrator_user" {
+  length  = 32
+  special = true
+}
+
+resource "scaleway_rdb_user" "app" {
+  instance_id = scaleway_rdb_instance.main.id
+  name        = "${var.database_admin_user}_app"
+  password    = random_password.app_user.result
+  is_admin    = false
+}
+
+resource "scaleway_rdb_user" "migrator" {
+  instance_id = scaleway_rdb_instance.main.id
+  name        = "${var.database_admin_user}_migrator"
+  password    = random_password.migrator_user.result
+  is_admin    = false
+}
+
+resource "scaleway_rdb_privilege" "app_account" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.account.name
+  user_name     = scaleway_rdb_user.app.name
+  permission    = "readwrite"
+}
+
+resource "scaleway_rdb_privilege" "app_main" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.main.name
+  user_name     = scaleway_rdb_user.app.name
+  permission    = "readwrite"
+}
+
+resource "scaleway_rdb_privilege" "migrator_account" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.account.name
+  user_name     = scaleway_rdb_user.migrator.name
+  permission    = "all"
+}
+
+resource "scaleway_rdb_privilege" "migrator_main" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.main.name
+  user_name     = scaleway_rdb_user.migrator.name
+  permission    = "all"
+}
+
 # Object storage for avatars and logos, mirroring the public containers they replace: the
 # gateway proxies unsigned GETs to these path-style bucket URLs. Names carry the
 # prefix-environment prefix because Scaleway's bucket namespace is SHARED ACROSS ALL CUSTOMERS
@@ -533,8 +589,16 @@ resource "scaleway_iam_api_key" "storage" {
 }
 
 locals {
-  account_database_connection_string = "Host=${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port};Database=account;Username=${var.database_admin_user};Password=${random_password.database.result};SSL Mode=Require"
-  main_database_connection_string    = "Host=${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port};Database=main;Username=${var.database_admin_user};Password=${random_password.database.result};SSL Mode=Require"
+  # The application connects as the readwrite user (it can never change database structure);
+  # the migrator connection string reaches only the workers' Secret Manager paths, where the
+  # pre-upgrade migration Job (MIGRATE_ONLY) resolves it.
+  database_host                      = "${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port}"
+  app_database_credentials           = "Username=${scaleway_rdb_user.app.name};Password=${random_password.app_user.result};SSL Mode=Require"
+  migrator_database_credentials      = "Username=${scaleway_rdb_user.migrator.name};Password=${random_password.migrator_user.result};SSL Mode=Require"
+  account_database_connection_string = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
+  main_database_connection_string    = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
+  account_migrator_connection_string = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
+  main_migrator_connection_string    = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
   blob_storage_connection_string     = "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage.access_key};SecretKey=${scaleway_iam_api_key.storage.secret_key};ForcePathStyle=false;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
   signing_key                        = random_bytes.authentication_token_signing_key.base64
   data_protection_encryption_key     = random_bytes.data_protection_encryption_key.base64
@@ -554,6 +618,8 @@ locals {
       ConnectionStrings__account-database = local.account_database_connection_string
       ConnectionStrings__blob-storage     = local.blob_storage_connection_string
       Authentication__TokenSigning__Key   = local.signing_key
+      # Structure-owner credentials for the pre-upgrade migration Job only.
+      ConnectionStrings__account-database-migrator = local.account_migrator_connection_string
     }
     main-api = {
       ConnectionStrings__main-database  = local.main_database_connection_string
@@ -564,6 +630,8 @@ locals {
     main-workers = {
       ConnectionStrings__main-database = local.main_database_connection_string
       ConnectionStrings__blob-storage  = local.blob_storage_connection_string
+      # Structure-owner credentials for the pre-upgrade migration Job only.
+      ConnectionStrings__main-database-migrator = local.main_migrator_connection_string
     }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key

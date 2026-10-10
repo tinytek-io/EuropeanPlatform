@@ -479,9 +479,13 @@ const string JobTemplate = """
                                app.kubernetes.io/component: "MIGRATIONS"
                                app.kubernetes.io/instance: "{{ .Release.Name }}"
                              annotations:
-                               # Runs BEFORE any Deployment is upgraded and blocks the upgrade until migrations complete;
-                               # a failed migration aborts the deploy with the old version still serving.
-                               "helm.sh/hook": "pre-upgrade"
+                               # Runs BEFORE any Deployment is upgraded (blocking the upgrade until
+                               # migrations complete; a failed migration aborts the deploy with the
+                               # old version still serving) and AFTER a first install (on a fresh
+                               # environment the config maps below only exist once the main resources
+                               # are applied, so a pre-install hook would fail; app pods simply retry
+                               # until the post-install job has created the schema).
+                               "helm.sh/hook": "pre-upgrade,post-install"
                                # The previous Job is deleted just before this one is created (default policy).
                                "helm.sh/hook-delete-policy": "before-hook-creation"
                                "helm.sh/hook-weight": "-1"

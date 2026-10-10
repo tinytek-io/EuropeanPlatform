@@ -29,11 +29,15 @@ var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
 using var scope = host.Services.CreateScope();
 
-// Apply migrations on startup. EF Core's migration lock (__EFMigrationsLock) serializes
-// concurrent replicas, so a rolling upgrade is safe. The APIs start in parallel with the workers,
-// which mirrors local development.
-var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<AccountDbContext>>();
-migrationService.ApplyMigrations();
+// Schema migrations at startup only when the migrator connection string is absent (local
+// development). In deployed environments the pre-upgrade migration Job owns the schema, and the
+// runtime user is a readwrite role that cannot create schema objects (least privilege).
+var configuration = host.Services.GetRequiredService<IConfiguration>();
+if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("account-database-migrator")))
+{
+    var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<AccountDbContext>>();
+    migrationService.ApplyMigrations();
+}
 
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<AccountDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);
