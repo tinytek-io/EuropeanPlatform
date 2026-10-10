@@ -14,9 +14,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\account\Api\Account.Api.csproj"/>
+        <ProjectReference Include="..\account\Migrator\Account.Migrator.csproj"/>
         <ProjectReference Include="..\account\Workers\Account.Workers.csproj"/>
         <ProjectReference Include="..\AppGateway\AppGateway.csproj"/>
         <ProjectReference Include="..\main\Api\Main.Api.csproj"/>
+        <ProjectReference Include="..\main\Migrator\Main.Migrator.csproj"/>
         <ProjectReference Include="..\main\Workers\Main.Workers.csproj"/>
         <ProjectReference Include="..\shared-kernel\SharedKernel\SharedKernel.csproj" IsAspireProjectResource="false"/>
     </ItemGroup>

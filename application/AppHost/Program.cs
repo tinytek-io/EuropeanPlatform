@@ -372,6 +372,18 @@ if (isPublishMode)
         .WithKubernetesProbes("/openapi", "/openapi");
 }
 
+// Dedicated database migrators: run-once console apps applying schema + data migrations with the
+// structure-owner role. Publish-only (local development migrates at worker startup) and deployed
+// as Jobs, not Deployments: the chart patch turns the generated workload into a pre-upgrade Job.
+IResourceBuilder<ProjectResource> accountMigrator = null!;
+IResourceBuilder<ProjectResource> mainMigrator = null!;
+
+if (isPublishMode)
+{
+    accountMigrator = builder.AddProject<Account_Migrator>("account-migrator");
+    mainMigrator = builder.AddProject<Main_Migrator>("main-migrator");
+}
+
 // Deployed workloads share the HMAC token-signing key (tokens are issued and validated by the
 // APIs and validated by the gateway) and the Transactional Email SMTP settings.
 if (isPublishMode)
@@ -382,7 +394,9 @@ if (isPublishMode)
         ("account-api", accountApi),
         ("main-workers", mainWorkers),
         ("main-api", mainApi),
-        ("app-gateway", appGateway)
+        ("app-gateway", appGateway),
+        ("account-migrator", accountMigrator),
+        ("main-migrator", mainMigrator)
     };
 
     foreach (var (name, workload) in workloadBuilders)
@@ -453,10 +467,12 @@ if (isPublishMode && kubernetes is not null)
     //  * every Deployment rolls out with maxUnavailable: 1 — with single-replica workloads the last
     //    ready pod terminates before its replacement passes readiness, so deploys surfaced as edge
     //    504 windows. The patch pins maxUnavailable: 0 (maxSurge stays 1).
-    //  * one pre-upgrade migration Job per self-contained system: schema + data migrations run to
-    //    completion in the workers' image BEFORE any new pod rolls out (pre-upgrade only — on a
-    //    first install the workers' startup migrations cover it, and hook resources are created
-    //    before the config maps the Job's pod depends on).
+    //  * one migration Job per self-contained system, running the dedicated migrator image to
+    //    completion (schema + data migrations) BEFORE any new pod rolls out. It is a pre-upgrade/
+    //    pre-install hook, and the migrator's config map and secret are promoted to hook resources
+    //    too — regular resources are applied only after hooks, so without that the Job's pod would
+    //    start before its config exists (whenever the migrator is new in a release, or always on a
+    //    first install).
     builder.Pipeline.WithFinalAction("publish-kubernetes", PatchGeneratedChart);
 }
 
@@ -464,28 +480,28 @@ AddStripeCliContainer();
 
 await builder.Build().RunAsync();
 
-// Generated per self-contained system; the MIGRATIONS/VALUES_KEY/WORKERS tokens are replaced per
-// self-contained system. The image/config/secrets are the workers' own — the Job runs the same
-// image with MIGRATE_ONLY=true so it exits after schema + data migrations instead of starting
-// hosted services. Helm's own {{ ... }} braces stay literal (raw string, no interpolation).
-const string JobTemplate = """
+// Generated per self-contained system; the RESOURCE/VALUES_KEY tokens are replaced per migrator.
+// The image/config/secret are the migrator's own — a console app that applies schema + data
+// migrations and exits (it has no run mode to select; it is not a worker). Helm's own {{ ... }}
+// braces stay literal (raw string, no interpolation).
+const string jobTemplate = """
                            ---
                            apiVersion: "batch/v1"
                            kind: "Job"
                            metadata:
-                             name: "{{ .Chart.Name }}-MIGRATIONS-job"
+                             name: "{{ .Chart.Name }}-RESOURCE-job"
                              labels:
                                app.kubernetes.io/name: "{{ .Chart.Name }}"
-                               app.kubernetes.io/component: "MIGRATIONS"
+                               app.kubernetes.io/component: "RESOURCE"
                                app.kubernetes.io/instance: "{{ .Release.Name }}"
                              annotations:
-                               # Runs BEFORE any Deployment is upgraded (blocking the upgrade until
-                               # migrations complete; a failed migration aborts the deploy with the
-                               # old version still serving) and AFTER a first install (on a fresh
-                               # environment the config maps below only exist once the main resources
-                               # are applied, so a pre-install hook would fail; app pods simply retry
-                               # until the post-install job has created the schema).
-                               "helm.sh/hook": "pre-upgrade,post-install"
+                               # Runs BEFORE any pod of the release rolls out, upgrade or fresh
+                               # install: the upgrade blocks until migrations complete, and a
+                               # failed migration aborts the deploy with the old version still
+                               # serving. The config map and secret below are hook resources
+                               # themselves (applied at weight -2, before this Job at -1) because
+                               # regular release resources are applied after hooks.
+                               "helm.sh/hook": "pre-upgrade,pre-install"
                                # The previous Job is deleted just before this one is created (default policy).
                                "helm.sh/hook-delete-policy": "before-hook-creation"
                                "helm.sh/hook-weight": "-1"
@@ -495,23 +511,32 @@ const string JobTemplate = """
                                metadata:
                                  labels:
                                    app.kubernetes.io/name: "{{ .Chart.Name }}"
-                                   app.kubernetes.io/component: "MIGRATIONS"
+                                   app.kubernetes.io/component: "RESOURCE"
                                    app.kubernetes.io/instance: "{{ .Release.Name }}"
                                spec:
                                  restartPolicy: Never
                                  containers:
-                                   - name: "MIGRATIONS"
+                                   - name: "RESOURCE"
                                      image: "{{ .Values.parameters.VALUES_KEY.VALUES_KEY_image }}"
-                                     env:
-                                       - name: "MIGRATE_ONLY"
-                                         value: "true"
                                      envFrom:
                                        - configMapRef:
-                                           name: "WORKERS-config"
+                                           name: "RESOURCE-config"
                                        - secretRef:
-                                           name: "WORKERS-secrets"
+                                           name: "RESOURCE-secrets"
                                      imagePullPolicy: "IfNotPresent"
                            """;
+
+// Hook annotations for a migrator's config map and secret (inserted into their metadata): hook
+// resources are applied before the regular release resources and before lower-weight hooks, so
+// the migration Job (weight -1) can reference them even when they are new in this release.
+// before-hook-creation recreates them for every hook run so their values always match the
+// release being deployed.
+const string hookResourceAnnotations = """
+                                         annotations:
+                                           "helm.sh/hook": "pre-upgrade,pre-install"
+                                           "helm.sh/hook-delete-policy": "before-hook-creation"
+                                           "helm.sh/hook-weight": "-2"
+                                       """;
 
 // Runs as the final action of the chart-generation step (publish-kubernetes): by then the Helm
 // chart exists, and every step that consumes it — helm-deploy-kubernetes in a deploy — runs
@@ -554,30 +579,47 @@ async Task PatchRolloutStrategyAsync(string templatesFolder)
 
 async Task AddMigrationJobsAsync(string templatesFolder)
 {
-    // One migration Job per workers Deployment: e.g. templates/account-workers/deployment.yaml
-    // produces templates/account-migrations/job.yaml, reusing the workers' image, config, and
-    // secrets. The workers run the same migration code at startup as a no-op safety net (and to
-    // cover first installs, where pre-install hooks would race the config maps they depend on).
-    var workersDeployments = Directory.GetDirectories(templatesFolder, "*-workers");
-    if (workersDeployments.Length == 0)
+    // One migration Job per migrator workload: the publisher generates a Deployment for every
+    // project resource, but a migrator runs to completion and exits — as a Deployment it would
+    // crash-loop forever. The patch deletes the generated Deployment and replaces it with a
+    // pre-upgrade/pre-install hook Job, and promotes the migrator's config map and secret to
+    // hook resources so they exist before the Job's pod starts.
+    var migratorWorkloads = Directory.GetDirectories(templatesFolder, "*-migrator");
+    if (migratorWorkloads.Length == 0)
     {
-        throw new InvalidOperationException("No *-workers deployment found in the generated chart — the chart layout changed, update the migration patch.");
+        throw new InvalidOperationException("No *-migrator workload found in the generated chart — the chart layout changed, update the migration patch.");
     }
 
-    foreach (var workersFolder in workersDeployments)
+    foreach (var migratorFolder in migratorWorkloads)
     {
-        var workers = Path.GetFileName(workersFolder); // account-workers
-        var migrations = workers.Replace("-workers", "-migrations"); // account-migrations
-        var valuesKey = workers.Replace('-', '_'); // account_workers
-        var jobFolder = Path.Combine(templatesFolder, migrations);
-        Directory.CreateDirectory(jobFolder);
+        var migrator = Path.GetFileName(migratorFolder); // account-migrator
+        File.Delete(Path.Combine(migratorFolder, "deployment.yaml"));
 
-        // Helm's own {{ ... }} template braces are literal here: string.Format only touches {0}-style.
-        var job = JobTemplate.Replace("MIGRATIONS", migrations).Replace("VALUES_KEY", valuesKey).Replace("WORKERS", workers);
+        await PromoteToHookResourceAsync(Path.Combine(migratorFolder, "config.yaml"), migrator);
+        await PromoteToHookResourceAsync(Path.Combine(migratorFolder, "secrets.yaml"), migrator);
 
-        await File.WriteAllTextAsync(Path.Combine(jobFolder, "job.yaml"), job);
-        Console.WriteLine($"Migration patch: {migrations} Job added (pre-upgrade hook, image from {workers}).");
+        var job = jobTemplate
+            .Replace("RESOURCE", migrator)
+            .Replace("VALUES_KEY", migrator.Replace('-', '_'));
+
+        await File.WriteAllTextAsync(Path.Combine(migratorFolder, "job.yaml"), job);
+        Console.WriteLine($"Migration patch: {migrator} Job added (pre-upgrade/pre-install hook).");
     }
+}
+
+// The publisher emits every workload's config map and secret with a single metadata labels block;
+// the hook annotations are inserted right before it (same indentation).
+async Task PromoteToHookResourceAsync(string yamlFile, string migrator)
+{
+    var yaml = await File.ReadAllTextAsync(yamlFile);
+    var labelsIndex = yaml.IndexOf("  labels:", StringComparison.Ordinal);
+    if (labelsIndex < 0)
+    {
+        throw new InvalidOperationException($"No metadata labels block found in {Path.GetFileName(yamlFile)} for {migrator} — the generated chart layout changed, update the migration patch.");
+    }
+
+    yaml = yaml.Insert(labelsIndex, hookResourceAnnotations + Environment.NewLine);
+    await File.WriteAllTextAsync(yamlFile, yaml);
 }
 
 

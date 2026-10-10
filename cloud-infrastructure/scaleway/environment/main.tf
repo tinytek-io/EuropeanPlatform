@@ -618,8 +618,6 @@ locals {
       ConnectionStrings__account-database = local.account_database_connection_string
       ConnectionStrings__blob-storage     = local.blob_storage_connection_string
       Authentication__TokenSigning__Key   = local.signing_key
-      # Structure-owner credentials for the pre-upgrade migration Job only.
-      ConnectionStrings__account-database-migrator = local.account_migrator_connection_string
     }
     main-api = {
       ConnectionStrings__main-database  = local.main_database_connection_string
@@ -630,8 +628,15 @@ locals {
     main-workers = {
       ConnectionStrings__main-database = local.main_database_connection_string
       ConnectionStrings__blob-storage  = local.blob_storage_connection_string
-      # Structure-owner credentials for the pre-upgrade migration Job only.
-      ConnectionStrings__main-database-migrator = local.main_migrator_connection_string
+    }
+    # The dedicated migrator workloads (pre-upgrade Jobs): the SAME logical connection name as
+    # the application, but their own Secret Manager path resolves it as the structure-owner
+    # migrator role. The runtime workloads above resolve the same name as the readwrite app user.
+    account-migrator = {
+      ConnectionStrings__account-database = local.account_migrator_connection_string
+    }
+    main-migrator = {
+      ConnectionStrings__main-database = local.main_migrator_connection_string
     }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key
