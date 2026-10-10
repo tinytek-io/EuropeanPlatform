@@ -6,6 +6,7 @@
         <Project Path="account\Tests\Account.Tests.csproj"/>
         <Project Path="account\WebApp\Account.WebApp.esproj"/>
         <Project Path="account\Workers\Account.Workers.csproj"/>
+        <Project Path="account\Migrator\Account.Migrator.csproj"/>
     </Folder>
     <Folder Name="/main/">
         <Project Path="main\Api\Main.Api.csproj"/>
@@ -13,6 +14,7 @@
         <Project Path="main\Tests\Main.Tests.csproj"/>
         <Project Path="main\WebApp\Main.WebApp.esproj"/>
         <Project Path="main\Workers\Main.Workers.csproj"/>
+        <Project Path="main\Migrator\Main.Migrator.csproj"/>
     </Folder>
     <Folder Name="/shared-kernel/">
         <Project Path="shared-kernel\SharedKernel\SharedKernel.csproj"/>
