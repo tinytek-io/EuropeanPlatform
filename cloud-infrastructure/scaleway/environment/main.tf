@@ -122,6 +122,36 @@ resource "scaleway_vpc_private_network" "vpc" {
   tags       = local.tags
 }
 
+# NAT egress for the node pool: the nodes have no public IPs (see scaleway_k8s_pool.default), and
+# the Kapsule API refuses that configuration unless a public gateway on the private network
+# advertises the default route. The gateway masquerades outbound traffic (image pulls, telemetry,
+# third-party APIs); nothing can reach the nodes inbound through it.
+resource "scaleway_vpc_public_gateway_ip" "nat" {
+  zone       = "${var.region}-1"
+  project_id = var.project_id
+  tags       = local.tags
+}
+
+resource "scaleway_vpc_public_gateway" "nat" {
+  zone         = "${var.region}-1"
+  project_id   = var.project_id
+  name         = "${var.prefix}-${var.environment}-nat"
+  type         = "VPC-GW-S"
+  ip_id        = scaleway_vpc_public_gateway_ip.nat.id
+  move_to_ipam = true
+  tags         = local.tags
+}
+
+resource "scaleway_vpc_gateway_network" "nat" {
+  zone               = "${var.region}-1"
+  gateway_id         = scaleway_vpc_public_gateway.nat.id
+  private_network_id = scaleway_vpc_private_network.vpc.id
+  enable_masquerade  = true
+  ipam_config {
+    push_default_route = true
+  }
+}
+
 # The public Load Balancer in front of the Cilium Envoy gateway. Terraform owns the LB shell
 # and its flexible IP (which survives LB recreation); the Kapsule cloud-controller-manager
 # creates the frontends and backends on it through the Service annotations
@@ -526,14 +556,21 @@ resource "scaleway_k8s_cluster" "kapsule" {
 }
 
 resource "scaleway_k8s_pool" "default" {
-  cluster_id          = scaleway_k8s_cluster.kapsule.id
-  name                = "default"
-  node_type           = var.node_type
-  size                = var.node_count
+  cluster_id = scaleway_k8s_cluster.kapsule.id
+  name       = "default"
+  node_type  = var.node_type
+  size       = var.node_count
+  # No public IPs on the nodes: the edge WAF (and the gateway load balancer, which sits on the
+  # private network) is the only public entry — a node's public IP would bypass it entirely.
+  # Nodes keep outbound access for image pulls and telemetry through the private network.
+  public_ip_disabled  = true
   autoscaling         = false
   zone                = "${var.region}-1"
   wait_for_pool_ready = true
   tags                = local.tags
+  # The Kapsule API only accepts public_ip_disabled when the NAT gateway is attached and
+  # advertises the default route; the dependency guarantees the apply ordering.
+  depends_on = [scaleway_vpc_gateway_network.nat]
 }
 
 # -------------------------------------------------------------------------------------------------
