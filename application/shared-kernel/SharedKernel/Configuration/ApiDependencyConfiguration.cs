@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Configuration;
@@ -167,6 +168,10 @@ public static class ApiDependencyConfiguration
                     {
                         options.Cookie.Name = AuthenticationTokenHttpKeys.AntiforgeryTokenCookieName;
                         options.HeaderName = AuthenticationTokenHttpKeys.AntiforgeryTokenHttpHeaderKey;
+                        // The __Host- prefix requires the Secure attribute on every response; the
+                        // framework default (None) strips it when the request reaches Kestrel as
+                        // plain HTTP behind the gateway, producing a cookie browsers reject.
+                        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                     }
                 )
                 .AddHttpForwardHeaders();
