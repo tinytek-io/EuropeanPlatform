@@ -29,16 +29,17 @@ var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
 using var scope = host.Services.CreateScope();
 
-// Schema migrations at startup only when the migrator connection string is absent (local
-// development). In deployed environments the pre-upgrade migration Job owns the schema, and the
-// runtime user is a readwrite role that cannot create schema objects (least privilege).
-var configuration = host.Services.GetRequiredService<IConfiguration>();
-if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("account-database-migrator")))
+// Schema migrations at startup are for local development only: in deployed environments the
+// dedicated migrator Job owns the schema (the runtime user is a readwrite role that cannot
+// create schema objects — least privilege).
+if (SharedInfrastructureConfiguration.IsRunningInCloud is false)
 {
     var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<AccountDbContext>>();
     migrationService.ApplyMigrations();
 }
 
+// Data migrations run here as an idempotent no-op after the migrator Job has applied them, and as
+// the resilient fallback if they were not: tracked in __data_migrations_history.
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<AccountDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);
 
@@ -47,13 +48,5 @@ await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);
 // non-zero so the orchestrator notices, which is preferable to running with inconsistent flag state.
 var featureFlagDefinitionReconciler = scope.ServiceProvider.GetRequiredService<FeatureFlagDefinitionReconciler>();
 await featureFlagDefinitionReconciler.ReconcileAsync(lifetime.ApplicationStopping);
-
-// The pre-deploy migration Job runs this image with MIGRATE_ONLY=true: schema + data migrations
-// and flag reconciliation complete before any new pods roll out (helm pre-upgrade hook). Exit
-// here so the Job finishes successfully instead of starting the hosted services.
-if (Environment.GetEnvironmentVariable("MIGRATE_ONLY") == "true")
-{
-    return;
-}
 
 await host.RunAsync();

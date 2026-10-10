@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
+using JetBrains.Annotations;
 using Spectre.Console;
 
 namespace DeveloperCli.Commands;
@@ -97,12 +98,12 @@ public sealed partial class DeployCommand : Command
         PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
 
         // The environment module needs the project id from the bootstrap module's (local) state.
-        var projectId = RunTerraform(bootstrapModuleFolder, "output -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)").Trim();
+        var projectId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)")).Trim();
 
         if (!skipPlanCheck)
         {
             PrintHeader("Checking Terraform convergence");
-            var plan = ProcessHelper.ExecuteQuietly(
+            var plan = await ProcessHelper.ExecuteQuietlyAsync(
                 $"terraform plan -detailed-exitcode -input=false -no-color -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
                 environmentModuleFolder,
                 ("SCW_DEFAULT_PROJECT_ID", projectId)
@@ -136,13 +137,13 @@ public sealed partial class DeployCommand : Command
         // The cluster kubeconfig is a sensitive Terraform output; it goes to a temp file that only
         // the deploy process reads and is deleted afterwards.
         var kubeconfigPath = Path.Combine(Path.GetTempPath(), $"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml");
-        var kubeconfig = RunTerraform(environmentModuleFolder, "output -raw kubeconfig", "read the cluster kubeconfig output");
-        File.WriteAllText(kubeconfigPath, kubeconfig);
+        var kubeconfig = await RunTerraformAsync(environmentModuleFolder, "output -raw kubeconfig", "read the cluster kubeconfig output");
+        await File.WriteAllTextAsync(kubeconfigPath, kubeconfig);
 
         // Per-workload Secret Manager keys are deploy-time parameters of the Aspire pipeline
         // (env-shaped names, read by the AppHost parameter resolution — same shape as the
         // deploy script always used, but never hand-copied).
-        var workloadKeysJson = RunTerraform(environmentModuleFolder, "output -json workload_secret_manager_keys", "read the workload Secret Manager keys");
+        var workloadKeysJson = await RunTerraformAsync(environmentModuleFolder, "output -json workload_secret_manager_keys", "read the workload Secret Manager keys");
         var workloadKeys = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(workloadKeysJson)
                            ?? throw new InvalidOperationException("Could not parse workload_secret_manager_keys output.");
 
@@ -154,7 +155,7 @@ public sealed partial class DeployCommand : Command
         // Cockpit telemetry endpoints (per signal) are not secret — they pass as plain environment
         // values that the AppHost wires into every workload. Environments without Cockpit
         // telemetry simply leave this output absent.
-        var cockpitEndpointsJson = RunTerraform(environmentModuleFolder, "output -json cockpit_otlp_endpoints", "read the Cockpit OTLP endpoints");
+        var cockpitEndpointsJson = await RunTerraformAsync(environmentModuleFolder, "output -json cockpit_otlp_endpoints", "read the Cockpit OTLP endpoints");
         var cockpitEndpoints = JsonSerializer.Deserialize<Dictionary<string, string>>(cockpitEndpointsJson)
                                ?? throw new InvalidOperationException("Could not parse cockpit_otlp_endpoints output.");
 
@@ -198,7 +199,7 @@ public sealed partial class DeployCommand : Command
             }
 
             using var process = Process.Start(processStartInfo)!;
-            process.WaitForExit();
+            await process.WaitForExitAsync();
             exitCode = process.ExitCode;
         }
         finally
@@ -285,7 +286,7 @@ public sealed partial class DeployCommand : Command
         {
             foreach (var deployment in unpatched)
             {
-                AnsiConsole.MarkupLine($"  [red]✗[/] {Markup.Escape(Path.GetFileName(Path.GetDirectoryName(deployment)))} rolls out with unavailable pods");
+                AnsiConsole.MarkupLine($"  [red]✗[/] {Markup.Escape(Path.GetDirectoryName(deployment) ?? "unknown")} rolls out with unavailable pods");
             }
 
             AnsiConsole.MarkupLine("[red]Chart validation failed:[/] the AppHost rollout patch did not reach every deployment — deploys would cause 504 windows.");
@@ -313,7 +314,7 @@ public sealed partial class DeployCommand : Command
             return;
         }
 
-        var namespaceId = RunTerraform(bootstrapModuleFolder, "output -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)").Trim();
+        var namespaceId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)")).Trim();
         if (string.IsNullOrWhiteSpace(namespaceId))
         {
             AnsiConsole.MarkupLine("[yellow]Registry prune skipped:[/] no registry namespace output.");
@@ -363,9 +364,9 @@ public sealed partial class DeployCommand : Command
         return await response.Content.ReadFromJsonAsync<T>();
     }
 
-    private static string RunTerraform(string workingDirectory, string arguments, string failureHint)
+    private static async Task<string> RunTerraformAsync(string workingDirectory, string arguments, string failureHint)
     {
-        var result = ProcessHelper.ExecuteQuietly($"terraform {arguments}", workingDirectory);
+        var result = await ProcessHelper.ExecuteQuietlyAsync($"terraform {arguments}", workingDirectory);
         if (!result.Success)
         {
             AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.GetErrorSummary("terraform")));
@@ -383,11 +384,17 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.WriteLine();
     }
 
+    // Deserialization-only shapes for the registry prune: the JSON serializer instantiates them
+    // (hence UsedImplicitly), and only the ids are needed — kept tags are deleted by id, not name.
+    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
     private sealed record RegistryImagePage(List<RegistryImage> Images);
 
+    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
     private sealed record RegistryTagPage(List<RegistryTag> Tags);
 
-    private sealed record RegistryImage(string Id, string Name);
+    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
+    private sealed record RegistryImage(string Id);
 
-    private sealed record RegistryTag(string Id, string Name);
+    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
+    private sealed record RegistryTag(string Id);
 }

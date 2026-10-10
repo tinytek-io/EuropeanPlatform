@@ -46,7 +46,7 @@ public sealed class EdgeHealthCommand : Command
         var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
         if (string.IsNullOrWhiteSpace(secretKey))
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] SCW_SECRET_KEY is not set. Export it before running (see cloud-infrastructure/scaleway/environment).[/]");
+            AnsiConsole.MarkupLine("[red]Error:[/] SCW_SECRET_KEY is not set. Export it before running (see cloud-infrastructure/scaleway/environment).");
             Environment.Exit(1);
         }
 
@@ -58,7 +58,7 @@ public sealed class EdgeHealthCommand : Command
         var pipelines = await ListPipelinesAsync(httpClient, projectFilter);
         if (pipelines.Count == 0)
         {
-            AnsiConsole.MarkupLine("[red]Error:[/] no Edge Services pipelines found.[/]");
+            AnsiConsole.MarkupLine("[red]Error:[/] no Edge Services pipelines found.");
             Environment.Exit(1);
         }
 

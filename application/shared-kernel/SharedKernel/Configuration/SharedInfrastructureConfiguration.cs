@@ -159,26 +159,11 @@ public static class SharedInfrastructureConfiguration
             // runtime by the Scaleway Secret Manager provider. Resolved per context creation
             // instead of being captured here: registration happens before the Secret Manager
             // source is added, and capturing eagerly would also defeat its refresh timer.
-            //
-            // In migrate-only mode (the pre-upgrade migration Job) the context binds the
-            // '<name>-migrator' connection string when configured: the migrator is the
-            // structure-owner role, and the runtime application user cannot change schema.
             builder.Services.AddDbContext<T>((serviceProvider, options) =>
                 {
-                    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-                    var effectiveConnectionName = connectionName;
-                    if (Environment.GetEnvironmentVariable("MIGRATE_ONLY") == "true")
-                    {
-                        var migratorConnectionName = $"{connectionName}-migrator";
-                        if (!string.IsNullOrWhiteSpace(configuration.GetConnectionString(migratorConnectionName)))
-                        {
-                            effectiveConnectionName = migratorConnectionName;
-                        }
-                    }
-
-                    var connectionString = configuration.GetConnectionString(effectiveConnectionName)
+                    var connectionString = serviceProvider.GetRequiredService<IConfiguration>().GetConnectionString(connectionName)
                                            ?? throw new InvalidOperationException(
-                                               $"The connection string '{effectiveConnectionName}' is required but was not configured."
+                                               $"The connection string '{connectionName}' is required but was not configured."
                                            );
 
                     options.UseNpgsql(connectionString, o => o.MigrationsHistoryTable("__ef_migrations_history"))
