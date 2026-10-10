@@ -551,6 +551,53 @@ async Task PatchGeneratedChart(PipelineStepContext context)
 
     await PatchRolloutStrategyAsync(templatesFolder);
     await AddMigrationJobsAsync(templatesFolder);
+    PatchGatewayRoutesForwardedProto(templatesFolder);
+}
+
+// The public requests' TLS terminates twice: at the Scaleway edge (its certificate) and again at
+// the Gateway (the cert-manager certificate — the edge origin connects with TLS through the
+// TCP-passthrough LB, see the edge backend stage). Cilium's Envoy does not set X-Forwarded-Proto
+// when forwarding, so nothing tells the APIs that the request arrived encrypted — and everything
+// from Envoy inward (YARP, the APIs) is plain HTTP on the pod network. The APIs' ForwardedHeaders
+// middleware trusts the pod network and honors that header, and antiforgery's SecurePolicy.Always
+// refuses requests that do not present as SSL (found live: crash-loop on SecurePolicy.Always).
+// The rewrite is honest: every request reaching the Gateway terminated TLS at its https listener,
+// and the Gateway is not reachable from inside the cluster.
+void PatchGatewayRoutesForwardedProto(string templatesFolder)
+{
+    var gatewayRoutesFolder = Path.Combine(templatesFolder, "public-gateway");
+    var routeFiles = Directory.GetFiles(gatewayRoutesFolder, "*-route.yaml");
+    if (routeFiles.Length == 0)
+    {
+        throw new InvalidOperationException("No HTTPRoute templates found under public-gateway — the generated chart layout changed, update the forwarded-proto patch.");
+    }
+
+    foreach (var routeFile in routeFiles)
+    {
+        var yaml = File.ReadAllText(routeFile);
+        if (yaml.Contains("requestHeaderModifier"))
+        {
+            continue;
+        }
+
+        var backendRefsIndex = yaml.IndexOf("      backendRefs:", StringComparison.Ordinal);
+        if (backendRefsIndex < 0)
+        {
+            throw new InvalidOperationException($"No backendRefs block found in {Path.GetFileName(routeFile)} — the generated chart layout changed, update the forwarded-proto patch.");
+        }
+
+        var forwardedProtoFilter = """
+                                         filters:
+                                           - type: "RequestHeaderModifier"
+                                             requestHeaderModifier:
+                                               set:
+                                                 - name: "X-Forwarded-Proto"
+                                                   value: "https"
+                                   """;
+        yaml = yaml.Insert(backendRefsIndex, forwardedProtoFilter + Environment.NewLine);
+        File.WriteAllText(routeFile, yaml);
+        Console.WriteLine($"Forwarded-proto patch: {Path.GetFileName(routeFile)} restores X-Forwarded-Proto: https.");
+    }
 }
 
 async Task PatchRolloutStrategyAsync(string templatesFolder)
