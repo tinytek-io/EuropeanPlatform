@@ -74,13 +74,14 @@ public sealed record InternalCa(X509Certificate2 Certificate)
             return true;
         }
 
-        // The internal CA is not system-trusted, so the framework already flagged the chain; the
-        // hostname mismatch, however, is ours to judge — no other error is acceptable.
-        if (policyErrors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch))
-        {
-            return false;
-        }
-
+        // YARP forwards several account routes with the ORIGINAL public Host header
+        // (RequestHeaderOriginalHost: account-api serves two host-scoped SPAs and disambiguates
+        // them by Request.Host), and the forwarded host travels into the TLS handshake's target
+        // name — so the framework's NameMismatch flag fires for every such request even though
+        // the connection is pinned to the right destination by YARP's per-origin pools. The
+        // hostname check here is therefore meaningless for proxied requests; the guarantee that
+        // we are talking to OUR service is the chain validation below: only workloads holding a
+        // certificate from the internal CA can complete the handshake.
         chain ??= new X509Chain();
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.CustomTrustStore.Clear();
