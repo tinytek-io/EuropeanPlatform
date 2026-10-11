@@ -1,4 +1,7 @@
 using System.Reflection;
+using BackOffice.Authentication;
+using BackOffice.Integrations.Account;
+using BackOffice.Integrations.InternalTls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SharedKernel.Authentication.BackOfficeIdentity;
@@ -20,9 +23,39 @@ public static class Configuration
             // resolves IBlobStorageClient for the keyring repository in deployed environments.
             // AddSharedTelemetry wires OpenTelemetry plus the Secret Manager configuration
             // provider (a no-op locally).
-            return builder
+            builder
                 .AddDefaultBlobStorage()
                 .AddSharedTelemetry();
+
+            // The account internal API client validates account's in-cluster TLS against the
+            // Terraform-managed internal CA (a no-op locally, where the ASP.NET development
+            // certificate is machine-trusted).
+            builder.Services.AddInternalCaTrust(builder.Configuration);
+
+            // The typed client for account's internal API: every call carries the staff
+            // delegation token minted from the signed-in principal.
+            IHostApplicationBuilder.AddAccountInternalApiClient(builder);
+
+            return builder;
+        }
+
+        private static void AddAccountInternalApiClient(IHostApplicationBuilder hostApplicationBuilder)
+        {
+            hostApplicationBuilder.Services.AddTransient<BackOfficeDelegationTokenGenerator>();
+            hostApplicationBuilder.Services.AddTransient<BackOfficeDelegationHandler>();
+
+            // Same address contract as the app-gateway's account client: the deploy passes
+            // ACCOUNT_API_URL (the in-cluster Service), local development falls back to the
+            // account API's port from the shared port allocation.
+            hostApplicationBuilder.Services.AddHttpClient<AccountInternalApiClient>((serviceProvider, client) =>
+                {
+                    var accountApiUrl = Environment.GetEnvironmentVariable("ACCOUNT_API_URL");
+                    client.BaseAddress = accountApiUrl is not null
+                        ? new Uri(accountApiUrl)
+                        : new Uri($"https://localhost:{serviceProvider.GetRequiredService<PortAllocation>().AccountApi}");
+                    client.Timeout = TimeSpan.FromSeconds(45);
+                }
+            ).AddHttpMessageHandler<BackOfficeDelegationHandler>();
         }
     }
 
