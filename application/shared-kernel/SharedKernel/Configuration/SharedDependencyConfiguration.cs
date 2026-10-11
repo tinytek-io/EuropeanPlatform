@@ -63,6 +63,27 @@ public static class SharedDependencyConfiguration
                 .RegisterRepositories(assemblies);
         }
 
+        // Database-less variant for BFF-style systems (the back-office calls other systems'
+        // internal APIs instead of owning a database): everything except the persistence helpers.
+        public IServiceCollection AddSharedServices(Assembly[] assemblies)
+        {
+            services.AddHttpContextAccessor();
+
+            return services
+                .AddServiceDiscovery()
+                .AddSingleton(sp => GetTokenSigningService(sp.GetService<IConfiguration>()))
+                .AddCrossServiceDataProtection()
+                .AddSingleton(Settings.Current)
+                .AddTimeProvider()
+                .AddAuthentication()
+                .AddDefaultJsonSerializerOptions()
+                .AddDefaultHealthChecks()
+                .AddEmailClient()
+                .AddMediatRPipelineBehaviors()
+                .RegisterMediatRRequest(assemblies)
+                .RegisterRepositories(assemblies);
+        }
+
         private IServiceCollection AddCrossServiceDataProtection()
         {
             // Antiforgery tokens cross service boundaries by design: the module-federated SPA page (and its

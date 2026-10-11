@@ -640,9 +640,10 @@ resource "scaleway_iam_api_key" "storage" {
 locals {
   # The serving workloads and their in-cluster Service DNS names (the certificates' SANs).
   internal_tls_workloads = {
-    account-api = "account-api-service"
-    main-api    = "main-api-service"
-    app-gateway = "app-gateway-service"
+    account-api     = "account-api-service"
+    main-api        = "main-api-service"
+    app-gateway     = "app-gateway-service"
+    back-office-api = "back-office-api-service"
   }
 }
 
@@ -759,6 +760,19 @@ locals {
       InternalTls__CaPem          = tls_self_signed_cert.internal_ca.cert_pem
       InternalTls__CertificatePem = tls_locally_signed_cert.workload["app-gateway"].cert_pem
       InternalTls__KeyPem         = tls_private_key.workload["app-gateway"].private_key_pem
+    }
+    back-office-api = {
+      # Antiforgery tokens minted by the back-office BFF are validated by itself; it consumes the
+      # shared Data Protection keyring (main-api owns generation), so it needs the encryption key.
+      # The blob client reads that keyring from Object Storage (registered by AddApiServices in
+      # deployed environments) — hence the blob-storage connection string. The token signing key
+      # feeds the shared application JWT scheme that the shared API wiring registers for every
+      # API; the back-office auth cleanup re-evaluates whether this system keeps that scheme.
+      ConnectionStrings__blob-storage   = local.blob_storage_connection_string
+      Authentication__TokenSigning__Key = local.signing_key
+      data-protection-encryption-key    = local.data_protection_encryption_key
+      InternalTls__CertificatePem       = tls_locally_signed_cert.workload["back-office-api"].cert_pem
+      InternalTls__KeyPem               = tls_private_key.workload["back-office-api"].private_key_pem
     }
   }
 
