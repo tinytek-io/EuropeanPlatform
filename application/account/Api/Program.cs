@@ -23,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder
     .AddApiInfrastructure()
     .AddDevelopmentPort()
+    .AddInternalTls()
     .AddAccountInfrastructure();
 
 // Configure dependency injection services like Repositories, MediatR, Pipelines, FluentValidation validators, etc.
