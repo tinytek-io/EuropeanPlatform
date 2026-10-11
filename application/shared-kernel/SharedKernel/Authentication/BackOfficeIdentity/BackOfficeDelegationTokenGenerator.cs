@@ -41,7 +41,8 @@ public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient token
 
         claims.AddRange(principal.Claims
             .Where(claim => claim.Type == BackOfficeIdentityDefaults.GroupsClaimType)
-            .Select(claim => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, claim.Value)));
+            .Select(claim => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, claim.Value))
+        );
 
         var now = timeProvider.GetUtcNow();
         var tokenDescriptor = new SecurityTokenDescriptor

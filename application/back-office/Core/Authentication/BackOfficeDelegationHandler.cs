@@ -21,7 +21,8 @@ public sealed class BackOfficeDelegationHandler(
         if (principal is not { Identity.IsAuthenticated: true })
         {
             throw new InvalidOperationException(
-                "The back-office BFF may only call internal APIs on behalf of an authenticated staff principal.");
+                "The back-office BFF may only call internal APIs on behalf of an authenticated staff principal."
+            );
         }
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenGenerator.Generate(principal));
