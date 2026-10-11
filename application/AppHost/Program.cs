@@ -275,6 +275,54 @@ if (!isPublishMode)
         .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
 }
 
+// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
+// provider — and points the back-office staff sign-in at it. This exercises the same generic
+// flow a production provider will use: discovery, authorization code + PKCE, the callback at
+// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
+// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
+// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
+if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
+{
+    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
+
+    // Authelia's client registration needs the back-office callback URL, whose port comes from
+    // .workspace/port.txt — generate the effective configuration (from the template checked in
+    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
+    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
+    Directory.CreateDirectory(autheliaConfigFolder);
+    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
+    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
+    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
+    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeApi}/.auth/login/aad/callback";
+    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
+        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
+        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
+    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
+    foreach (var autheliaFile in new[] { "users_database.yml" })
+    {
+        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
+    }
+
+    builder
+        .AddContainer("authelia", "authelia/authelia:4.38")
+        .WithHttpEndpoint(9091, 9091, "https")
+        .WithBindMount(autheliaConfigFolder, "/config")
+        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
+        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
+        .WaitFor(autheliaRedis);
+
+    accountApi
+        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
+        .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
+        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
+        // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
+        // and token requests) must tolerate it. Dev-harness only; production providers have
+        // trusted certificates and leave this unset.
+        .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
+        // The mock login picker would offer a bypass around the real provider's login screen.
+        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
+}
+
 // The container listens on the image default port 8080; the Service fronts it on 80. The
 // endpoints are marked external because the Cilium Gateway routes public traffic to them (both
 // the app hostname via YARP and the back-office hostname, which bypasses YARP just like the

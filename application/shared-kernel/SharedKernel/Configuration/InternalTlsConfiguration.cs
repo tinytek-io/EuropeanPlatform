@@ -25,20 +25,23 @@ public static class InternalTlsConfiguration
         }
 
         builder.WebHost.ConfigureKestrel(options =>
-        {
-            // The certificate must exist at startup: serving plaintext because the secret was
-            // missing would silently undo the in-cluster TLS guarantee — fail loud instead.
-            var certificatePem = builder.Configuration["InternalTls:CertificatePem"]
-                                 ?? throw new InvalidOperationException(
-                                     "The 'InternalTls:CertificatePem' secret is required in cloud deployments (provisioned by Terraform in Secret Manager).");
-            var keyPem = builder.Configuration["InternalTls:KeyPem"]
-                          ?? throw new InvalidOperationException(
-                              "The 'InternalTls:KeyPem' secret is required in cloud deployments (provisioned by Terraform in Secret Manager).");
-            var certificate = X509Certificate2.CreateFromPem(certificatePem, keyPem);
+            {
+                // The certificate must exist at startup: serving plaintext because the secret was
+                // missing would silently undo the in-cluster TLS guarantee — fail loud instead.
+                var certificatePem = builder.Configuration["InternalTls:CertificatePem"]
+                                     ?? throw new InvalidOperationException(
+                                         "The 'InternalTls:CertificatePem' secret is required in cloud deployments (provisioned by Terraform in Secret Manager)."
+                                     );
+                var keyPem = builder.Configuration["InternalTls:KeyPem"]
+                             ?? throw new InvalidOperationException(
+                                 "The 'InternalTls:KeyPem' secret is required in cloud deployments (provisioned by Terraform in Secret Manager)."
+                             );
+                var certificate = X509Certificate2.CreateFromPem(certificatePem, keyPem);
 
-            // Any explicit Listen disables the implicit URL/port listeners (8080): HTTPS only.
-            options.ListenAnyIP(HttpsPort, listen => listen.UseHttps(certificate));
-        });
+                // Any explicit Listen disables the implicit URL/port listeners (8080): HTTPS only.
+                options.ListenAnyIP(HttpsPort, listen => listen.UseHttps(certificate));
+            }
+        );
 
         return builder;
     }

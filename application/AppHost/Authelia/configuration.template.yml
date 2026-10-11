@@ -1,0 +1,82 @@
+# Authelia configuration template for the back-office OIDC test harness (development only).
+# The AppHost generates configuration.yml from this file with REDIRECT_URI_PLACEHOLDER replaced
+# by the dev back-office callback (the port comes from .workspace/port.txt at startup), and the
+# jwks key placeholder further down replaced by the generated RS256 signing key (AutheliaTls —
+# dev-only material, generated at startup into obj/authelia and never committed). The remaining
+# secrets are static dev material — nothing here is real. The user lives in users_database.yml
+# (oidcadmin / OIDCTest123!, group 'admins').
+#
+# The app's OIDC registration (SharedKernel BackOfficeOidcExtensions) is authorization-code + PKCE
+# with the client credentials in the token request body, hence client_secret_post below.
+theme: grey
+server:
+  port: 9091
+  # Authelia requires a secure scheme for its portal URL; the harness serves a generated
+  # self-signed dev certificate (authelia-tls.pem/key, 10-year, CN=authelia.dev.localhost —
+  # also generated at startup into obj/authelia). Browsers ignore the self-signed cert via
+  # Playwright's ignoreHTTPSErrors; the app's OIDC backchannel is configured with the dev-only
+  # untrusted-certificate bypass in the harness wiring.
+  tls:
+    certificate: /config/authelia-tls.pem
+    key: /config/authelia-tls.key
+log:
+  level: debug
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+session:
+  secret: dev-only-authelia-session-secret-please-ignore
+  cookies:
+    - name: authelia_session
+      domain: dev.localhost
+      authelia_url: https://authelia.dev.localhost:9091
+  expiration: 1h
+  inactivity: 5m
+  remember_me_duration: 1d
+  redis:
+    host: authelia-redis
+    port: 6379
+storage:
+  # Authelia requires exactly 32 characters; this is static dev material.
+  encryption_key: 1234567890abcdef1234567890abcdef
+  local:
+    path: /config/db.sqlite3
+notifier:
+  filesystem:
+    filename: /config/notification.txt
+# Authelia requires a validation policy; the harness only serves the OIDC portal, never proxies.
+identity_validation:
+  reset_password:
+    jwt_secret: dev-only-reset-password-jwt-secret
+
+access_control:
+  default_policy: one_factor
+identity_providers:
+  oidc:
+    hmac_secret: dev-only-oidc-hmac-secret-value!
+    # RS256 signing key for the id_token signature — generated at startup (AutheliaTls) and
+    # injected in place of the placeholder below; never committed.
+    jwks:
+      - algorithm: RS256
+        use: sig
+        key: |
+          OIDC_JWKS_KEY_PLACEHOLDER
+    clients:
+      - client_id: back-office
+        client_name: Back-office (local OIDC harness)
+        client_secret: dev-only-back-office-client-secret
+        public: false
+        authorization_policy: one_factor
+        consent_mode: auto
+        token_endpoint_auth_method: client_secret_post
+        redirect_uris:
+          - REDIRECT_URI_PLACEHOLDER
+        scopes:
+          - openid
+          - profile
+          - email
+          - groups
+        grant_types:
+          - authorization_code
+        response_types:
+          - code

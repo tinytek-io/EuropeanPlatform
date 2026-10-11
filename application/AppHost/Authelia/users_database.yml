@@ -1,0 +1,10 @@
+# Authelia users for the back-office OIDC test harness (development only). The password is
+# deliberately public test material: user 'oidcadmin' / 'OIDCTest123!'. The argon2 digest was
+# generated with: authelia crypto hash generate argon2 --password 'OIDCTest123!'
+users:
+  oidcadmin:
+    displayname: OIDC Test Admin
+    password: $argon2id$v=19$m=65536,t=3,p=4$5AQX5THsbqlflzEv0VgHLQ$NXNoRYpsRS+Bs6uP2hCCrXrGOhDfi6T7Y7xWNYYjfB8
+    email: oidcadmin@dev.localhost
+    groups:
+      - admins
