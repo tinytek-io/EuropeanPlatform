@@ -89,3 +89,8 @@ output "cockpit_otlp_endpoints" {
     Traces  = "https://${split("/", scaleway_cockpit_source.telemetry["traces"].id)[1]}.traces.cockpit.${var.region}.scw.cloud/otlp/v1/traces"
   }
 }
+
+output "internal_ca_pem" {
+  description = "The public internal CA certificate (PEM) that signs the workloads' in-cluster TLS certificates; the deploy passes it to the chart (Envoy validation) and the app-gateway"
+  value       = tls_self_signed_cert.internal_ca.cert_pem
+}

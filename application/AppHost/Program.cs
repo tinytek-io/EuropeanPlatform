@@ -282,7 +282,7 @@ if (!isPublishMode)
 if (isPublishMode)
 {
     accountApi
-        .WithHttpEndpoint(8080, 8080, "http")
+        .WithHttpsEndpoint(8443, 8443, "https")
         .WithExternalHttpEndpoints()
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
 
@@ -317,11 +317,11 @@ if (!isPublishMode)
     mainApi.WithEnvironment("KESTREL_PORT", ports.MainApi.ToString());
 }
 
-// Same port contract as account-api: container on 8080, Service fronting it on 80.
+// Same port contract as account-api: container and Service both on the internal TLS port.
 if (isPublishMode)
 {
     mainApi
-        .WithHttpEndpoint(8080, 8080, "http")
+        .WithHttpsEndpoint(8443, 8443, "https")
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
 }
 
@@ -362,10 +362,10 @@ if (isPublishMode)
     // external because the Cilium Gateway routes the public app hostname here. The gateway serves
     // no health endpoints, so probes hit its Scalar OpenAPI page instead.
     appGateway
-        .WithHttpEndpoint(8080, 8080, "http")
+        .WithHttpsEndpoint(8443, 8443, "https")
         .WithExternalHttpEndpoints()
-        .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("http"))
-        .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("http"))
+        .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"))
+        .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("https"))
         .WithEnvironment("ACCOUNT_STORAGE_URL", accountStorageUrl)
         .WithEnvironment("MAIN_STORAGE_URL", mainStorageUrl)
         .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", builder.Configuration["Storage:BucketPrefix"] ?? string.Empty)
@@ -437,6 +437,10 @@ if (isPublishMode)
     }
 }
 
+// The three workloads that serve traffic in the cluster: internal cert-manager certificate,
+// HTTPS-only Kestrel (SharedKernel's AddInternalTls), and probes/env/routing on 8443.
+string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway"];
+
 // Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
 // the YARP gateway; the back-office hostname bypasses it and hits account-api directly,
 // mirroring the Azure post-split topology. cert-manager is installed BY THE CHART (same
@@ -451,6 +455,10 @@ if (isPublishMode && kubernetes is not null)
         .WithLetsEncryptProduction(acmeEmail)
         .WithHttp01Solver(); // ACME challenges route through the Gateway (HTTPRoute on /.well-known/acme-challenge)
 
+    // The internal CA comes from Terraform (the deploy passes it as the InternalTls:CaPem
+    // configuration value): the chart turns it into the ConfigMap Envoy's BackendTLSPolicy
+    // validation consumes, and the app-gateway reads it directly from configuration.
+
     var publicGateway = kubernetes
         .AddGateway("public-gateway")
         .WithGatewayClass("cilium")
@@ -459,8 +467,8 @@ if (isPublishMode && kubernetes is not null)
         .WithTls(issuer);
 
     publicGateway
-        .WithRoute(appPublicHostname, "/", appGateway.GetEndpoint("http"))
-        .WithRoute(backOfficePublicHostname, "/", accountApi.GetEndpoint("http"));
+        .WithRoute(appPublicHostname, "/", appGateway.GetEndpoint("https"))
+        .WithRoute(backOfficePublicHostname, "/", accountApi.GetEndpoint("https"));
 
     // Two patches to the generated chart, applied right after chart generation so helm consumes
     // them (chart-consuming steps run after final actions):
@@ -552,6 +560,87 @@ async Task PatchGeneratedChart(PipelineStepContext context)
     await PatchRolloutStrategyAsync(templatesFolder);
     await AddMigrationJobsAsync(templatesFolder);
     PatchGatewayRoutesForwardedProto(templatesFolder);
+    AddInternalTlsManifests(templatesFolder);
+    PatchWorkloadsForInternalTls(templatesFolder);
+}
+
+// The internal TLS trust chain, written as chart manifests because the Aspire publisher has no
+// typed support for BackendTLSPolicy: Terraform owns the internal CA and the per-workload leaf
+// certificates (see cloud-infrastructure/scaleway/environment), the leaf key material reaches the
+// workloads through Secret Manager, and the CA — public material — reaches this publish pipeline
+// as the InternalTls:CaPem configuration value. The chart needs it in two places: the ConfigMap
+// Envoy validates against, and (referenced by name) the BackendTLSPolicies.
+void AddInternalTlsManifests(string templatesFolder)
+{
+    var caPem = builder.Configuration["InternalTls:CaPem"];
+    if (string.IsNullOrWhiteSpace(caPem))
+    {
+        throw new InvalidOperationException("InternalTls:CaPem is not set — the deploy command passes the Terraform-managed internal CA certificate. Without it Envoy cannot validate the workloads' TLS.");
+    }
+
+    var internalTlsFolder = Path.Combine(templatesFolder, "internal-tls");
+    Directory.CreateDirectory(internalTlsFolder);
+
+    var caConfigMap = $"""
+                       ---
+                       apiVersion: "v1"
+                       kind: "ConfigMap"
+                       metadata:
+                         name: "internal-root-ca-bundle"
+                       data:
+                         # Cilium's BackendTLSPolicy validation reads the CA from the literal
+                         # `ca.crt` key, whatever the policy references.
+                         ca.crt: |
+                           {caPem.Replace("\n", "\n    ")}
+                       """;
+    File.WriteAllText(Path.Combine(internalTlsFolder, "internal-ca.yaml"), caConfigMap);
+
+    const string backendTlsPolicyTemplate = """
+                                            ---
+                                            apiVersion: "gateway.networking.k8s.io/v1"
+                                            kind: "BackendTLSPolicy"
+                                            metadata:
+                                              name: "WORKLOAD-service-tls"
+                                            spec:
+                                              targetRefs:
+                                                - group: ""
+                                                  kind: "Service"
+                                                  name: "WORKLOAD-service"
+                                              validation:
+                                                hostname: "WORKLOAD-service.default.svc.cluster.local"
+                                                caCertificateRefs:
+                                                  - group: ""
+                                                    kind: "ConfigMap"
+                                                    name: "internal-root-ca-bundle"
+                                            """;
+    // main-api is only dialed by YARP (which trusts the CA itself); Envoy reaches the
+    // app-gateway and account-api directly, so those two carry the policy.
+    var policies = string.Join("\n", internalTlsWorkloads.Where(w => w != "main-api").Select(w => backendTlsPolicyTemplate.Replace("WORKLOAD", w)));
+    File.WriteAllText(Path.Combine(internalTlsFolder, "backend-tls-policies.yaml"), policies);
+
+    Console.WriteLine($"Internal TLS patch: CA, {internalTlsWorkloads.Length} leaf certificates, trust bundle, and backend TLS policies added.");
+}
+
+// The publisher generates probes and port declarations from the publish-mode endpoint, but the
+// generated deployment still carries the plain-HTTP contract (scheme HTTP, port 8080) and no
+// certificate mounts — this patch completes the HTTPS-only conversion per workload.
+void PatchWorkloadsForInternalTls(string templatesFolder)
+{
+    foreach (var workload in internalTlsWorkloads)
+    {
+        var deploymentPath = Path.Combine(templatesFolder, workload, "deployment.yaml");
+        var yaml = File.ReadAllText(deploymentPath);
+
+        // Probes and the declared port follow the endpoint: HTTPS on 8443.
+        yaml = yaml.Replace("scheme: \"HTTP\"", "scheme: \"HTTPS\"");
+        yaml = yaml.Replace("port: 8080", "port: 8443");
+        yaml = yaml.Replace("- name: \"http\"\n              protocol: \"TCP\"\n              containerPort: 8080",
+            "- name: \"https\"\n              protocol: \"TCP\"\n              containerPort: 8443"
+        );
+
+        File.WriteAllText(deploymentPath, yaml);
+        Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes, ports, certificate mount).");
+    }
 }
 
 // The public requests' TLS terminates twice: at the Scaleway edge (its certificate) and again at
