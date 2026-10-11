@@ -373,6 +373,29 @@ if (isPublishMode)
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
 }
 
+// The standalone back-office system: a BFF over the feature systems' internal APIs, owning the
+// staff identity outright. Deployed dark during the migration — the edge still routes the
+// back-office hostname to account's folded routes — until the cutover flips the Gateway route.
+var backOfficeApi = builder
+    .AddProject<BackOffice_Api>("back-office-api")
+    .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
+    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId);
+
+if (!isPublishMode)
+{
+    backOfficeApi.WithEnvironment("KESTREL_PORT", ports.BackOfficeSystemApi.ToString());
+}
+
+if (isPublishMode)
+{
+    backOfficeApi
+        .WithHttpsEndpoint(8443, 8443, "https")
+        .WithKubernetesProbes("/internal-api/ready", "/internal-api/live")
+        // Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff
+        // exists, mirroring account's folded back-office during the migration.
+        .WithEnvironment("MockEasyAuth__Enabled", mockEasyAuthEnabled ? "true" : "false");
+}
+
 var appGateway = builder
     .AddProject<AppGateway>("app-gateway")
     .WithReference(frontendBuild)
@@ -443,6 +466,7 @@ if (isPublishMode)
         ("main-workers", mainWorkers),
         ("main-api", mainApi),
         ("app-gateway", appGateway),
+        ("back-office-api", backOfficeApi),
         ("account-migrator", accountMigrator),
         ("main-migrator", mainMigrator)
     };
@@ -487,7 +511,7 @@ if (isPublishMode)
 
 // The three workloads that serve traffic in the cluster: internal cert-manager certificate,
 // HTTPS-only Kestrel (SharedKernel's AddInternalTls), and probes/env/routing on 8443.
-string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway"];
+string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway", "back-office-api"];
 
 // Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
 // the YARP gateway; the back-office hostname bypasses it and hits account-api directly,

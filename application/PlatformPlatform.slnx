@@ -8,6 +8,10 @@
         <Project Path="account\Workers\Account.Workers.csproj"/>
         <Project Path="account\Migrator\Account.Migrator.csproj"/>
     </Folder>
+    <Folder Name="/back-office/">
+        <Project Path="back-office\Api\BackOffice.Api.csproj"/>
+        <Project Path="back-office\Core\BackOffice.csproj"/>
+    </Folder>
     <Folder Name="/main/">
         <Project Path="main\Api\Main.Api.csproj"/>
         <Project Path="main\Core\Main.csproj"/>
