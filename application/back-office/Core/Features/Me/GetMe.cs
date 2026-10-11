@@ -1,9 +1,9 @@
 using System.Security.Claims;
 using JetBrains.Annotations;
+using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using SharedKernel.Authentication.BackOfficeIdentity;
-using MediatR;
 using SharedKernel.Cqrs;
 
 namespace BackOffice.Features.Me;

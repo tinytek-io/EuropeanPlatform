@@ -30,6 +30,23 @@ public static class BackOfficeIdentityDefaults
     // Distinct from the `X-MS-CLIENT-PRINCIPAL-NAME` header, which carries the UPN/email.
     public const string NameClaimType = "name";
 
+    // Delegation: the back-office BFF calls the feature systems' internal APIs on behalf of the
+    // signed-in staff member. It mints a short-lived platform-signed JWT carrying the staff
+    // claims; the internal endpoints validate it with this dedicated JWT bearer scheme. A
+    // distinct scheme (rather than the application Bearer scheme) keeps the two token
+    // populations from being interchangeable: application tokens are rejected here (audience
+    // mismatch) and delegation tokens are rejected by the application scheme for the same
+    // reason — no token confusion in either direction.
+    public const string DelegationScheme = "BackOfficeDelegation";
+
+    // Audience stamped into delegation tokens and the only audience the delegation scheme accepts.
+    public const string DelegationAudience = "back-office-staff";
+
+    // Authorization policy for internal API endpoints called by the back-office BFF: requires
+    // authentication through the delegation scheme. Mutating internal endpoints combine this with
+    // the admin requirement.
+    public const string DelegationPolicyName = "BackOfficeDelegationPolicy";
+
     public const string LoginPath = "/.auth/login/aad";
 
     public const string CallbackPath = "/.auth/login/aad/callback";

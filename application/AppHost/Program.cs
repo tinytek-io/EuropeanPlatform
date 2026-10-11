@@ -393,7 +393,10 @@ if (isPublishMode)
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live")
         // Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff
         // exists, mirroring account's folded back-office during the migration.
-        .WithEnvironment("MockEasyAuth__Enabled", mockEasyAuthEnabled ? "true" : "false");
+        .WithEnvironment("MockEasyAuth__Enabled", mockEasyAuthEnabled ? "true" : "false")
+        // The BFF calls account's internal API (/internal-api/back-office/*) over in-cluster TLS,
+        // carrying the signed-in staff member's delegation token.
+        .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));
 }
 
 var appGateway = builder
