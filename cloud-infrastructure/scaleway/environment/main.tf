@@ -773,6 +773,9 @@ locals {
       data-protection-encryption-key    = local.data_protection_encryption_key
       InternalTls__CertificatePem       = tls_locally_signed_cert.workload["back-office-api"].cert_pem
       InternalTls__KeyPem               = tls_private_key.workload["back-office-api"].private_key_pem
+      # The internal CA (public material) validates account's in-cluster TLS on the BFF's
+      # internal API calls, mirroring the app-gateway's trust configuration.
+      InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
   }
 

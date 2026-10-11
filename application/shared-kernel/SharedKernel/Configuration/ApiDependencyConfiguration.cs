@@ -323,6 +323,7 @@ public static class ApiDependencyConfiguration
             // The JWT bearer validation parameters come from ITokenSigningClient, which reads the
             // signing key from configuration (Scaleway Secret Manager in deployed workloads).
             services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+            services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureBackOfficeDelegationJwtOptions>();
 
             // Add Authentication and Authorization services
             services
@@ -334,6 +335,7 @@ public static class ApiDependencyConfiguration
                     }
                 )
                 .AddJwtBearer()
+                .AddJwtBearer(BackOfficeIdentityDefaults.DelegationScheme, _ => { })
                 .AddScheme<AuthenticationSchemeOptions, BackOfficeIdentityHandler>(BackOfficeIdentityDefaults.AuthenticationScheme, _ => { });
 
             services.AddSingleton<IAuthorizationHandler, BackOfficeAdminAuthorizationHandler>();
@@ -351,6 +353,12 @@ public static class ApiDependencyConfiguration
                             policy.AuthenticationSchemes = [BackOfficeIdentityDefaults.AuthenticationScheme];
                             policy.RequireAuthenticatedUser();
                             policy.AddRequirements(new BackOfficeAdminRequirement());
+                        }
+                    );
+                    authOptions.AddPolicy(BackOfficeIdentityDefaults.DelegationPolicyName, policy =>
+                        {
+                            policy.AuthenticationSchemes = [BackOfficeIdentityDefaults.DelegationScheme];
+                            policy.RequireAuthenticatedUser();
                         }
                     );
                 }
@@ -410,6 +418,36 @@ public sealed class ConfigureJwtBearerOptions(ITokenSigningClient tokenSigningCl
             validateLifetime: true,
             clockSkew: TimeSpan.FromSeconds(5) // No clock skew needed between workloads in one cluster, but this must be a higher value than the AppGateway
         );
+    }
+
+    public void Configure(JwtBearerOptions options)
+    {
+        Configure(Options.DefaultName, options);
+    }
+}
+
+/// <summary>
+///     Wires the token signing validation parameters into the back-office delegation scheme. The
+///     parameters are the platform's (same HMAC key and issuer as application tokens) except for
+///     the audience: only delegation tokens minted by the back-office BFF carry
+///     BackOfficeIdentityDefaults.DelegationAudience, so application tokens are rejected here.
+///     Registered as IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
+/// </summary>
+public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient tokenSigningClient)
+    : IConfigureNamedOptions<JwtBearerOptions>
+{
+    public void Configure(string? name, JwtBearerOptions options)
+    {
+        if (name != BackOfficeIdentityDefaults.DelegationScheme)
+        {
+            return;
+        }
+
+        options.TokenValidationParameters = tokenSigningClient.GetTokenValidationParameters(
+            validateLifetime: true,
+            clockSkew: TimeSpan.FromSeconds(5)
+        );
+        options.TokenValidationParameters.ValidAudience = BackOfficeIdentityDefaults.DelegationAudience;
     }
 
     public void Configure(JwtBearerOptions options)

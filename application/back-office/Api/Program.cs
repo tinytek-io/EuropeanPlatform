@@ -3,7 +3,6 @@ using BackOffice;
 using Microsoft.Extensions.Options;
 using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Configuration;
-using SharedKernel.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,7 +21,7 @@ builder.AddInternalTls();
 // selector (development and explicitly opted-in environments), antiforgery, and the health
 // endpoints. The single OpenAPI document serves the SPA contract at cutover.
 builder.Services
-    .AddApiServices([Assembly.GetExecutingAssembly(), Configuration.Assembly], documentLayout: ApiDocumentLayout.Single)
+    .AddApiServices([Assembly.GetExecutingAssembly(), Configuration.Assembly])
     .AddBackOfficeServices();
 
 var app = builder.Build();
@@ -39,7 +38,7 @@ if (backOfficeOidcConfigured)
 }
 
 if (!backOfficeOidcConfigured && app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>() is false
-    && SharedInfrastructureConfiguration.IsRunningInCloud)
+                              && SharedInfrastructureConfiguration.IsRunningInCloud)
 {
     // No provider and no mock: reject the login picker instead of pretending it is configured.
     app.MapGet("/login", Results.Unauthorized).RequireHost(backOfficeHostname);
