@@ -1,5 +1,6 @@
 using System.Reflection;
 using BackOffice.Authentication;
+using BackOffice.ExecutionContext;
 using BackOffice.Integrations.Account;
 using BackOffice.Integrations.InternalTls;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,6 +71,10 @@ public static class Configuration
                 .BindConfiguration(BackOfficeHostOptions.SectionName)
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
+
+            // Request-scoped staff identity: handlers read this instead of the raw principal,
+            // whether the identity came from the mock EasyAuth selector or a staff OIDC provider.
+            services.AddScoped<IStaffExecutionContext, StaffExecutionContext>();
 
             return services.AddSharedServices([Assembly]);
         }

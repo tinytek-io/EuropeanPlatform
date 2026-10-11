@@ -24,7 +24,8 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
             .ProducesValidationProblem();
 
         group.MapGet("/dashboard/kpis", async Task<ApiResult<BackOfficeDashboardKpisResponse>> (
-            [AsParameters] GetDashboardKpisQuery query, IMediator mediator)
+                [AsParameters] GetDashboardKpisQuery query,
+                IMediator mediator)
             => await mediator.Send(query)
         ).Produces<BackOfficeDashboardKpisResponse>();
     }
