@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.7"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 
   # Remote state lives in the bucket the bootstrap module created, using Scaleway's S3
@@ -133,13 +137,12 @@ resource "scaleway_vpc_public_gateway_ip" "nat" {
 }
 
 resource "scaleway_vpc_public_gateway" "nat" {
-  zone         = "${var.region}-1"
-  project_id   = var.project_id
-  name         = "${var.prefix}-${var.environment}-nat"
-  type         = "VPC-GW-S"
-  ip_id        = scaleway_vpc_public_gateway_ip.nat.id
-  move_to_ipam = true
-  tags         = local.tags
+  zone       = "${var.region}-1"
+  project_id = var.project_id
+  name       = "${var.prefix}-${var.environment}-nat"
+  type       = "VPC-GW-S"
+  ip_id      = scaleway_vpc_public_gateway_ip.nat.id
+  tags       = local.tags
 }
 
 resource "scaleway_vpc_gateway_network" "nat" {
@@ -625,6 +628,76 @@ resource "scaleway_iam_api_key" "storage" {
   default_project_id = var.project_id
 }
 
+# Internal TLS: one Terraform-managed CA signs each serving workload's in-cluster certificate.
+# The workloads serve HTTPS only — the pod network is not trusted to carry plaintext — and Envoy
+# validates them through BackendTLSPolicy against the CA. The leaf key material reaches the
+# workloads through Secret Manager; the CA certificate (public material) travels to the deploy
+# pipeline as an output, which the chart turns into Envoy's validation ConfigMap and the
+# app-gateway reads as configuration. Certificates do not renew themselves: rotate with
+# terraform apply -replace=tls_private_key.internal_ca (the new CA key re-signs everything; the
+# Secret Manager versions update within the workloads' 5-minute refresh), then redeploy so the
+# pods restart onto the new material.
+locals {
+  # The serving workloads and their in-cluster Service DNS names (the certificates' SANs).
+  internal_tls_workloads = {
+    account-api = "account-api-service"
+    main-api    = "main-api-service"
+    app-gateway = "app-gateway-service"
+  }
+}
+
+resource "tls_private_key" "internal_ca" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
+resource "tls_self_signed_cert" "internal_ca" {
+  private_key_pem       = tls_private_key.internal_ca.private_key_pem
+  is_ca_certificate     = true
+  set_subject_key_id    = true
+  validity_period_hours = 87600 # 10 years
+  allowed_uses          = ["cert_signing"]
+
+  subject {
+    common_name = "${var.prefix}-${var.environment} internal CA"
+  }
+}
+
+resource "tls_private_key" "workload" {
+  for_each = local.internal_tls_workloads
+
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
+resource "tls_cert_request" "workload" {
+  for_each = local.internal_tls_workloads
+
+  private_key_pem = tls_private_key.workload[each.key].private_key_pem
+
+  subject {
+    common_name = each.value
+  }
+
+  dns_names = [
+    each.value,
+    "${each.value}.default",
+    "${each.value}.default.svc",
+    "${each.value}.default.svc.cluster.local",
+  ]
+}
+
+resource "tls_locally_signed_cert" "workload" {
+  for_each = local.internal_tls_workloads
+
+  cert_request_pem      = tls_cert_request.workload[each.key].cert_request_pem
+  ca_private_key_pem    = tls_private_key.internal_ca.private_key_pem
+  ca_cert_pem           = tls_self_signed_cert.internal_ca.cert_pem
+  validity_period_hours = 8760 # 1 year
+  allowed_uses          = ["server_auth"]
+}
+
+
 locals {
   # The application connects as the readwrite user (it can never change database structure);
   # the migrator connection string reaches only the workers' Secret Manager paths, where the
@@ -650,6 +723,8 @@ locals {
       ConnectionStrings__account-storage = local.blob_storage_connection_string
       Authentication__TokenSigning__Key  = local.signing_key
       data-protection-encryption-key     = local.data_protection_encryption_key
+      InternalTls__CertificatePem        = tls_locally_signed_cert.workload["account-api"].cert_pem
+      InternalTls__KeyPem                = tls_private_key.workload["account-api"].private_key_pem
     }
     account-workers = {
       ConnectionStrings__account-database = local.account_database_connection_string
@@ -661,6 +736,8 @@ locals {
       ConnectionStrings__blob-storage   = local.blob_storage_connection_string
       Authentication__TokenSigning__Key = local.signing_key
       data-protection-encryption-key    = local.data_protection_encryption_key
+      InternalTls__CertificatePem       = tls_locally_signed_cert.workload["main-api"].cert_pem
+      InternalTls__KeyPem               = tls_private_key.workload["main-api"].private_key_pem
     }
     main-workers = {
       ConnectionStrings__main-database = local.main_database_connection_string
@@ -677,6 +754,11 @@ locals {
     }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key
+      # The CA is public material, but the gateway reads it through Secret Manager like its other
+      # configuration: a multi-line PEM must not travel as a chart value (it breaks values.yaml).
+      InternalTls__CaPem          = tls_self_signed_cert.internal_ca.cert_pem
+      InternalTls__CertificatePem = tls_locally_signed_cert.workload["app-gateway"].cert_pem
+      InternalTls__KeyPem         = tls_private_key.workload["app-gateway"].private_key_pem
     }
   }
 

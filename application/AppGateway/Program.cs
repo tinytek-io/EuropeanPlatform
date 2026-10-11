@@ -1,6 +1,7 @@
 using AppGateway;
 using AppGateway.ApiAggregation;
 using AppGateway.Filters;
+using AppGateway.InternalTls;
 using AppGateway.Middleware;
 using AppGateway.Transformations;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,11 @@ var builder = WebApplication.CreateBuilder(args);
 // dependencies, traces, and logs surface in the cluster's Application Insights workspace alongside the APIs.
 builder.AddSharedTelemetry();
 
+// The gateway has no DbContext, so AddSharedInfrastructure never ran for it — but deployed it
+// still reads configuration from Scaleway Secret Manager (the internal CA, the token signing
+// key). A no-op locally and in tests.
+builder.Configuration.AddScalewaySecretManager(TimeSpan.FromMinutes(5));
+
 builder.Services
     .AddOptions<HostnamesOptions>()
     .Bind(builder.Configuration.GetSection(HostnamesOptions.SectionName))
@@ -28,6 +34,11 @@ builder.Services
 // resolve the dependency, while their {SERVICE}_API_URL env-var paths take priority over the unused
 // port values.
 builder.Services.AddSingleton(SharedInfrastructureConfiguration.IsRunningInCloud ? new PortAllocation(0) : PortAllocation.Load());
+
+// In-cluster TLS: serve HTTPS only (Terraform-managed certificate from Secret Manager), and
+// validate the APIs' internal-CA certificates when proxying or aggregating.
+builder.AddInternalTls();
+builder.Services.AddInternalCaTrust(builder.Configuration);
 
 var reverseProxyBuilder = builder.Services
     .AddReverseProxy()

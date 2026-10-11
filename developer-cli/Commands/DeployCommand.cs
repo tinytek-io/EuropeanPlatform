@@ -159,6 +159,12 @@ public sealed partial class DeployCommand : Command
         var cockpitEndpoints = JsonSerializer.Deserialize<Dictionary<string, string>>(cockpitEndpointsJson)
                                ?? throw new InvalidOperationException("Could not parse cockpit_otlp_endpoints output.");
 
+        // The public internal CA certificate: the chart turns it into Envoy's BackendTLSPolicy
+        // validation ConfigMap, and the app-gateway reads it as configuration to validate the
+        // APIs' in-cluster TLS. Public material — like the Cockpit endpoints, it passes as a
+        // plain environment value.
+        var internalCaPem = (await RunTerraformAsync(environmentModuleFolder, "output -raw internal_ca_pem", "read the internal CA certificate")).Trim();
+
         PrintHeader("Running the Aspire deploy pipeline");
 
         // The Aspire chart is regenerated on every deploy; a stale chart folder confuses
@@ -181,6 +187,7 @@ public sealed partial class DeployCommand : Command
         };
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
+        environmentVariables.Add(("InternalTls__CaPem", internalCaPem));
 
         int exitCode;
         try
