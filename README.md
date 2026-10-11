@@ -422,6 +422,32 @@ provider. Back-office admin actions additionally require `BackOffice:AdminsGroup
 value the provider issues in the `groups` claim for staff administrators. When these keys are
 configured, the mock identity selector is disabled automatically.
 
+#### Test the OIDC flow locally with the Authelia harness
+
+The local dev stack can run [Authelia](https://www.authelia.com) — a small open-source OIDC
+provider — as a stand-in for a production identity provider, exercising the exact same flow:
+discovery, the authorization redirect, code + PKCE, the callback, and the `groups` claim that
+gates admin features.
+
+1. Start the dev stack with the harness enabled: `AUTHELIA__ENABLED=true dotnet run --project
+   AppHost` (or export `Authelia__Enabled=true`). This adds `authelia` + `authelia-redis`
+   containers at `https://authelia.dev.localhost:9091`, wires the back-office to them, and hides
+   the mock login picker.
+2. Run the harness spec against it:
+
+   ```bash
+   dotnet run --project developer-cli -- e2e back-office-oidc --no-wait-for-aspire
+   ```
+
+   with `BACK_OFFICE_OIDC_ENABLED=true` in the environment (the spec skips itself otherwise, so
+   it stays out of the default suite). It signs in as `oidcadmin` / `OIDCTest123!` — a static
+   dev user in the `admins` group (see `application/AppHost/Authelia/`) — and asserts the
+   dashboard renders.
+
+The harness certificate is self-signed (`authelia-tls.pem`), so the OIDC backchannel runs with
+the dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
+providers.
+
 ### (Optional) Configure Stripe for staging and production
 
 Create a separate Stripe account (or sandbox) for each environment. For production, use a live Stripe account instead of a sandbox. Follow the Stripe Dashboard setup steps in [section 3.2](#32-optional-set-up-stripe-sandbox-for-localhost) to configure products, payment methods, tax, invoices, and other settings.

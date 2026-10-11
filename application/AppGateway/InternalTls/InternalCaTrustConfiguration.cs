@@ -27,7 +27,8 @@ public static class InternalCaTrustConfiguration
         // every internal call (the CA is not system-trusted) — fail loud instead.
         var caPem = configuration["InternalTls:CaPem"]
                     ?? throw new InvalidOperationException(
-                        "The 'InternalTls:CaPem' configuration value is required in cloud deployments (the deploy command passes the Terraform-managed internal CA).");
+                        "The 'InternalTls:CaPem' configuration value is required in cloud deployments (the deploy command passes the Terraform-managed internal CA)."
+                    );
         var internalCa = new InternalCa(X509CertificateLoader.LoadCertificate(PemFirstCertificateBytes(caPem)));
         services.AddSingleton(internalCa);
 
@@ -110,6 +111,6 @@ public sealed class InternalCaForwarderHttpClientFactory(InternalCa internalCa) 
             }
         };
 
-        return new HttpMessageInvoker(handler, disposeHandler: true);
+        return new HttpMessageInvoker(handler, true);
     }
 }

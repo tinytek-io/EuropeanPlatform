@@ -65,6 +65,24 @@ public static class BackOfficeOidcExtensions
                     oidc.Scope.Clear();
                     oidc.Scope.Add(OpenIdConnectScope.OpenIdProfile);
                     oidc.Scope.Add(OpenIdConnectScope.Email);
+                    // The admin gate matches the 'groups' claim against BackOffice:AdminsGroupId;
+                    // request the groups scope when that gate is configured (providers that do not
+                    // know the scope ignore it).
+                    if (!string.IsNullOrWhiteSpace(configuration["BackOffice:AdminsGroupId"]))
+                    {
+                        oidc.Scope.Add("groups");
+                    }
+
+                    // Dev-only escape hatch for the local Authelia harness, whose certificate is
+                    // self-signed: the backchannel (discovery, token, userinfo) then tolerates it.
+                    // Production providers have trusted certificates and leave this unset.
+                    if (configuration.GetSection("BackOffice:Oidc:DevAllowUntrustedCertificate").Get<bool>())
+                    {
+                        oidc.BackchannelHttpHandler = new HttpClientHandler
+                        {
+                            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                        };
+                    }
                 }
             );
 
