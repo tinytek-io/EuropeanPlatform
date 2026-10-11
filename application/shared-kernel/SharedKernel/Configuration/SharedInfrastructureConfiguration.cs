@@ -174,7 +174,7 @@ public static class SharedInfrastructureConfiguration
             return builder;
         }
 
-        private IHostApplicationBuilder AddDefaultBlobStorage()
+        public IHostApplicationBuilder AddDefaultBlobStorage()
         {
             IHostApplicationBuilder.RegisterS3BlobStorage(builder.Services);
 

@@ -20,12 +20,17 @@ public sealed record PortAllocation(int BasePort)
     internal static readonly int[] WorktreeCandidateBasePorts = [9100, 9200, 9300, 9400, 9500, 9600, 9700, 9800, 9900];
 
     // Port layout within a worktree's allocation. The browser-facing hosts take the lowest offsets:
-    //   +0 app.dev.localhost   +1 back-office.dev.localhost   +2 (reserved: web.dev.localhost)
-    //   +3 Aspire dashboard    +4 Postgres    +5 Mailpit UI/API    +6 Blob storage
-    // BasePort + 2 is intentionally unallocated so the future web host can claim it without a reshuffle.
+    //   +0 app.dev.localhost   +1 back-office.dev.localhost (account's folded listener)
+    //   +2 back-office system (standalone)   +3 Aspire dashboard    +4 Postgres
+    //   +5 Mailpit UI/API    +6 Blob storage
     public int AppGateway => BasePort;
 
     public int BackOfficeApi => BasePort + 1;
+
+    // The standalone back-office system's dev listener; claims the long-reserved +2 offset.
+    // After the back-office cutover account's folded listener (+1) retires and this port owns
+    // the back-office.dev.localhost host.
+    public int BackOfficeSystemApi => BasePort + 2;
 
     public int Aspire => BasePort + 3;
 
@@ -57,7 +62,7 @@ public sealed record PortAllocation(int BasePort)
 
     public int[] AllPorts =>
     [
-        AppGateway, BackOfficeApi, Aspire, Postgres, MailpitHttp, Blob, MailpitSmtp, OtelEndpoint,
+        AppGateway, BackOfficeApi, BackOfficeSystemApi, Aspire, Postgres, MailpitHttp, Blob, MailpitSmtp, OtelEndpoint,
         ResourceService, MainApi, MainStatic, MainWorkers, AccountApi, AccountStatic, AccountWorkers, BackOfficeStatic
     ];
 
