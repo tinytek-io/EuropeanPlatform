@@ -144,6 +144,62 @@ public enum LoginEventOutcome
     Failed
 }
 
+/// <summary>Mirrors account's TenantState.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum TenantState
+{
+    Active,
+    Suspended
+}
+
+/// <summary>Mirrors account's SuspensionReason.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SuspensionReason
+{
+    PaymentFailed,
+    CustomerDeleted
+}
+
+/// <summary>Mirrors account's DriftDiscrepancyKind.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DriftDiscrepancyKind
+{
+    MissingEvent,
+    ExtraEvent,
+    FieldDisagree,
+    SubscriptionStateMismatch,
+    UnclassifiedStripeEvent,
+    UnsupportedStripeApiVersion,
+    StripeEventPayloadDivergence,
+    BillingEventDenormalizationStale,
+    AmountExcludingTaxClamped,
+    ScheduledPriceMissing
+}
+
+/// <summary>Mirrors account's DriftSeverity.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DriftSeverity
+{
+    Warning,
+    Critical
+}
+
+/// <summary>Mirrors account's DriftDiscrepancy (the drift banner's row shape).</summary>
+[PublicAPI]
+public sealed record DriftDiscrepancy(
+    DriftDiscrepancyKind Kind,
+    string Description,
+    DriftSeverity Severity,
+    BillingEventType? ExpectedEventType = null,
+    string? ExpectedValue = null,
+    string? ActualValue = null,
+    DateTimeOffset? OccurredAt = null
+);
+
 /// <summary>
 ///     Mirrors account's FeatureFlagSource: the snake-case wire vocabulary the frontend filters on
 ///     travels through JsonStringEnumMemberName, so both the member names and the wire names must

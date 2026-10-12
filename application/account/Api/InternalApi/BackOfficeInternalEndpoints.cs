@@ -3,6 +3,7 @@ using Account.Features.BackOffice.BillingEvents.Queries;
 using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.BackOffice.Invoices.Queries;
 using Account.Features.FeatureFlags.Queries;
+using Account.Features.Tenants.BackOffice.Queries;
 using Account.Features.Users.BackOffice.Queries;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
@@ -96,5 +97,28 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         users.MapGet("/{id}/feature-flags", async Task<ApiResult<GetUserFeatureFlagsResponse>> (UserId id, IMediator mediator)
             => await mediator.Send(new GetUserFeatureFlagsQuery { UserId = id })
         ).Produces<GetUserFeatureFlagsResponse>();
+
+        var tenants = group.MapGroup("/tenants").WithTags("BackOfficeInternalTenants");
+        tenants.MapGet("/", async Task<ApiResult<TenantsResponse>> ([AsParameters] GetTenantsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<TenantsResponse>();
+        tenants.MapGet("/{id}", async Task<ApiResult<TenantDetailResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new GetTenantDetailQuery(id))
+        ).Produces<TenantDetailResponse>();
+        tenants.MapGet("/{id}/user-counts", async Task<ApiResult<TenantUserCountsResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new GetTenantUserCountsQuery(id))
+        ).Produces<TenantUserCountsResponse>();
+        tenants.MapGet("/{id}/users", async Task<ApiResult<TenantUsersResponse>> (TenantId id, [AsParameters] GetTenantUsersQuery query, IMediator mediator)
+            => await mediator.Send(query with { Id = id })
+        ).Produces<TenantUsersResponse>();
+        tenants.MapGet("/{id}/activity", async Task<ApiResult<TenantActivityResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new GetTenantActivityQuery(id))
+        ).Produces<TenantActivityResponse>();
+        tenants.MapGet("/{id}/payment-history", async Task<ApiResult<TenantPaymentHistoryResponse>> (TenantId id, [AsParameters] GetTenantPaymentHistoryQuery query, IMediator mediator)
+            => await mediator.Send(query with { Id = id })
+        ).Produces<TenantPaymentHistoryResponse>();
+        tenants.MapGet("/{id}/feature-flags", async Task<ApiResult<GetTenantFeatureFlagsResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new GetTenantFeatureFlagsQuery { TenantId = id })
+        ).Produces<GetTenantFeatureFlagsResponse>();
     }
 }
