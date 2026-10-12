@@ -36,7 +36,7 @@ public sealed class RecordingAccountApiHandler : HttpMessageHandler
         var errorJson = errors.Length == 0
             ? string.Empty
             : $@",""errors"":{{{string.Join(",", errors.Select(e => $@"""{e.Property}"":[""{e.Error}""]"))}}}";
-        Enqueue(statusCode, $@"{{""title"":""{statusCode}"",""status"":{(int) statusCode},""detail"":""{detail}""{errorJson}}}");
+        Enqueue(statusCode, $@"{{""title"":""{statusCode}"",""status"":{(int)statusCode},""detail"":""{detail}""{errorJson}}}");
     }
 
     public (HttpRequestMessage Request, string Body) SingleRequest()
@@ -52,7 +52,8 @@ public sealed class RecordingAccountApiHandler : HttpMessageHandler
         if (_responses.Count == 0)
         {
             throw new InvalidOperationException(
-                $"No canned response for the forwarded request {request.Method} {request.RequestUri}. Enqueue one before calling the endpoint.");
+                $"No canned response for the forwarded request {request.Method} {request.RequestUri}. Enqueue one before calling the endpoint."
+            );
         }
 
         var (statusCode, responseBody) = _responses.Dequeue();
