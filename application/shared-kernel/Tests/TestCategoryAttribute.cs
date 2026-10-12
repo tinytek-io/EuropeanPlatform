@@ -5,7 +5,7 @@ namespace SharedKernel.Tests;
 
 /// <summary>
 ///     Categorizes a test for conditional execution.
-///     Common categories: "Noisy" (verbose output), "RequiresDocker", "RequiresAzure", "Integration", etc.
+///     Common categories: "Noisy" (verbose output), "RequiresDocker", "RequiresKubernetes", "Integration", etc.
 ///     Use --exclude-category in the Developer CLI to filter out specific test categories.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]

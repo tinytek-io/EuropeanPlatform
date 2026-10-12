@@ -110,10 +110,10 @@ public class SinglePageAppConfiguration
     public string BundleDirectory { get; }
 
     // Source directory for SPA static assets that rsbuild copies into BundleDirectory at build time
-    // (manifest.json, favicon.ico, apple-touch-icon.png, etc.). In Azure these assets live alongside
+    // (manifest.json, favicon.ico, apple-touch-icon.png, etc.). Deployed these assets live alongside
     // the bundle, but in local dev rsbuild's dev server holds them and they never reach BundleDirectory.
     // Layering this directory under the bundle file provider closes that gap without per-asset rules.
-    // Null in Azure (see constructor).
+    // Null when deployed (see constructor).
     public string? PublicDirectory { get; }
 
     private string CdnUrl { get; }
@@ -165,7 +165,7 @@ public class SinglePageAppConfiguration
         // Walk up looking for <webAppProjectName>/main.tsx (the React entry point, source-controlled in every
         // SPA) or <webAppProjectName>/<dist>/index.html (production deployments where main.tsx is gone but the
         // built bundle is). Either marker reliably identifies the SPA folder across local dev, CI before the
-        // frontend build, and the deployed Azure container. Matching just on the bare folder name would stop
+        // frontend build, and the deployed container. Matching just on the bare folder name would stop
         // at unrelated same-named directories like account/Tests/BackOffice.
         var assemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
 
