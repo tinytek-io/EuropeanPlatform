@@ -5,7 +5,6 @@ using Account.Features.Tenants.BackOffice.Queries;
 using Account.Features.Users.Domain;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,7 +24,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
         SeedUser(tenant.Id, "neverseen@tenant-1.com", null);
         SeedUser(tenant.Id, "pending@tenant-1.com", null, false);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -48,7 +47,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
         var tenant = DatabaseSeeder.Tenant1;
         SeedUser(tenant.Id, "pending-recent@tenant-1.com", DateTimeOffset.UtcNow.AddDays(-1), false);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -67,7 +66,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

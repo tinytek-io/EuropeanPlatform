@@ -8,7 +8,6 @@ using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -24,7 +23,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -58,7 +57,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -78,7 +77,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -99,7 +98,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -120,7 +119,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -141,7 +140,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -161,7 +160,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -179,7 +178,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
     {
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -196,7 +195,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -221,7 +220,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 30);
         SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -241,7 +240,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -261,7 +260,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -282,7 +281,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantD = SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -303,7 +302,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         var tenantE = SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -325,7 +324,7 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 50);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 40);
         SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 30);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

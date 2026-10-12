@@ -3,7 +3,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using SharedKernel.Authentication.TokenSigning;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace SharedKernel.Authentication;
 
 /// <summary>
 ///     Mints the short-lived delegation token the back-office BFF presents to the feature systems'
@@ -30,7 +30,7 @@ public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient token
         var displayName = principal.FindFirstValue(ClaimTypes.Name);
         if (!string.IsNullOrWhiteSpace(displayName))
         {
-            claims.Add(new Claim(BackOfficeIdentityDefaults.NameClaimType, displayName));
+            claims.Add(new Claim(BackOfficeDelegationDefaults.NameClaimType, displayName));
         }
 
         var email = principal.FindFirstValue(ClaimTypes.Email);
@@ -40,8 +40,8 @@ public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient token
         }
 
         claims.AddRange(principal.Claims
-            .Where(claim => claim.Type == BackOfficeIdentityDefaults.GroupsClaimType)
-            .Select(claim => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, claim.Value))
+            .Where(claim => claim.Type == BackOfficeDelegationDefaults.GroupsClaimType)
+            .Select(claim => new Claim(BackOfficeDelegationDefaults.GroupsClaimType, claim.Value))
         );
 
         var now = timeProvider.GetUtcNow();
@@ -52,7 +52,7 @@ public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient token
             IssuedAt = now.UtcDateTime,
             Expires = now.AddMinutes(ValidForMinutes).UtcDateTime,
             Issuer = tokenSigningClient.Issuer,
-            Audience = BackOfficeIdentityDefaults.DelegationAudience,
+            Audience = BackOfficeDelegationDefaults.DelegationAudience,
             SigningCredentials = tokenSigningClient.GetSigningCredentials()
         };
 

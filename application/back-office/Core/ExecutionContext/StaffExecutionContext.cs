@@ -1,7 +1,8 @@
 using System.Security.Claims;
+using BackOffice.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 
 namespace BackOffice.ExecutionContext;
 

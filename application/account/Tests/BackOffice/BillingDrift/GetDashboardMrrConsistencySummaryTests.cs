@@ -6,7 +6,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,7 +24,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         SeedPaidSubscription(tenantId, subscriptionId, 149m, false, null);
         SeedSubscriptionCreatedEvent(tenantId, subscriptionId, 149m);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -51,7 +50,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         SeedPaidSubscription(tenantId, subscriptionId, 100.00m, false, null);
         SeedSubscriptionCreatedEvent(tenantId, subscriptionId, 100.005m);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -77,7 +76,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         SeedPaidSubscription(tenantId, subscriptionId, 149m, true, null);
         SeedSubscriptionCreatedEvent(tenantId, subscriptionId, 149m);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

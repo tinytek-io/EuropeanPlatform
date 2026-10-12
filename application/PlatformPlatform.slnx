@@ -1,7 +1,6 @@
 <Solution>
     <Folder Name="/account/">
         <Project Path="account\Api\Account.Api.csproj"/>
-        <Project Path="back-office\WebApp\BackOffice.WebApp.esproj"/>
         <Project Path="account\Core\Account.csproj"/>
         <Project Path="account\Tests\Account.Tests.csproj"/>
         <Project Path="account\WebApp\Account.WebApp.esproj"/>
@@ -11,6 +10,8 @@
     <Folder Name="/back-office/">
         <Project Path="back-office\Api\BackOffice.Api.csproj"/>
         <Project Path="back-office\Core\BackOffice.csproj"/>
+        <Project Path="back-office\Tests\BackOffice.Tests.csproj"/>
+        <Project Path="back-office\WebApp\BackOffice.WebApp.esproj"/>
     </Folder>
     <Folder Name="/main/">
         <Project Path="main\Api\Main.Api.csproj"/>

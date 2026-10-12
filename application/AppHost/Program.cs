@@ -3,9 +3,9 @@ using System.Net.Sockets;
 using AppHost;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
+using BackOffice.Authentication.MockEasyAuth;
 using Microsoft.Extensions.Configuration;
 using Projects;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Configuration;
 
 // Docker volume name prefix, derived from branding.productName in platform-settings.jsonc so the
@@ -268,20 +268,14 @@ if (!isPublishMode)
 }
 
 // The container listens on the image default port 8080; the Service fronts it on 80. The
-// endpoints are marked external because the Cilium Gateway routes public traffic to them (both
-// the app hostname via YARP and the back-office hostname, which bypasses YARP just like the
-// Azure post-split topology).
+// endpoints are marked external because the Cilium Gateway routes public traffic to the app
+// hostname, which the YARP gateway proxies to this service.
 if (isPublishMode)
 {
     accountApi
         .WithHttpsEndpoint(8443, 8443, "https")
         .WithExternalHttpEndpoints()
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
-
-    if (mockEasyAuthEnabled)
-    {
-        accountApi.WithEnvironment("MockEasyAuth__Enabled", "true");
-    }
 }
 
 var mainWorkers = builder

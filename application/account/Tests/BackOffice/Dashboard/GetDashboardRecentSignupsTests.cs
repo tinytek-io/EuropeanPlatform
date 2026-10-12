@@ -4,7 +4,6 @@ using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -24,7 +23,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         SeedTenant("Middle", future.AddDays(-1));
         SeedTenant("Oldest", future.AddDays(-2));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -49,7 +48,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
     public async Task GetDashboardRecentSignups_WhenCalledWithInvalidLimit_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

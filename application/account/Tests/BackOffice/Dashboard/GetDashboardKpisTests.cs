@@ -9,7 +9,6 @@ using Account.Features.Tenants.Domain;
 using Account.Features.Users.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Authentication.TokenGeneration;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
@@ -34,7 +33,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         var canceledTenant = SeedTenant("Canceled Ltd", SubscriptionPlan.Basis, now.AddDays(-90));
         SeedSubscription(canceledTenant, SubscriptionPlan.Basis, null, true);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -70,7 +69,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         SeedSession(secondTenant, secondTenantUser, now.AddHours(-1), true);
         SeedSession(secondTenant, secondTenantUser, now.AddDays(-2), false);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -121,7 +120,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         SeedTenant("New Free 1", SubscriptionPlan.Basis, now.AddDays(-3));
         SeedTenant("New Free 2", SubscriptionPlan.Basis, now.AddDays(-2));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -155,7 +154,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         var cancelling = SeedTenant("Cancelling", SubscriptionPlan.Standard, now.AddDays(-30));
         SeedPaidSubscription(cancelling, SubscriptionPlan.Standard, 149m, true, null, null);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -180,7 +179,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         var deletedTenant = SeedTenant("Deleted Co", SubscriptionPlan.Standard, now.AddDays(-15));
         Connection.Update("tenants", "id", deletedTenant.Value, [("deleted_at", now.AddDays(-1))]);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -210,7 +209,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         SeedPaidSubscription(softDeletedTenant, SubscriptionPlan.Premium, 99m, false, null, null, now.AddDays(-90));
         Connection.Update("tenants", "id", softDeletedTenant.Value, [("deleted_at", now.AddDays(-1))]);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

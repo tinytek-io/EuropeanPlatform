@@ -1,13 +1,13 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using BackOffice.Authentication;
+using BackOffice.Authentication.MockEasyAuth;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using Xunit;
 
-namespace SharedKernel.Tests.Authentication;
+namespace BackOffice.Tests.Authentication;
 
 public sealed class MockEasyAuthMiddlewareTests
 {
