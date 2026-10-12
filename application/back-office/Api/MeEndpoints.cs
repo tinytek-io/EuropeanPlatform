@@ -1,5 +1,4 @@
 using BackOffice.Features.Me;
-using MediatR;
 using Microsoft.Extensions.Options;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;

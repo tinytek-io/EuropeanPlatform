@@ -1,4 +1,3 @@
-using System.Reflection;
 using BackOffice;
 using Microsoft.Extensions.Options;
 using SharedKernel.Authentication.BackOfficeIdentity;

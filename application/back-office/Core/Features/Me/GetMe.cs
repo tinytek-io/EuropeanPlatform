@@ -1,6 +1,5 @@
 using BackOffice.ExecutionContext;
 using JetBrains.Annotations;
-using MediatR;
 using SharedKernel.Cqrs;
 
 namespace BackOffice.Features.Me;
