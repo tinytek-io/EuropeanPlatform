@@ -8,7 +8,7 @@ namespace SharedKernel.Integrations.BlobStorage;
 
 /// <summary>
 ///     S3-compatible implementation of <see cref="IBlobStorageClient" />, used against Scaleway
-///     Object Storage in production and MinIO in local development. Buckets are created lazily with
+///     Object Storage in production and SeaweedFS in local development. Buckets are created lazily with
 ///     a public-read policy when requested, so avatars/logos can be served unsigned through AppGateway
 ///     exactly like the public containers they replace.
 /// </summary>

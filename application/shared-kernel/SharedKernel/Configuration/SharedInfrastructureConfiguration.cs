@@ -197,7 +197,7 @@ public static class SharedInfrastructureConfiguration
 
         private static void RegisterS3BlobStorage(IServiceCollection services, string? connectionName = null)
         {
-            // S3-compatible object storage (Scaleway Object Storage in production, MinIO in local
+            // S3-compatible object storage (Scaleway Object Storage in production, SeaweedFS in local
             // development) configured from the `blob-storage` connection string. The key registers
             // the same client additionally under a named key for consumers of multiple accounts.
             services.TryAddSingleton<IBlobStorageClient>(IHostApplicationBuilder.CreateBlobStorageClient);

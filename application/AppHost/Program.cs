@@ -149,8 +149,8 @@ else
     mainDatabase = postgres.AddDatabase("main-database", "main");
 }
 
-// Object storage is S3 (Scaleway Object Storage when published, MinIO in local development).
-// MinIO implements the same API, so the connection string shape is identical in both modes;
+// Object storage is S3 (Scaleway Object Storage when published, SeaweedFS in local development).
+// SeaweedFS implements the same API, so the connection string shape is identical in both modes;
 // publish mode consumes it as an externally supplied deploy-time secret.
 IResourceBuilder<IResourceWithConnectionString> blobStorage;
 
@@ -160,25 +160,26 @@ if (isPublishMode)
 }
 else
 {
-    // Fixed MinIO root credentials, safe for local development like the Azurite key they replace.
-    const string minioAccessKey = "minioadmin";
-    const string minioSecretKey = "minioadmin";
+    // Fixed local development credentials, safe like the Azurite key they replace. SeaweedFS's
+    // default IAM accepts any credentials without configuration, so the values only exist to keep
+    // the connection string shape identical to production.
+    const string storageAccessKey = "seaweed-admin";
+    const string storageSecretKey = "seaweed-admin";
 
-    // MinIO is a local development S3 emulator; buckets are created lazily by the S3 client on
-    // first use, so no bootstrap task is needed.
+    // SeaweedFS is a local development S3 emulator (Apache-2.0, single container); buckets are
+    // created lazily by the S3 client on first use, so no bootstrap task is needed. The S3
+    // gateway runs on the container's 8333 (the default `weed server` ports stay free).
     builder
-        .AddContainer("minio", "minio/minio")
-        .WithHttpEndpoint(ports.Blob, 9000)
-        .WithArgs("server", "/data")
-        .WithEnvironment("MINIO_ROOT_USER", minioAccessKey)
-        .WithEnvironment("MINIO_ROOT_PASSWORD", minioSecretKey)
-        .WithVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-minio-data", "/data")
+        .AddContainer("seaweedfs", "chrislusf/seaweedfs:latest")
+        .WithHttpEndpoint(ports.Blob, 8333)
+        .WithArgs("server", "-dir=/data", "-s3", "-s3.port=8333")
+        .WithVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-seaweed-data", "/data")
         .WithLifetime(ContainerLifetime.Persistent)
-        .WithUrlForEndpoint("http", u => u.DisplayText = "Object storage (MinIO)");
+        .WithUrlForEndpoint("http", u => u.DisplayText = "Object storage (SeaweedFS)");
 
     blobStorage = builder.AddConnectionString(
         "blob-storage",
-        $"ServiceUrl=http://localhost:{ports.Blob};AccessKey={minioAccessKey};SecretKey={minioSecretKey};ForcePathStyle=true;Region=fr-par"
+        $"ServiceUrl=http://localhost:{ports.Blob};AccessKey={storageAccessKey};SecretKey={storageSecretKey};ForcePathStyle=true;Region=fr-par"
     );
 }
 
