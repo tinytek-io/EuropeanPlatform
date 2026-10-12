@@ -4,7 +4,13 @@ using System.Text.Json;
 using BackOffice.Authentication;
 using BackOffice.Authentication.MockEasyAuth;
 using FluentAssertions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace BackOffice.Tests.Authentication;
@@ -185,5 +191,86 @@ public sealed class MockEasyAuthMiddlewareTests
 
         // Assert
         observed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UseMockEasyAuthInDevelopment_WhenOidcProviderIsConfigured_ShouldNotRegisterTheMiddleware()
+    {
+        // Arrange: a fully configured OIDC provider, even in the development environment — the
+        // mock would otherwise intercept the login path the provider's challenge endpoint maps.
+        var (pipeline, context) = BuildPipeline(true);
+
+        // Act
+        await pipeline(context);
+
+        // Assert: the request fell through to the terminal handler, so the mock selector never
+        // redirected the login path to its picker.
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        context.Response.Headers.Location.ToString().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UseMockEasyAuthInDevelopment_WhenNoProviderInDevelopment_ShouldRegisterTheMiddleware()
+    {
+        // Arrange
+        var (pipeline, context) = BuildPipeline(false);
+
+        // Act
+        await pipeline(context);
+
+        // Assert: the mock selector owns the login path and redirects to its picker.
+        context.Response.StatusCode.Should().Be(StatusCodes.Status302Found);
+        context.Response.Headers.Location.ToString().Should().Be("/login?returnPath=%2F");
+    }
+
+    // A minimal pipeline host — configuration (optionally with a fully configured OIDC provider),
+    // a development environment, and a terminal handler — invoked on the login path, enough to
+    // observe whether UseMockEasyAuthInDevelopment registered the mock selector.
+    private static (RequestDelegate Pipeline, HttpContext Context) BuildPipeline(bool oidcConfigured)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["BackOffice:Host"] = "back-office.test.localhost",
+            ["BackOffice:AdminsGroupId"] = "BackOfficeAdmins"
+        };
+        if (oidcConfigured)
+        {
+            settings["BackOffice:Oidc:Authority"] = "https://login.example.com";
+            settings["BackOffice:Oidc:ClientId"] = "client-id";
+            settings["BackOffice:Oidc:ClientSecret"] = "secret";
+        }
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IWebHostEnvironment>(new DevTestWebHostEnvironment());
+        var provider = services.BuildServiceProvider();
+
+        var app = new ApplicationBuilder(provider);
+        app.UseMockEasyAuthInDevelopment();
+        app.Run(_ => Task.CompletedTask);
+
+        var context = new DefaultHttpContext
+        {
+            RequestServices = provider,
+            Request = { Path = BackOfficeIdentityDefaults.LoginPath, Method = HttpMethods.Get }
+        };
+
+        return (app.Build(), context);
+    }
+
+    private sealed class DevTestWebHostEnvironment : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "BackOffice.Tests";
+
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+
+        public string WebRootPath { get; set; } = "";
+
+        public string EnvironmentName { get; set; } = Environments.Development;
+
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
