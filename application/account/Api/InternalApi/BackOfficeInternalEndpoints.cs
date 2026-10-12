@@ -1,17 +1,21 @@
+using Account.Features.BackOffice.BillingDrift.Queries;
+using Account.Features.BackOffice.BillingEvents.Queries;
 using Account.Features.BackOffice.Dashboard.Queries;
+using Account.Features.BackOffice.Invoices.Queries;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Endpoints;
 
 namespace Account.Api.InternalApi;
 
-// The internal API surface the standalone back-office BFF consumes: the same queries and commands
-// as account's folded /api/back-office/* routes, exposed under /internal-api/back-office/* for
-// the BFF's typed clients. Every route requires the delegation policy — a platform-signed
-// short-lived JWT minted by the BFF from the signed-in staff principal — so in-cluster callers
-// cannot reach back-office data by injecting EasyAuth-style headers. In-cluster only: the gateway
-// blocks /internal-api/* from public traffic. No OpenAPI group: the SPA-facing documents must not
-// leak the internal contract.
+// The internal API surface the standalone back-office BFF consumes: the same queries as account's
+// folded /api/back-office/* routes, exposed under /internal-api/back-office/* for the BFF's typed
+// clients. Every route requires the delegation policy — a platform-signed short-lived JWT minted by
+// the BFF from the signed-in staff principal — so in-cluster callers cannot reach back-office
+// data by injecting EasyAuth-style headers. In-cluster only: the gateway blocks /internal-api/*
+// from public traffic. No OpenAPI group: the SPA-facing documents must not leak the internal
+// contract. Mutating routes combine the delegation policy with the admin requirement when they
+// arrive.
 public sealed class BackOfficeInternalEndpoints : IEndpoints
 {
     private const string RoutesPrefix = "/internal-api/back-office";
@@ -23,10 +27,54 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
             .RequireAuthorization(BackOfficeIdentityDefaults.DelegationPolicyName)
             .ProducesValidationProblem();
 
-        group.MapGet("/dashboard/kpis", async Task<ApiResult<BackOfficeDashboardKpisResponse>> (
-                [AsParameters] GetDashboardKpisQuery query,
-                IMediator mediator)
+        var dashboard = group.MapGroup("/dashboard").WithTags("BackOfficeInternalDashboard");
+        dashboard.MapGet("/kpis", async Task<ApiResult<BackOfficeDashboardKpisResponse>> ([AsParameters] GetDashboardKpisQuery query, IMediator mediator)
             => await mediator.Send(query)
         ).Produces<BackOfficeDashboardKpisResponse>();
+        dashboard.MapGet("/trends", async Task<ApiResult<BackOfficeDashboardTrendsResponse>> ([AsParameters] GetDashboardTrendsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardTrendsResponse>();
+        dashboard.MapGet("/mrr-trend", async Task<ApiResult<BackOfficeDashboardMrrTrendResponse>> ([AsParameters] GetDashboardMrrTrendQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardMrrTrendResponse>();
+        dashboard.MapGet("/revenue-trend", async Task<ApiResult<BackOfficeDashboardRevenueTrendResponse>> ([AsParameters] GetDashboardRevenueTrendQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRevenueTrendResponse>();
+        dashboard.MapGet("/plan-distribution", async Task<ApiResult<BackOfficeDashboardPlanDistributionResponse>> ([AsParameters] GetDashboardPlanDistributionQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardPlanDistributionResponse>();
+        dashboard.MapGet("/recent-signups", async Task<ApiResult<BackOfficeDashboardRecentSignupsResponse>> ([AsParameters] GetDashboardRecentSignupsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentSignupsResponse>();
+        dashboard.MapGet("/recent-logins", async Task<ApiResult<BackOfficeDashboardRecentLoginsResponse>> ([AsParameters] GetDashboardRecentLoginsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentLoginsResponse>();
+        dashboard.MapGet("/recent-payments", async Task<ApiResult<BackOfficeDashboardRecentPaymentsResponse>> ([AsParameters] GetDashboardRecentPaymentsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentPaymentsResponse>();
+        dashboard.MapGet("/recent-stripe-events", async Task<ApiResult<BackOfficeDashboardRecentStripeEventsResponse>> ([AsParameters] GetDashboardRecentStripeEventsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentStripeEventsResponse>();
+
+        var billingEvents = group.MapGroup("/billing-events").WithTags("BackOfficeInternalBillingEvents");
+        billingEvents.MapGet("/", async Task<ApiResult<BillingEventsResponse>> ([AsParameters] GetBackOfficeBillingEventsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BillingEventsResponse>();
+
+        var invoices = group.MapGroup("/invoices").WithTags("BackOfficeInternalInvoices");
+        invoices.MapGet("/", async Task<ApiResult<BackOfficeInvoicesResponse>> ([AsParameters] GetBackOfficeInvoicesQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeInvoicesResponse>();
+
+        var billingDrift = group.MapGroup("/billing-drift").WithTags("BackOfficeInternalBillingDrift");
+        billingDrift.MapGet("/summary", async Task<ApiResult<BillingDriftSummaryResponse>> ([AsParameters] GetBillingDriftSummaryQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BillingDriftSummaryResponse>();
+        billingDrift.MapGet("/unsynced-summary", async Task<ApiResult<UnsyncedSubscriptionsSummaryResponse>> ([AsParameters] GetUnsyncedSubscriptionsSummaryQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<UnsyncedSubscriptionsSummaryResponse>();
+        billingDrift.MapGet("/mrr-consistency-summary", async Task<ApiResult<DashboardMrrConsistencySummaryResponse>> ([AsParameters] GetDashboardMrrConsistencySummaryQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<DashboardMrrConsistencySummaryResponse>();
     }
 }

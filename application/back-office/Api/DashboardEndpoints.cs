@@ -1,5 +1,4 @@
 using BackOffice.Features.Dashboard;
-using MediatR;
 using Microsoft.Extensions.Options;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
@@ -27,5 +26,37 @@ public sealed class DashboardEndpoints : IEndpoints
         group.MapGet("/kpis", async Task<ApiResult<BackOfficeDashboardKpisResponse>> ([AsParameters] GetDashboardKpisQuery query, IMediator mediator)
             => await mediator.Send(query)
         ).Produces<BackOfficeDashboardKpisResponse>();
+
+        group.MapGet("/trends", async Task<ApiResult<BackOfficeDashboardTrendsResponse>> ([AsParameters] GetDashboardTrendsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardTrendsResponse>();
+
+        group.MapGet("/mrr-trend", async Task<ApiResult<BackOfficeDashboardMrrTrendResponse>> ([AsParameters] GetDashboardMrrTrendQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardMrrTrendResponse>();
+
+        group.MapGet("/revenue-trend", async Task<ApiResult<BackOfficeDashboardRevenueTrendResponse>> ([AsParameters] GetDashboardRevenueTrendQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRevenueTrendResponse>();
+
+        group.MapGet("/plan-distribution", async Task<ApiResult<BackOfficeDashboardPlanDistributionResponse>> (IMediator mediator)
+            => await mediator.Send(new GetDashboardPlanDistributionQuery())
+        ).Produces<BackOfficeDashboardPlanDistributionResponse>();
+
+        group.MapGet("/recent-signups", async Task<ApiResult<BackOfficeDashboardRecentSignupsResponse>> ([AsParameters] GetDashboardRecentSignupsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentSignupsResponse>();
+
+        group.MapGet("/recent-logins", async Task<ApiResult<BackOfficeDashboardRecentLoginsResponse>> ([AsParameters] GetDashboardRecentLoginsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentLoginsResponse>();
+
+        group.MapGet("/recent-payments", async Task<ApiResult<BackOfficeDashboardRecentPaymentsResponse>> ([AsParameters] GetDashboardRecentPaymentsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentPaymentsResponse>();
+
+        group.MapGet("/recent-stripe-events", async Task<ApiResult<BackOfficeDashboardRecentStripeEventsResponse>> ([AsParameters] GetDashboardRecentStripeEventsQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeDashboardRecentStripeEventsResponse>();
     }
 }
