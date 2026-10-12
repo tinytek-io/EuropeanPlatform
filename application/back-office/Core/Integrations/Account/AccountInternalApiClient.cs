@@ -4,6 +4,7 @@ using BackOffice.Features.BillingDrift;
 using BackOffice.Features.BillingEvents;
 using BackOffice.Features.Dashboard;
 using BackOffice.Features.Invoices;
+using BackOffice.Features.Tenants;
 using BackOffice.Features.Users;
 using SharedKernel.Configuration;
 using SharedKernel.Domain;
@@ -157,6 +158,59 @@ public sealed class AccountInternalApiClient(HttpClient httpClient)
     public async Task<GetUserFeatureFlagsResponse> GetUserFeatureFlagsAsync(GetUserFeatureFlagsQuery query, CancellationToken cancellationToken)
     {
         return await GetAsync<GetUserFeatureFlagsResponse>($"/users/{query.UserId.Value}/feature-flags", cancellationToken);
+    }
+
+    public async Task<TenantsResponse> GetTenantsAsync(GetTenantsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantsResponse>("/tenants", cancellationToken,
+            ("search", query.Search),
+            ("plans", query.Plans),
+            ("statuses", query.Statuses),
+            ("unsynced", query.Unsynced),
+            ("driftDetected", query.DriftDetected),
+            ("orderBy", query.OrderBy),
+            ("sortOrder", query.SortOrder),
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<TenantDetailResponse> GetTenantDetailAsync(TenantId id, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantDetailResponse>($"/tenants/{id.Value}", cancellationToken);
+    }
+
+    public async Task<TenantUserCountsResponse> GetTenantUserCountsAsync(TenantId id, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantUserCountsResponse>($"/tenants/{id.Value}/user-counts", cancellationToken);
+    }
+
+    public async Task<TenantUsersResponse> GetTenantUsersAsync(GetTenantUsersQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantUsersResponse>($"/tenants/{query.Id.Value}/users", cancellationToken,
+            ("search", query.Search),
+            ("roles", query.Roles),
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<TenantActivityResponse> GetTenantActivityAsync(TenantId id, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantActivityResponse>($"/tenants/{id.Value}/activity", cancellationToken);
+    }
+
+    public async Task<TenantPaymentHistoryResponse> GetTenantPaymentHistoryAsync(GetTenantPaymentHistoryQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<TenantPaymentHistoryResponse>($"/tenants/{query.Id.Value}/payment-history", cancellationToken,
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<GetTenantFeatureFlagsResponse> GetTenantFeatureFlagsAsync(GetTenantFeatureFlagsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<GetTenantFeatureFlagsResponse>($"/tenants/{query.TenantId.Value}/feature-flags", cancellationToken);
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken, params (string Key, object? Value)[] parameters)
