@@ -1,3 +1,4 @@
+using BackOffice.Authentication.MockEasyAuth;
 using BackOffice.Integrations.Account;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -45,7 +46,7 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                         // Match the AppHost wiring: the mock admin identity carries this group id,
                         // so the BackOfficeAdmin policy and MeResponse.IsAdmin resolve admin status
                         // the same way they do in development.
-                        ["BackOffice:AdminsGroupId"] = BackOffice.Authentication.MockEasyAuth.MockEasyAuthIdentities.MockAdminsGroupId
+                        ["BackOffice:AdminsGroupId"] = MockEasyAuthIdentities.MockAdminsGroupId
                     }
                 );
             }

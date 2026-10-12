@@ -24,7 +24,7 @@ public sealed class MeTests(BackOfficeWebApplicationFactory factory)
         body.GetProperty("displayName").GetString().Should().Be("Admin");
         body.GetProperty("email").GetString().Should().Be("admin@dev.localhost");
         body.GetProperty("isAdmin").GetBoolean().Should().BeTrue();
-        body.GetProperty("groups").EnumerateArray().Select(g => g.GetString()).Should().BeEquivalentTo(["BackOfficeAdmins"]);
+        body.GetProperty("groups").EnumerateArray().Select(g => g.GetString()).Should().BeEquivalentTo("BackOfficeAdmins");
         Factory.AccountApi.Requests.Should().BeEmpty("the staff profile resolves locally from the signed-in identity");
     }
 
