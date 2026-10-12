@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 using Account.Features.Subscriptions.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,7 +24,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
                 ("drift_discrepancies", JsonSerializer.Serialize(discrepancies))
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -44,7 +43,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenSubscriptionHasNoDrift_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -60,7 +59,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenTenantNotFound_ShouldReturnNotFound()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var unknownTenantId = TenantId.NewId();
 
@@ -75,7 +74,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenNonAdminBackOfficeUser_ShouldReturnForbidden()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

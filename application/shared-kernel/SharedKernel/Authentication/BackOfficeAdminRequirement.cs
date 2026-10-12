@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace SharedKernel.Authentication;
 
 public sealed class BackOfficeAdminRequirement : IAuthorizationRequirement;
 
@@ -19,7 +19,7 @@ public sealed class BackOfficeAdminAuthorizationHandler(IOptions<BackOfficeHostO
         if (string.IsNullOrWhiteSpace(_options.AdminsGroupId)) return Task.CompletedTask;
 
         var hasGroup = context.User.Claims.Any(claim =>
-            claim.Type == BackOfficeIdentityDefaults.GroupsClaimType &&
+            claim.Type == BackOfficeDelegationDefaults.GroupsClaimType &&
             string.Equals(claim.Value, _options.AdminsGroupId, StringComparison.Ordinal)
         );
 

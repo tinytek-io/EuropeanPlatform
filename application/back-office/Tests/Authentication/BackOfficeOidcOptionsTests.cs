@@ -1,9 +1,9 @@
+using BackOffice.Authentication;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using Xunit;
 
-namespace SharedKernel.Tests.Authentication;
+namespace BackOffice.Tests.Authentication;
 
 public sealed class BackOfficeOidcOptionsTests
 {

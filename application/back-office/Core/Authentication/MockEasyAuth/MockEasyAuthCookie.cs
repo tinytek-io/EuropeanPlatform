@@ -1,9 +1,8 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using SharedKernel.Authentication.BackOfficeIdentity;
 
-namespace SharedKernel.Authentication.MockEasyAuth;
+namespace BackOffice.Authentication.MockEasyAuth;
 
 public static class MockEasyAuthCookie
 {

@@ -6,7 +6,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -26,7 +25,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         SeedActiveSubscription(paidTenant, subscriptionId, 49.99m, now.AddDays(-5));
         SeedSubscriptionCreatedEvent(paidTenant, subscriptionId, 49.99m, now.AddDays(-5));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -63,7 +62,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         SeedSubscriptionCreatedEvent(paidTenant, subscriptionId, 49.99m, subscribedSince);
         Connection.Update("tenants", "id", paidTenant.Value, [("deleted_at", now)]);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -81,7 +80,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
     public async Task GetDashboardMrrTrend_WhenCalledWithInvalidPeriod_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

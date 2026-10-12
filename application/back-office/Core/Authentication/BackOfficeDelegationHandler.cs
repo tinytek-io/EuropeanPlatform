@@ -1,13 +1,13 @@
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Http;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 
 namespace BackOffice.Authentication;
 
 /// <summary>
 ///     Attaches the delegation token to every internal API call: a short-lived platform-signed JWT
 ///     minted from the signed-in staff principal, validated by the feature systems' internal
-///     endpoints (BackOfficeIdentityDefaults.DelegationScheme). The token is minted per request —
+///     endpoints (BackOfficeDelegationDefaults.DelegationScheme). The token is minted per request —
 ///     no caching — so group membership changes take effect on the next call.
 /// </summary>
 public sealed class BackOfficeDelegationHandler(

@@ -1,4 +1,4 @@
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace BackOffice.Authentication;
 
 public sealed class BackOfficeClientPrincipal
 {

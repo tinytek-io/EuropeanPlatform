@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace SharedKernel.Authentication;
 
 public sealed class BackOfficeHostOptions
 {

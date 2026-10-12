@@ -2,15 +2,15 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using BackOffice.Authentication;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using Xunit;
 
-namespace SharedKernel.Tests.Authentication;
+namespace BackOffice.Tests.Authentication;
 
 public sealed class BackOfficeIdentityHandlerTests
 {

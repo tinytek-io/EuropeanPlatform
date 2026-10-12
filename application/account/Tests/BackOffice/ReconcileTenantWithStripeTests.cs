@@ -6,7 +6,6 @@ using Account.Features.Tenants.BackOffice.Commands;
 using Account.Integrations.OAuth;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -23,7 +22,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
                 ("stripe_customer_id", MockStripeClient.MockCustomerId)
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -47,7 +46,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenSubscriptionHasNoStripeCustomer_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -61,7 +60,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenTenantDoesNotExist_ShouldReturnNotFound()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
         var unknownTenantId = TenantId.NewId();
@@ -81,7 +80,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
                 ("stripe_customer_id", MockStripeClient.MockCustomerId)
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -95,7 +94,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenCalledByNonAdmin_ShouldReturnForbidden()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -136,7 +135,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         StripeState.ScheduledPlan = SubscriptionPlan.Premium;
         StripeState.PriceCatalogOmittedPlans.Add(SubscriptionPlan.Standard);
         StripeState.PriceCatalogOmittedPlans.Add(SubscriptionPlan.Premium);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -178,7 +177,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -204,7 +203,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -231,7 +230,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         // SubscriptionCurrency to USD makes SyncSubscriptionStateAsync return USD, which the boundary
         // guard then rejects against the cached platform currency.
         StripeState.SubscriptionCurrency = "USD";
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 

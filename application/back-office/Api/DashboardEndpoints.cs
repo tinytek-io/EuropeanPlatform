@@ -1,7 +1,8 @@
+using BackOffice.Authentication;
 using BackOffice.Features.Dashboard;
 using Microsoft.Extensions.Options;
 using SharedKernel.ApiResults;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 using SharedKernel.Endpoints;
 
 namespace BackOffice.Api;

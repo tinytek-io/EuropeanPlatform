@@ -9,7 +9,7 @@ using Account.Features.Tenants.BackOffice.Queries;
 using Account.Features.Users.BackOffice.Commands;
 using Account.Features.Users.BackOffice.Queries;
 using SharedKernel.ApiResults;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 using SharedKernel.Domain;
 using SharedKernel.Endpoints;
 using SharedKernel.OpenApi;
@@ -36,7 +36,7 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
             // no document is emitted for it (the staff-facing contract lives in the back-office
             // system).
             .WithGroupName(OpenApiDocumentNames.BackOffice)
-            .RequireAuthorization(BackOfficeIdentityDefaults.DelegationPolicyName)
+            .RequireAuthorization(BackOfficeDelegationDefaults.DelegationPolicyName)
             .ProducesValidationProblem();
 
         var dashboard = group.MapGroup("/dashboard").WithTags("BackOfficeInternalDashboard");
@@ -113,7 +113,7 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         // later needs only staff membership can use the plain delegation policy.
         users.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (UserId id, SetUserAbInclusionPinCommand command, IMediator mediator)
             => await mediator.Send(command with { UserId = id })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
 
         var tenants = group.MapGroup("/tenants").WithTags("BackOfficeInternalTenants");
         tenants.MapGet("/", async Task<ApiResult<TenantsResponse>> ([AsParameters] GetTenantsQuery query, IMediator mediator)
@@ -139,18 +139,18 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         ).Produces<GetTenantFeatureFlagsResponse>();
         tenants.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (TenantId id, SetTenantAbInclusionPinCommand command, IMediator mediator)
             => await mediator.Send(command with { TenantId = id })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         tenants.MapPost("/{id}/reconcile-with-stripe", async Task<ApiResult<ReconcileTenantWithStripeResponse>> (TenantId id, IMediator mediator)
                 => await mediator.Send(new ReconcileTenantWithStripeCommand { TenantId = id })
-            ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName)
+            ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName)
             .Produces<ReconcileTenantWithStripeResponse>();
         tenants.MapPost("/{id}/replay-archived-stripe-events", async Task<ApiResult<ReplayArchivedTenantStripeEventsResponse>> (TenantId id, IMediator mediator)
                 => await mediator.Send(new ReplayArchivedTenantStripeEventsCommand { TenantId = id })
-            ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName)
+            ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName)
             .Produces<ReplayArchivedTenantStripeEventsResponse>();
         tenants.MapPost("/{id}/drift/acknowledge", async Task<ApiResult> (TenantId id, IMediator mediator)
             => await mediator.Send(new AcknowledgeBillingDriftCommand { TenantId = id })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
 
         var featureFlags = group.MapGroup("/feature-flags").WithTags("BackOfficeInternalFeatureFlags");
         featureFlags.MapGet("/", async Task<ApiResult<GetFeatureFlagsResponse>> ([AsParameters] GetFeatureFlagsQuery query, IMediator mediator)
@@ -164,27 +164,27 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         ).Produces<GetFeatureFlagUsersResponse>();
         featureFlags.MapPut("/{flagKey}/activate", async Task<ApiResult> (string flagKey, IMediator mediator)
             => await mediator.Send(new ActivateFeatureFlagCommand(flagKey))
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapPut("/{flagKey}/deactivate", async Task<ApiResult> (string flagKey, IMediator mediator)
             => await mediator.Send(new DeactivateFeatureFlagCommand(flagKey))
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapDelete("/{flagKey}", async Task<ApiResult> (string flagKey, IMediator mediator)
             => await mediator.Send(new DeleteFeatureFlagCommand(flagKey))
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapPut("/{flagKey}/tenant-override", async Task<ApiResult> (string flagKey, SetTenantFeatureFlagInternalCommand command, IMediator mediator)
             => await mediator.Send(command with { FlagKey = flagKey })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapPut("/{flagKey}/rollout-percentage", async Task<ApiResult> (string flagKey, SetFeatureFlagRolloutPercentageCommand command, IMediator mediator)
             => await mediator.Send(command with { FlagKey = flagKey })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapDelete("/{flagKey}/tenant-override", async Task<ApiResult> (string flagKey, TenantId tenantId, IMediator mediator)
             => await mediator.Send(new RemoveTenantFeatureFlagOverrideCommand { FlagKey = flagKey, TenantId = tenantId })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapPut("/{flagKey}/user-override", async Task<ApiResult> (string flagKey, SetUserFeatureFlagInternalCommand command, IMediator mediator)
             => await mediator.Send(command with { FlagKey = flagKey })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
         featureFlags.MapDelete("/{flagKey}/user-override", async Task<ApiResult> (string flagKey, UserId userId, TenantId tenantId, IMediator mediator)
             => await mediator.Send(new RemoveUserFeatureFlagOverrideCommand { FlagKey = flagKey, UserId = userId, TenantId = tenantId })
-        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeDelegationDefaults.DelegationAdminPolicyName);
     }
 }

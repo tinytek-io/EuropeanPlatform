@@ -1,4 +1,4 @@
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace BackOffice.Authentication;
 
 /// <summary>
 ///     Configuration for the back-office staff identity provider. Any standard OpenID Connect

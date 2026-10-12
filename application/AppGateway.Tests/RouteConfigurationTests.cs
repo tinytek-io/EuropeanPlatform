@@ -75,7 +75,8 @@ public sealed class RouteConfigurationTests(AppGatewayApplicationFactory factory
         route.Metadata?.GetValueOrDefault("HostnameKey").Should().Be("BackOffice");
         route.Transforms.Should().Contain(
             t => t.ContainsKey("RequestHeaderOriginalHost") && string.Equals(t["RequestHeaderOriginalHost"], "true", StringComparison.OrdinalIgnoreCase),
-            "the back-office API's RequireHost matches the original public host header");
+            "the back-office API's RequireHost matches the original public host header"
+        );
     }
 
     private RouteConfig GetRoute(string routeId)

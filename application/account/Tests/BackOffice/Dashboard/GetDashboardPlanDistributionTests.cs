@@ -4,7 +4,6 @@ using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -21,7 +20,7 @@ public sealed class GetDashboardPlanDistributionTests(BackOfficeWebApplicationFa
         SeedTenant("Standard Inc", SubscriptionPlan.Standard);
         SeedTenant("Premium Ltd", SubscriptionPlan.Premium);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -50,7 +49,7 @@ public sealed class GetDashboardPlanDistributionTests(BackOfficeWebApplicationFa
         var deletedTenantId = SeedTenant("Churned Premium", SubscriptionPlan.Premium);
         Connection.Update("tenants", "id", deletedTenantId.Value, [("deleted_at", DateTimeOffset.UtcNow.AddDays(-1))]);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

@@ -6,7 +6,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -28,7 +27,7 @@ public sealed class GetUnsyncedSubscriptionsSummaryTests(BackOfficeWebApplicatio
         var unsyncedTenant = SeedTenant("Unsynced Co");
         SeedPaidSubscription(unsyncedTenant, SubscriptionId.NewId(), 299m);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

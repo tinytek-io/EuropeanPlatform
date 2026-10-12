@@ -7,7 +7,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.BackOffice.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -31,7 +30,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -68,7 +67,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -109,7 +108,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -130,7 +129,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
     {
         // Arrange
         var tenant = DatabaseSeeder.Tenant1;
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -149,7 +148,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

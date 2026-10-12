@@ -7,7 +7,6 @@ using Account.Features.ExternalAuthentication.Domain;
 using Account.Features.Users.BackOffice.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,7 +24,7 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
         SeedEmailLogin(user.Email, false, EmailLogin.MaxAttempts, 60);
         SeedExternalLogin(user.Email, ExternalLoginResult.Success, 5);
         SeedExternalLogin(user.Email, ExternalLoginResult.IdentityProviderError, 120);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -49,7 +48,7 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
         var user = DatabaseSeeder.Tenant1Owner;
         SeedEmailLogin(user.Email, true, 0, 60 * 24 * 60); // 60 days
         SeedEmailLogin(user.Email, true, 0, 60 * 24 * 5); // 5 days
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -67,7 +66,7 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
     {
         // Arrange
         var unknownUserId = UserId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 
-namespace SharedKernel.Authentication.MockEasyAuth;
+namespace BackOffice.Authentication.MockEasyAuth;
 
 public sealed record MockEasyAuthIdentity(string Id, string Name, string Email, string ObjectId, ImmutableArray<string> Groups);
 

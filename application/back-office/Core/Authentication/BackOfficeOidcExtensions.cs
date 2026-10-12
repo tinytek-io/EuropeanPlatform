@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using SharedKernel.OpenIdConnect;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace BackOffice.Authentication;
 
 public static class BackOfficeOidcDefaults
 {

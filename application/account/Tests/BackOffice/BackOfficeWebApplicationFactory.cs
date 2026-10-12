@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
@@ -80,10 +79,10 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                 var backOfficeSettings = new Dictionary<string, string?>
                 {
                     ["BackOffice:Host"] = BackOfficeHost,
-                    // Match the AppHost wiring: mock admin identity carries this group id, so
-                    // configuring it here lets BackOfficeAdminAuthorizationHandler and GetMe.IsAdmin
-                    // resolve admin status the same way they do in dev.
-                    ["BackOffice:AdminsGroupId"] = MockEasyAuthIdentities.MockAdminsGroupId,
+                    // Match the AppHost wiring: the admin test identity carries this group id, so
+                    // configuring it here lets the DelegationAdmin gate resolve admin status the
+                    // same way it does in dev.
+                    ["BackOffice:AdminsGroupId"] = TestStaffIdentities.AdminsGroupId,
                     // The user-facing SPA shell is scoped to Hostnames:App via UseHostScopedSinglePageAppFallback.
                     // Tests that target the user-facing host use app.test.localhost.
                     ["Hostnames:App"] = "app.test.localhost"

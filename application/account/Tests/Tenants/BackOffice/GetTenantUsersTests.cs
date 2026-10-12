@@ -5,7 +5,6 @@ using Account.Features.Tenants.BackOffice.Queries;
 using Account.Features.Users.Domain;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -36,7 +35,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         );
         SeedUser(otherTenantId, "outsider@other.com", "Outsider", null, UserRole.Member);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -58,7 +57,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         var tenant = DatabaseSeeder.Tenant1;
         SeedUser(tenant.Id, "charlie@tenant-1.com", "Charlie", "Carter", UserRole.Member);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -80,7 +79,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         SeedUser(tenant.Id, "owner2@tenant-1.com", "Owen", "Two", UserRole.Owner);
         SeedUser(tenant.Id, "member1@tenant-1-extra.com", "Mike", "One", UserRole.Member);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -108,7 +107,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
             SeedUser(tenant.Id, $"member{index}@tenant-1.com", $"Member{index}", "User", UserRole.Member);
         }
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -128,7 +127,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

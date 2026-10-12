@@ -7,7 +7,6 @@ using Account.Features.Tenants.BackOffice.Commands;
 using Account.Integrations.OAuth;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Tests.Persistence;
 using Xunit;
 
@@ -27,7 +26,7 @@ public sealed class ReplayArchivedTenantStripeEventsTests(BackOfficeWebApplicati
         var archivedOccurredAt = DateTimeOffset.UtcNow.AddDays(-45);
         InsertArchivedSubscriptionCreatedEvent(archivedOccurredAt);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -110,7 +109,7 @@ public sealed class ReplayArchivedTenantStripeEventsTests(BackOfficeWebApplicati
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
@@ -155,7 +154,7 @@ public sealed class ReplayArchivedTenantStripeEventsTests(BackOfficeWebApplicati
         var oldEventId = $"evt_archive_old_{Guid.NewGuid():N}";
         InsertArchivedSubscriptionCreatedEventWithId(oldEventId, stripeDoesNotHaveOccurredAt);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
