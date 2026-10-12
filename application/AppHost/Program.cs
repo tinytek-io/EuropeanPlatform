@@ -319,6 +319,9 @@ var backOfficeApi = builder
     .AddProject<BackOffice_Api>("back-office-api")
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    // Force-on so staff see the back-office billing UI without Stripe configured — the same
+    // force-on account-api applies: the staff dashboard is where billing/revenue data lives.
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
     // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
     // localhost, the gateway hostname in publish mode).
     .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
