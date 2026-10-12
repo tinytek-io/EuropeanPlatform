@@ -362,12 +362,12 @@ public static class ApiDependencyConfiguration
         public IServiceCollection AddHttpForwardHeaders()
         {
             // Ensure correct client IP addresses are set for requests
-            // This is required when running behind a reverse proxy like YARP or Azure Container Apps
+            // This is required when running behind a reverse proxy like YARP or the cluster's ingress
             return services.Configure<ForwardedHeadersOptions>(options =>
                 {
-                    // X-Forwarded-For surfaces real upstream client IPs in Application Insights / logs.
+                    // X-Forwarded-For surfaces real upstream client IPs in telemetry and logs.
                     // X-Forwarded-Proto sets Request.Scheme so generated absolute URLs use https.
-                    // X-Forwarded-Host is intentionally NOT enabled: each Azure container app
+                    // X-Forwarded-Host is intentionally NOT enabled: each deployed workload
                     // registers only the SPA it serves (see Account.Api Program.cs), so endpoint
                     // matching no longer depends on Request.Host being rewritten from forwarded
                     // headers, and dev's dual-Kestrel setup delivers the right Host directly.

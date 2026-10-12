@@ -35,10 +35,6 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
         // exercise CORS themselves.
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, "https://localhost");
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, "https://localhost");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         Environment.SetEnvironmentVariable("Stripe__AllowMockProvider", "true");
         Environment.SetEnvironmentVariable("Stripe__PublishableKey", "pk_test_mock_publishable_key");
         Environment.SetEnvironmentVariable("BypassAntiforgeryValidation", "true");

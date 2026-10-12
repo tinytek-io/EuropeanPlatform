@@ -59,8 +59,7 @@ export function getBaseUrl(): string {
 
 /**
  * Get the back-office base URL for tests. Back-office runs as its own system on its
- * own Kestrel listener (BASE_PORT + 2) — its own host, not a listener on the account
- * API, mirroring the Azure post-split topology.
+ * own Kestrel listener (BASE_PORT + 2) — its own host, not a listener on the account API.
  */
 export function getBackOfficeBaseUrl(): string {
   return process.env.BACK_OFFICE_PUBLIC_URL ?? DEFAULT_BACK_OFFICE_BASE_URL;
