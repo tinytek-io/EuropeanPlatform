@@ -5,7 +5,6 @@ using System.Text.Json;
 using Account.Features.BackOffice.Invoices.Queries;
 using Account.Features.Subscriptions.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Tests.Persistence;
 using Xunit;
 
@@ -25,7 +24,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — no Statuses query param = "All" view.
@@ -50,7 +49,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Invoices" view maps to Paid+Pending+Failed; only RowKind=Invoice rows match.
@@ -78,7 +77,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Refunds and credit notes" maps to Refunded OR HasCreditNote.
@@ -100,7 +99,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         // the original payment succeeded; only the reversal row carries the Refunded signal.
         SeedTransactions(Refunded("inv_refunded", "2025-03-01T00:00:00Z"));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -122,7 +121,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         // Arrange — Stripe pro-rated refund edge case: a refund without an accompanying credit note.
         SeedTransactions(RefundedWithoutCreditNote("inv_refund_only", "2025-04-01T00:00:00Z", "2025-04-05T00:00:00Z"));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -147,7 +146,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             RefundedWithoutCreditNote("inv_refund_only", "2025-04-01T00:00:00Z", "2025-04-05T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — Refunded filter alone matches only RowKind=Refund.
@@ -170,7 +169,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         var paymentDate = "2025-04-01T00:00:00Z";
         SeedTransactions(RefundedWithLegacyNullDates("inv_legacy", paymentDate));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -196,7 +195,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             RefundedWithLegacyNullDates("inv_legacy", "2025-04-15T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -219,7 +218,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         var creditNoteDate = "2025-02-05T00:00:00Z";
         SeedTransactions(PaidWithCreditNote("inv_paid_cn", invoiceDate, creditNoteDate));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — descending by date is the default.

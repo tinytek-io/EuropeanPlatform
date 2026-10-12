@@ -6,10 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.OpenIdConnect;
 
-namespace SharedKernel.Authentication.MockEasyAuth;
+namespace BackOffice.Authentication.MockEasyAuth;
 
 public sealed class MockEasyAuthMiddleware(RequestDelegate next)
 {

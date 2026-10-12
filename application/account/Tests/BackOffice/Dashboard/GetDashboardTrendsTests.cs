@@ -9,7 +9,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Features.Users.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -27,7 +26,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedTenant("Yesterday Inc", now.AddDays(-1));
         SeedTenant("Three Days Ago Inc", now.AddDays(-3));
         SeedTenant("Outside Period Inc", now.AddDays(-20));
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -61,7 +60,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "today@example.com", now);
         SeedUser(tenant, "ten-days-ago@example.com", now.AddDays(-10));
         SeedUser(tenant, "outside@example.com", now.AddDays(-45));
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -89,7 +88,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedExternalLogin("user4@example.com", ExternalLoginResult.Success, now);
         SeedExternalLogin("user5@example.com", ExternalLoginResult.Success, now.AddDays(-2));
         SeedExternalLogin("user6@example.com", ExternalLoginResult.IdentityProviderError, now);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -109,7 +108,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenNoEventsInPeriod_ShouldReturnZeroFilledPoints()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -127,7 +126,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenMetricIsMissing_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -141,7 +140,7 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenPeriodIsMissing_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

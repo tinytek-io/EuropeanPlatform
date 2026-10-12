@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using Account.Features.Tenants.BackOffice.Commands;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.FeatureFlags;
 using SharedKernel.Tests.Persistence;
@@ -17,7 +16,7 @@ public sealed class SetTenantAbInclusionPinTests(BackOfficeWebApplicationFactory
     public async Task SetTenantAbInclusionPin_WhenAlwaysOn_ShouldPersistPin()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var command = new SetTenantAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 
@@ -41,7 +40,7 @@ public sealed class SetTenantAbInclusionPinTests(BackOfficeWebApplicationFactory
     {
         // Arrange - seed an existing pin to verify null clears it
         Connection.Update("tenants", "id", DatabaseSeeder.Tenant1.Id.Value, [("ab_inclusion_pin", nameof(AbInclusionPin.AlwaysOn))]);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var command = new SetTenantAbInclusionPinCommand { AbInclusionPin = null };
 
@@ -60,7 +59,7 @@ public sealed class SetTenantAbInclusionPinTests(BackOfficeWebApplicationFactory
     public async Task SetTenantAbInclusionPin_WhenTenantNotFound_ShouldReturnNotFound()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var unknownTenantId = TenantId.NewId();
         var command = new SetTenantAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
@@ -85,7 +84,7 @@ public sealed class SetTenantAbInclusionPinTests(BackOfficeWebApplicationFactory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act - first read flags without a pin: tenant is out of range, so flag is disabled
@@ -112,7 +111,7 @@ public sealed class SetTenantAbInclusionPinTests(BackOfficeWebApplicationFactory
     public async Task SetTenantAbInclusionPin_WhenNonAdminBackOfficeUser_ShouldReturnForbidden()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var command = new SetTenantAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 using SharedKernel.OpenApi;
 using SharedKernel.SinglePageApp;
 using Xunit;
@@ -204,8 +204,8 @@ public sealed class EndpointMetadataTests : IDisposable
             var endpointKey = BuildEndpointKey(endpoint);
             var declaredPolicies = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ToArray();
             var expectedPolicy = AdminPolicyBackOfficeRoutes.Contains(endpointKey)
-                ? BackOfficeIdentityDefaults.DelegationAdminPolicyName
-                : BackOfficeIdentityDefaults.DelegationPolicyName;
+                ? BackOfficeDelegationDefaults.DelegationAdminPolicyName
+                : BackOfficeDelegationDefaults.DelegationPolicyName;
 
             if (!declaredPolicies.Contains(expectedPolicy))
             {
@@ -214,7 +214,7 @@ public sealed class EndpointMetadataTests : IDisposable
         }
 
         violations.Should().BeEmpty(
-            $"every internal back-office write endpoint must declare its expected delegation policy: routes listed in {nameof(AdminPolicyBackOfficeRoutes)} require '{BackOfficeIdentityDefaults.DelegationAdminPolicyName}' (delegated staff member carries the admins group), every other write endpoint requires '{BackOfficeIdentityDefaults.DelegationPolicyName}' (any delegated staff member). Add new admin-gated mutations to the allowlist and add a `_WhenNonAdminDelegatedIdentity_ShouldReturnForbidden` test alongside the mutation."
+            $"every internal back-office write endpoint must declare its expected delegation policy: routes listed in {nameof(AdminPolicyBackOfficeRoutes)} require '{BackOfficeDelegationDefaults.DelegationAdminPolicyName}' (delegated staff member carries the admins group), every other write endpoint requires '{BackOfficeDelegationDefaults.DelegationPolicyName}' (any delegated staff member). Add new admin-gated mutations to the allowlist and add a `_WhenNonAdminDelegatedIdentity_ShouldReturnForbidden` test alongside the mutation."
         );
     }
 

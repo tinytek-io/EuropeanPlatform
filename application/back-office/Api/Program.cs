@@ -1,9 +1,10 @@
 using BackOffice;
 using BackOffice.Api;
+using BackOffice.Authentication;
+using BackOffice.Authentication.MockEasyAuth;
 using BackOffice.ExecutionContext;
 using Microsoft.Extensions.Options;
 using SharedKernel.Authentication;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Configuration;
 using SharedKernel.SinglePageApp;
 
@@ -74,6 +75,10 @@ if (!mockEasyAuthEnabled)
 
 // Dev-only; short-circuits before the auth-gated SPA fallback (see AddBackOfficeDevStaticProxy).
 app.UseBackOfficeDevStaticProxy(backOfficeHostname);
+
+// The MockEasyAuth selector (local development and explicitly opted-in environments) injects the
+// staff identity headers from the dev cookie; must run before authentication.
+app.UseMockEasyAuthInDevelopment();
 
 app.UseApiServices(); // Add common configuration for all APIs like Swagger, HSTS, and DeveloperExceptionPage.
 

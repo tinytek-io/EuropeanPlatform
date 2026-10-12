@@ -5,7 +5,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -26,7 +25,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         SeedBillingEvent(tenantId, subscriptionId, BillingEventType.SubscriptionCreated, now.AddHours(-3), "evt_created", toPlan: SubscriptionPlan.Standard);
         SeedBillingEvent(tenantId, subscriptionId, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_upgraded", SubscriptionPlan.Standard, SubscriptionPlan.Premium, 30m, currency: MockStripeClient.MockStandardCurrency);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -58,7 +57,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         SeedBillingEvent(tenantId, subscriptionId, BillingEventType.SubscriptionRenewed, now.AddHours(-3), "evt_b", toPlan: SubscriptionPlan.Standard);
         SeedBillingEvent(tenantId, subscriptionId, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_c", SubscriptionPlan.Standard, SubscriptionPlan.Premium);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -77,7 +76,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
     public async Task GetDashboardRecentStripeEvents_WhenCalledWithInvalidLimit_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

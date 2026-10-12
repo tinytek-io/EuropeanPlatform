@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace BackOffice.Authentication;
 
 public sealed class BackOfficeIdentityHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,

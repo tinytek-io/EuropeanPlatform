@@ -7,7 +7,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Users.Domain;
 using FluentAssertions;
 using SharedKernel.Authentication;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests;
 using SharedKernel.Tests.Persistence;
@@ -24,18 +23,15 @@ namespace Account.Tests.BackOffice.FeatureFlags;
 // staff can investigate state without being able to change it.
 public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory factory) : BackOfficeEndpointBaseTest(factory), IClassFixture<BackOfficeWebApplicationFactory>
 {
-    private const string RegularBackOfficeIdentityId = "user";
-    private const string AdminBackOfficeIdentityId = "admin";
-
     private HttpClient CreateRegularBackOfficeClient()
     {
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == RegularBackOfficeIdentityId);
+        var identity = TestStaffIdentities.User;
         return CreateBackOfficeClientForIdentity(identity);
     }
 
     private HttpClient CreateAdminBackOfficeClient()
     {
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == AdminBackOfficeIdentityId);
+        var identity = TestStaffIdentities.Admin;
         return CreateBackOfficeClientForIdentity(identity);
     }
 

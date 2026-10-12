@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using Account.Features.Tenants.BackOffice.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using Xunit;
 
@@ -16,7 +15,7 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
     {
         // Arrange
         var tenant = DatabaseSeeder.Tenant1;
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
@@ -34,7 +33,7 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act

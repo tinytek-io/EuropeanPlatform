@@ -17,6 +17,7 @@
         <ProjectReference Include="..\account\Migrator\Account.Migrator.csproj"/>
         <ProjectReference Include="..\account\Workers\Account.Workers.csproj"/>
         <ProjectReference Include="..\back-office\Api\BackOffice.Api.csproj"/>
+        <ProjectReference Include="..\back-office\Core\BackOffice.csproj" IsAspireProjectResource="false"/>
         <ProjectReference Include="..\AppGateway\AppGateway.csproj"/>
         <ProjectReference Include="..\main\Api\Main.Api.csproj"/>
         <ProjectReference Include="..\main\Migrator\Main.Migrator.csproj"/>
