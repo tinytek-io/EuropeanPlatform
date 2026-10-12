@@ -12,6 +12,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Api\BackOffice.Api.csproj"/>
         <ProjectReference Include="..\Core\BackOffice.csproj"/>
         <ProjectReference Include="..\..\shared-kernel\Tests\SharedKernel.Tests.csproj"/>
     </ItemGroup>
