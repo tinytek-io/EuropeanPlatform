@@ -20,6 +20,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="BackOffice.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\Core\BackOffice.csproj"/>
     </ItemGroup>
 
