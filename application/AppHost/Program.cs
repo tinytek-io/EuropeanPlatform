@@ -22,7 +22,7 @@ OverrideAspireDashboardEnvironmentVariables(ports);
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Publish mode targets a real cluster, so the localhost-only concerns below (port probing, dev
-// certificates, Azurite bootstrapping) must not run. CheckPortAvailability in particular calls
+// certificates, emulator bootstrapping) must not run. CheckPortAvailability in particular calls
 // Environment.Exit(1) when Aspire is already running locally, which would abort every publish.
 var isPublishMode = builder.ExecutionContext.IsPublishMode;
 
@@ -160,7 +160,7 @@ if (isPublishMode)
 }
 else
 {
-    // Fixed local development credentials, safe like the Azurite key they replace. SeaweedFS's
+    // Fixed local development credentials, safe for a local-only emulator. SeaweedFS's
     // default IAM accepts any credentials without configuration, so the values only exist to keep
     // the connection string shape identical to production.
     const string storageAccessKey = "seaweed-admin";
@@ -516,9 +516,9 @@ if (isPublishMode)
 // HTTPS-only Kestrel (SharedKernel's AddInternalTls), and probes/env/routing on 8443.
 string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway", "back-office-api"];
 
-// Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
-// the YARP gateway; the back-office hostname bypasses it and hits account-api directly,
-// mirroring the Azure post-split topology. cert-manager is installed BY THE CHART (same
+// Public ingress: one Cilium (Envoy) Gateway with two hostnames. Both terminate at the YARP
+// gateway, which routes the app hostname to the feature APIs and the back-office hostname to
+// the back-office API. cert-manager is installed BY THE CHART (same
 // upstream v1.20.2 the cluster-ops steps used to apply by hand, with CRDs and the Gateway API
 // shim enabled) and owns the production issuer: DNS/TLS bring-up is complete and the staging
 // endpoint's rate-limit protection is no longer needed.

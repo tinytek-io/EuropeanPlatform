@@ -25,10 +25,6 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
         // validate these at host startup, mirroring account's test factory.
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, "https://localhost");
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, "https://localhost");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         Environment.SetEnvironmentVariable("BypassAntiforgeryValidation", "true");
     }
 

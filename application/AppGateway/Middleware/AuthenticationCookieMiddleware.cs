@@ -298,7 +298,7 @@ public sealed class AuthenticationCookieMiddleware(
 
         var validationParameters = tokenSigningClient.GetTokenValidationParameters(
             validateLifetime: false, // We validate the lifetime manually
-            clockSkew: TimeSpan.FromSeconds(2) // In Azure, we don't need any clock skew, but this must be a lower value than in downstream APIs
+            clockSkew: TimeSpan.FromSeconds(2) // In the cluster, we don't need any clock skew, but this must be a lower value than in downstream APIs
         );
 
         var validationResult = await TokenHandler.ValidateTokenAsync(token, validationParameters);

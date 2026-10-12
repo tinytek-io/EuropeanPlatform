@@ -21,8 +21,8 @@ public static class SharedInfrastructureConfiguration
 {
     // True when the process runs as a deployed workload rather than on a developer machine or in a
     // test host. Container images set ASPNETCORE_ENVIRONMENT=Production; local Aspire runs set
-    // Development; test hosts leave it unset. This replaces the previous "IsRunningInAzure"
-    // distinction with the one it actually meant: deployed versus developer machine.
+    // Development; test hosts leave it unset. The distinction it tracks is deployed versus
+    // developer machine, not any specific cloud.
     public static readonly bool IsRunningInCloud =
         (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")) == "Production";
 
@@ -276,7 +276,7 @@ public static class SharedInfrastructureConfiguration
                                 {
                                     options.EnrichWithHttpRequest = PublicHostTelemetryEnricher.Enrich;
                                     // 4xx is a client problem (validation, auth, missing route); the server handled it.
-                                    // Mark OK so Application Insights doesn't flag it; only 5xx is a real server error.
+                                    // Mark OK so dashboards don't flag it; only 5xx is a real server error.
                                     options.EnrichWithHttpResponse = (activity, response) =>
                                     {
                                         if (response.StatusCode is >= 400 and < 500) activity.SetStatus(ActivityStatusCode.Ok);
@@ -284,9 +284,7 @@ public static class SharedInfrastructureConfiguration
                                 }
                             )
                             .AddGrpcClientInstrumentation()
-                            .AddHttpClientInstrumentation(options =>
-                                options.EnrichWithHttpRequestMessage = PublicHostTelemetryEnricher.EnrichOutbound
-                            );
+                            .AddHttpClientInstrumentation();
                     }
                 );
 

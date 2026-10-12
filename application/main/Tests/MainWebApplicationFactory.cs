@@ -30,10 +30,6 @@ public class MainWebApplicationFactory : WebApplicationFactory<Program>
     {
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, TestPublicUrl);
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, $"{TestPublicUrl}/main");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         // ASP.NET uses a cryptographic double-submit antiforgery pattern that encrypts the user's
         // ClaimUid in the token, which is complex to replicate in tests; the middleware honors this
         // env var to bypass validation.
