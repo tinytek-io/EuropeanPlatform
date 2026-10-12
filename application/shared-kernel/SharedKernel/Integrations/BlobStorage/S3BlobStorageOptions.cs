@@ -2,7 +2,7 @@ namespace SharedKernel.Integrations.BlobStorage;
 
 /// <summary>
 ///     Connection details for an S3-compatible object store (Scaleway Object Storage in production,
-///     MinIO in local development), expressed as a single connection string so it flows through the
+///     SeaweedFS in local development), expressed as a single connection string so it flows through the
 ///     existing `ConnectionStrings:blob-storage` configuration key and deploy-time secret inputs.
 ///     Format: `ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=...;SecretKey=...;Region=fr-par;ForcePathStyle=false`.
 /// </summary>
@@ -11,7 +11,7 @@ namespace SharedKernel.Integrations.BlobStorage;
 ///     so deployed environments prefix every bucket with an environment-unique string
 ///     (`BucketPrefix=pp-stage-`). The applications keep using logical bucket names ("avatars",
 ///     "data-protection") and this prefix turns them into the actual, TF-owned bucket names. Local
-///     development (MinIO) has no such constraint and omits the entry.
+///     development (SeaweedFS) has no such constraint and omits the entry.
 /// </remarks>
 public sealed record S3BlobStorageOptions(
     string ServiceUrl,
@@ -46,7 +46,7 @@ public sealed record S3BlobStorageOptions(
 
         // The region is derived from the service URL host (e.g. s3.fr-par.scw.cloud -> fr-par) so
         // Scaleway endpoints work without repeating it; hosts without a region label (e.g. the
-        // MinIO localhost endpoint) must state it explicitly.
+        // the SeaweedFS localhost endpoint) must state it explicitly.
         var region = parts.GetValueOrDefault("Region");
         if (string.IsNullOrEmpty(region))
         {
