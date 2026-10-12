@@ -75,3 +75,91 @@ public sealed record PaymentTransactionId(string Value) : StronglyTypedUlid<Paym
 /// <summary>Mirrors account's BillingEventId (a ULID).</summary>
 [PublicAPI]
 public sealed record BillingEventId(string Value) : StronglyTypedUlid<BillingEventId>(Value);
+
+/// <summary>Mirrors account's UserRole.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum UserRole
+{
+    Member,
+    Admin,
+    Owner
+}
+
+/// <summary>Mirrors account's PlannedSubscriptionChange.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PlannedSubscriptionChange
+{
+    Cancellation,
+    ScheduledPlanChange
+}
+
+/// <summary>Mirrors account's DeviceType.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DeviceType
+{
+    Unknown,
+    Desktop,
+    Mobile,
+    Tablet
+}
+
+/// <summary>Mirrors account's SessionRevokedReason.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SessionRevokedReason
+{
+    LoggedOut,
+    Revoked,
+    ReplayAttackDetected,
+    SwitchTenant
+}
+
+/// <summary>Mirrors account's ExternalProviderType.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ExternalProviderType
+{
+    Google
+}
+
+/// <summary>Mirrors account's LoginEventKind.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LoginEventKind
+{
+    Email,
+    External
+}
+
+/// <summary>Mirrors account's LoginEventOutcome.</summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LoginEventOutcome
+{
+    Pending,
+    Succeeded,
+    Failed
+}
+
+/// <summary>
+///     Mirrors account's FeatureFlagSource: the snake-case wire vocabulary the frontend filters on
+///     travels through JsonStringEnumMemberName, so both the member names and the wire names must
+///     stay in sync.
+/// </summary>
+[PublicAPI]
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum FeatureFlagSource
+{
+    [JsonStringEnumMemberName("manual_override")]
+    Manual,
+
+    [JsonStringEnumMemberName("plan")] Plan,
+
+    [JsonStringEnumMemberName("ab_rollout")]
+    AbRollout,
+
+    [JsonStringEnumMemberName("default")] Default
+}

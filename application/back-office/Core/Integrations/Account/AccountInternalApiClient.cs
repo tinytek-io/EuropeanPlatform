@@ -4,7 +4,9 @@ using BackOffice.Features.BillingDrift;
 using BackOffice.Features.BillingEvents;
 using BackOffice.Features.Dashboard;
 using BackOffice.Features.Invoices;
+using BackOffice.Features.Users;
 using SharedKernel.Configuration;
+using SharedKernel.Domain;
 
 namespace BackOffice.Integrations.Account;
 
@@ -119,6 +121,42 @@ public sealed class AccountInternalApiClient(HttpClient httpClient)
     public async Task<DashboardMrrConsistencySummaryResponse> GetDashboardMrrConsistencySummaryAsync(CancellationToken cancellationToken)
     {
         return await GetAsync<DashboardMrrConsistencySummaryResponse>("/billing-drift/mrr-consistency-summary", cancellationToken);
+    }
+
+    public async Task<BackOfficeUsersResponse> GetBackOfficeUsersAsync(GetBackOfficeUsersQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<BackOfficeUsersResponse>("/users", cancellationToken,
+            ("search", query.Search),
+            ("roles", query.Roles),
+            ("activity", query.Activity),
+            ("orderBy", query.OrderBy),
+            ("sortOrder", query.SortOrder),
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<BackOfficeUserDetailResponse> GetBackOfficeUserDetailAsync(UserId id, CancellationToken cancellationToken)
+    {
+        return await GetAsync<BackOfficeUserDetailResponse>($"/users/{id.Value}", cancellationToken);
+    }
+
+    public async Task<BackOfficeUserSessionsResponse> GetBackOfficeUserSessionsAsync(GetBackOfficeUserSessionsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<BackOfficeUserSessionsResponse>($"/users/{query.Id.Value}/sessions", cancellationToken,
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<BackOfficeUserLoginHistoryResponse> GetBackOfficeUserLoginHistoryAsync(GetBackOfficeUserLoginHistoryQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<BackOfficeUserLoginHistoryResponse>($"/users/{query.Id.Value}/login-history", cancellationToken);
+    }
+
+    public async Task<GetUserFeatureFlagsResponse> GetUserFeatureFlagsAsync(GetUserFeatureFlagsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<GetUserFeatureFlagsResponse>($"/users/{query.UserId.Value}/feature-flags", cancellationToken);
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken, params (string Key, object? Value)[] parameters)
