@@ -33,7 +33,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -73,7 +73,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -109,7 +109,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -140,7 +140,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -178,7 +178,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -209,7 +209,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -246,7 +246,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -268,7 +268,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -287,7 +287,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

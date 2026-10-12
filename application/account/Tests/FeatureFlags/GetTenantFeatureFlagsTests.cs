@@ -22,7 +22,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -46,7 +46,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -69,7 +69,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -98,7 +98,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -126,7 +126,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert — the row Source stays Manual (the override is authoritative for that column), but
         // IsEnabled must be false because the base row is globally deactivated.
@@ -147,7 +147,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{nonExistentId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{nonExistentId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -162,7 +162,7 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

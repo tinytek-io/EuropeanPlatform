@@ -20,7 +20,7 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/activity");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/activity");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -38,7 +38,7 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/activity");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/activity");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

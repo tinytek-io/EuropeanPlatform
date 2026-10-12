@@ -8,7 +8,6 @@ using Account.Features.Users.BackOffice.Queries;
 using Account.Features.Users.Domain;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
@@ -27,7 +26,7 @@ public sealed class GetBackOfficeUserDetailTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{user.Id}");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{user.Id}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -52,7 +51,7 @@ public sealed class GetBackOfficeUserDetailTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{primaryUserId}");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{primaryUserId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -81,7 +80,7 @@ public sealed class GetBackOfficeUserDetailTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{unknownUserId}");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{unknownUserId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -95,24 +94,10 @@ public sealed class GetBackOfficeUserDetailTests(BackOfficeWebApplicationFactory
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetBackOfficeUserDetail_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name)

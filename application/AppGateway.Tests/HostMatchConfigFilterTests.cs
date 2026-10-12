@@ -8,9 +8,10 @@ namespace AppGateway.Tests;
 
 public sealed class HostMatchConfigFilterTests
 {
+    private const string BackOfficeHost = "back-office.dev.localhost";
     private const string AppHost = "app.dev.localhost";
 
-    private readonly HostMatchConfigFilter _filter = new(Options.Create(new HostnamesOptions { App = AppHost }));
+    private readonly HostMatchConfigFilter _filter = new(Options.Create(new HostnamesOptions { App = AppHost, BackOffice = BackOfficeHost }));
 
     [Fact]
     public async Task ConfigureRouteAsync_WhenMetadataReferencesApp_ShouldInjectAppHostnameOnly()
@@ -21,7 +22,7 @@ public sealed class HostMatchConfigFilterTests
         // Act
         var result = await _filter.ConfigureRouteAsync(route, null, CancellationToken.None);
 
-        // Assert
+        // Assert -- the App key injects the app hostname only; wildcard routes get both hosts.
         result.Match.Hosts.Should().BeEquivalentTo(AppHost);
     }
 
@@ -35,7 +36,7 @@ public sealed class HostMatchConfigFilterTests
         var result = await _filter.ConfigureRouteAsync(route, null, CancellationToken.None);
 
         // Assert
-        result.Match.Hosts.Should().BeEquivalentTo(AppHost);
+        result.Match.Hosts.Should().BeEquivalentTo(AppHost, BackOfficeHost);
     }
 
     [Fact]

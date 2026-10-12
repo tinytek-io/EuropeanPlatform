@@ -25,7 +25,7 @@ public sealed class GetDashboardPlanDistributionTests(BackOfficeWebApplicationFa
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/plan-distribution");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/plan-distribution");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -54,7 +54,7 @@ public sealed class GetDashboardPlanDistributionTests(BackOfficeWebApplicationFa
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/plan-distribution");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/plan-distribution");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -73,7 +73,7 @@ public sealed class GetDashboardPlanDistributionTests(BackOfficeWebApplicationFa
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/plan-distribution");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/plan-distribution");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

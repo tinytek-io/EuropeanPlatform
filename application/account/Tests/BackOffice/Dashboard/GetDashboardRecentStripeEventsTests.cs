@@ -30,7 +30,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-stripe-events?Limit=10");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-stripe-events?Limit=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -62,7 +62,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-stripe-events?Limit=2");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-stripe-events?Limit=2");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -81,7 +81,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-stripe-events?Limit=999");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-stripe-events?Limit=999");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -94,7 +94,7 @@ public sealed class GetDashboardRecentStripeEventsTests(BackOfficeWebApplication
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-stripe-events?Limit=6");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-stripe-events?Limit=6");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
