@@ -29,7 +29,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/user-counts");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/user-counts");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -52,7 +52,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/user-counts");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/user-counts");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -71,7 +71,7 @@ public sealed class GetTenantUserCountsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/user-counts");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/user-counts");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

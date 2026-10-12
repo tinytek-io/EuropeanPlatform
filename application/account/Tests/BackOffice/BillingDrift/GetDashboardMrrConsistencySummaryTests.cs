@@ -29,7 +29,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/mrr-consistency-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/mrr-consistency-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -55,7 +55,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/mrr-consistency-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/mrr-consistency-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -81,7 +81,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/mrr-consistency-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/mrr-consistency-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -99,7 +99,7 @@ public sealed class GetDashboardMrrConsistencySummaryTests(BackOfficeWebApplicat
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/mrr-consistency-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/mrr-consistency-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

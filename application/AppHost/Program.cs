@@ -91,13 +91,11 @@ var backOfficePublicHostname = isPublishMode
     : backOfficeHostname;
 
 var appBaseUrl = $"https://{appHostname}:{ports.AppGateway}";
-// Localhost mirrors the Azure post-split topology: back-office traffic bypasses AppGateway and
-// hits the consolidated account-api process directly on a dedicated Kestrel port.
-var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.BackOfficeApi}";
+// In dev the back-office SPA is served by the back-office system's dedicated Kestrel listener.
+var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemApi}";
 // In publish mode the scheme+hostname is the public URL seen by browsers; internally the gateway
 // forwards plain HTTP to the workloads.
 var appPublicUrl = $"https://{appPublicHostname}";
-var backOfficePublicUrl = $"https://{backOfficePublicHostname}";
 
 // Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff exists;
 // production leaves MockEasyAuth:Enabled unset so the middleware and the /login picker stay off.
@@ -233,16 +231,15 @@ if (!isPublishMode)
 
 var accountApi = builder
     .AddProject<Account_Api>("account-api")
-    // Back-office bundle URLs target the public back-office origin (dedicated Kestrel port on
-    // localhost, cluster gateway hostname in publish mode).
-    .WithEnvironment("BACK_OFFICE_PUBLIC_URL", backOfficePublicUrl)
-    .WithEnvironment("BACK_OFFICE_CDN_URL", backOfficePublicUrl)
     .WithUrlConfiguration(appHostname, isPublishMode ? null : ports.AppGateway, "/account")
     // Google OAuth's redirect_uri whitelist requires literal 'localhost' in development, not
     // subdomains like 'app.dev.localhost'; the callback then 301's via LocalhostRedirectMiddleware
     // back to the canonical dev hostname. In publish mode the public URL is the real one.
     .WithEnvironment("OAUTH_PUBLIC_URL", isPublishMode ? appPublicUrl : "https://localhost:" + ports.AppGateway)
     .WithEnvironment("Hostnames__App", appPublicHostname)
+    // The internal API's DelegationAdmin gate reads the admins group id (BackOfficeHostOptions is
+    // bound by the AccountAndBackOffice document layout); the host value only satisfies its
+    // startup validation — the staff-facing routes live in the back-office system.
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
     .WithReference(accountDatabase)
@@ -263,64 +260,11 @@ var accountApi = builder
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
     .WaitFor(accountWorkers);
 
-// Second Kestrel port for back-office.dev.localhost so localhost mirrors the Azure post-split
-// topology where back-office has its own external ingress and AppGateway is not in the path.
-// BACK_OFFICE_STATIC_PORT drives the BackOfficeDevStaticProxy to the rsbuild dev server; both are
-// development-only listeners (bound by AddDevelopmentPort), so they stay out of published charts.
+// KESTREL_PORT is a development-only listener (bound by AddDevelopmentPort), so it stays out of
+// published charts; in containers the image default (8080) applies.
 if (!isPublishMode)
 {
-    accountApi
-        .WithEnvironment("KESTREL_PORT", ports.AccountApi.ToString())
-        .WithEnvironment("BACK_OFFICE_KESTREL_PORT", ports.BackOfficeApi.ToString())
-        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
-}
-
-// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
-// provider — and points the back-office staff sign-in at it. This exercises the same generic
-// flow a production provider will use: discovery, authorization code + PKCE, the callback at
-// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
-// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
-// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
-if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
-{
-    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
-
-    // Authelia's client registration needs the back-office callback URL, whose port comes from
-    // .workspace/port.txt — generate the effective configuration (from the template checked in
-    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
-    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
-    Directory.CreateDirectory(autheliaConfigFolder);
-    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
-    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
-    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
-    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeApi}/.auth/login/aad/callback";
-    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
-        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
-        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
-    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
-    foreach (var autheliaFile in new[] { "users_database.yml" })
-    {
-        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
-    }
-
-    builder
-        .AddContainer("authelia", "authelia/authelia:4.38")
-        .WithHttpEndpoint(9091, 9091, "https")
-        .WithBindMount(autheliaConfigFolder, "/config")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
-        .WaitFor(autheliaRedis);
-
-    accountApi
-        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
-        .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
-        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
-        // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
-        // and token requests) must tolerate it. Dev-harness only; production providers have
-        // trusted certificates and leave this unset.
-        .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
-        // The mock login picker would offer a bypass around the real provider's login screen.
-        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
+    accountApi.WithEnvironment("KESTREL_PORT", ports.AccountApi.ToString());
 }
 
 // The container listens on the image default port 8080; the Service fronts it on 80. The
@@ -379,11 +323,17 @@ if (isPublishMode)
 var backOfficeApi = builder
     .AddProject<BackOffice_Api>("back-office-api")
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId);
+    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
+    // localhost, the gateway hostname in publish mode).
+    .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
 
 if (!isPublishMode)
 {
-    backOfficeApi.WithEnvironment("KESTREL_PORT", ports.BackOfficeSystemApi.ToString());
+    backOfficeApi
+        .WithEnvironment("KESTREL_PORT", ports.BackOfficeSystemApi.ToString())
+        // Drives the dev static proxy to the rsbuild dev server.
+        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
 }
 
 if (isPublishMode)
@@ -399,14 +349,65 @@ if (isPublishMode)
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));
 }
 
+// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
+// provider — and points the back-office staff sign-in at it. This exercises the same generic
+// flow a production provider will use: discovery, authorization code + PKCE, the callback at
+// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
+// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
+// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
+if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
+{
+    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
+
+    // Authelia's client registration needs the back-office callback URL, whose port comes from
+    // .workspace/port.txt — generate the effective configuration (from the template checked in
+    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
+    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
+    Directory.CreateDirectory(autheliaConfigFolder);
+    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
+    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
+    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
+    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemApi}/.auth/login/aad/callback";
+    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
+        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
+        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
+    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
+    foreach (var autheliaFile in new[] { "users_database.yml" })
+    {
+        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
+    }
+
+    builder
+        .AddContainer("authelia", "authelia/authelia:4.38")
+        .WithHttpEndpoint(9091, 9091, "https")
+        .WithBindMount(autheliaConfigFolder, "/config")
+        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
+        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
+        .WaitFor(autheliaRedis);
+
+    backOfficeApi
+        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
+        .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
+        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
+        // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
+        // and token requests) must tolerate it. Dev-harness only; production providers have
+        // trusted certificates and leave this unset.
+        .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
+        // The mock login picker would offer a bypass around the real provider's login screen.
+        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
+}
+
 var appGateway = builder
     .AddProject<AppGateway>("app-gateway")
     .WithReference(frontendBuild)
     .WithReference(accountApi)
     .WithReference(mainApi)
+    .WithReference(backOfficeApi)
     .WaitFor(accountApi)
+    .WaitFor(backOfficeApi)
     .WaitFor(frontendBuild)
     .WithEnvironment("Hostnames__App", appPublicHostname)
+    .WithEnvironment("Hostnames__BackOffice", backOfficePublicHostname)
     .WithUrls(context =>
         {
             // Replace the auto-published "https" endpoint URL with three explicit dashboard URLs.
@@ -439,6 +440,7 @@ if (isPublishMode)
         .WithHttpsEndpoint(8443, 8443, "https")
         .WithExternalHttpEndpoints()
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"))
+        .WithEnvironment("BACK_OFFICE_API_URL", backOfficeApi.GetEndpoint("https"))
         .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("https"))
         .WithEnvironment("ACCOUNT_STORAGE_URL", accountStorageUrl)
         .WithEnvironment("MAIN_STORAGE_URL", mainStorageUrl)
@@ -543,7 +545,10 @@ if (isPublishMode && kubernetes is not null)
 
     publicGateway
         .WithRoute(appPublicHostname, "/", appGateway.GetEndpoint("https"))
-        .WithRoute(backOfficePublicHostname, "/", accountApi.GetEndpoint("https"));
+        // Both public hostnames flow through the gateway: the YARP back-office route targets the
+        // back-office API, and the gateway's wildcard avatar/logo storage routes serve blobs for
+        // BOTH hostnames — the back-office system itself holds no blob proxy (bounded context).
+        .WithRoute(backOfficePublicHostname, "/", appGateway.GetEndpoint("https"));
 
     // Two patches to the generated chart, applied right after chart generation so helm consumes
     // them (chart-consuming steps run after final actions):

@@ -22,7 +22,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{userId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{userId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -58,7 +58,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{userId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{userId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -101,7 +101,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{userId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{userId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -130,7 +130,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{userId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{userId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -150,7 +150,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{nonExistentId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{nonExistentId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -165,7 +165,7 @@ public sealed class GetUserFeatureFlagsTests(BackOfficeWebApplicationFactory fac
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{userId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{userId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

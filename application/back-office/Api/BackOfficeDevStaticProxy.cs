@@ -4,12 +4,12 @@ using Microsoft.AspNetCore.Http.Extensions;
 using SharedKernel.Configuration;
 using Yarp.ReverseProxy.Forwarder;
 
-namespace Account.Api;
+namespace BackOffice.Api;
 
-// Non-Azure proxy that forwards back-office static-asset and HMR traffic from the back-office Kestrel
-// listener (BACK_OFFICE_KESTREL_PORT) to the rsbuild dev server (BACK_OFFICE_STATIC_PORT). Azure
-// deployments bake the bundle into BackOffice/dist and serve it via UseStaticFiles, so this
-// proxy is registered only outside Azure. The proxy must run before authentication so anonymous
+// Development-only proxy that forwards the SPA's static-asset and HMR traffic from the back-office
+// Kestrel listener to the rsbuild dev server (BACK_OFFICE_STATIC_PORT, set by the AppHost).
+// Deployed environments bake the bundle into WebApp/dist and serve it via the SPA fallback, so
+// the proxy is registered only outside the cloud. It must run before authentication so anonymous
 // browsers can fetch /static/*, /rsbuild-hmr, and HMR /{filename}.hot-update.{ext} during the SPA
 // bootstrap.
 public static class BackOfficeDevStaticProxy

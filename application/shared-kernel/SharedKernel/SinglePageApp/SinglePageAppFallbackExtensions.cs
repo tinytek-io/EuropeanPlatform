@@ -288,7 +288,7 @@ public static class SinglePageAppFallbackExtensions
 
         // Registers one MapFallback per host-scoped SPA so a single process can serve multiple SPAs
         // bound to different hostnames (e.g. local Aspire hosting account/WebApp on app.dev.localhost
-        // and account/BackOffice on back-office.dev.localhost via dual Kestrel listeners). Each entry
+        // with back-office served by its own system). Each entry
         // serves its own bundle directory, embeds its own userInfo, and is restricted via RequireHost.
         // In production, prefer UseSingleSpaFallback: each container app runs the same image but only
         // serves one SPA, removing the dependency on Request.Host being correctly rewritten from

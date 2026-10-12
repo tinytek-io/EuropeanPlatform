@@ -31,7 +31,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -62,7 +62,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?EventTypes=SubscriptionUpgraded&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?EventTypes=SubscriptionUpgraded&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -88,7 +88,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?Search=Acme&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?Search=Acme&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -115,8 +115,8 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var firstPage = await client.GetFromJsonAsync<BillingEventsResponse>("/api/back-office/billing-events?PageOffset=0&PageSize=2");
-        var secondPage = await client.GetFromJsonAsync<BillingEventsResponse>("/api/back-office/billing-events?PageOffset=1&PageSize=2");
+        var firstPage = await client.GetFromJsonAsync<BillingEventsResponse>("/internal-api/back-office/billing-events?PageOffset=0&PageSize=2");
+        var secondPage = await client.GetFromJsonAsync<BillingEventsResponse>("/internal-api/back-office/billing-events?PageOffset=1&PageSize=2");
 
         // Assert
         firstPage.Should().NotBeNull();
@@ -146,7 +146,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         var occurredFrom = Uri.EscapeDataString(now.AddHours(-2).ToString("O"));
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/billing-events?OccurredFrom={occurredFrom}&PageSize=10");
+        var response = await client.GetAsync($"/internal-api/back-office/billing-events?OccurredFrom={occurredFrom}&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -170,7 +170,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?OrderBy=OccurredAt&SortOrder=Ascending&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?OrderBy=OccurredAt&SortOrder=Ascending&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -188,7 +188,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -208,7 +208,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         var oversizedSearch = new string('a', 101);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/billing-events?Search={oversizedSearch}");
+        var response = await client.GetAsync($"/internal-api/back-office/billing-events?Search={oversizedSearch}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -222,7 +222,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=101");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=101");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -235,7 +235,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

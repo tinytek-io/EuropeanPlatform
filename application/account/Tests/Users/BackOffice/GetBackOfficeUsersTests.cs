@@ -9,7 +9,6 @@ using Account.Features.Users.Domain;
 using Account.Integrations.Stripe;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
@@ -31,7 +30,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=alice.unique");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=alice.unique");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -53,7 +52,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=alice%20wonderland");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=alice%20wonderland");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -76,7 +75,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=cynical");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=cynical");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -107,7 +106,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users");
+        var response = await client.GetAsync("/internal-api/back-office/users");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -130,7 +129,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=filterable&roles=Owner&roles=Admin");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=filterable&roles=Owner&roles=Admin");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -153,7 +152,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=activity&activity=ActiveLast24Hours");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=activity&activity=ActiveLast24Hours");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -175,7 +174,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=inactivity&activity=InactiveOver30Days");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=inactivity&activity=InactiveOver30Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -200,7 +199,7 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=pageable&pageSize=10&pageOffset=2");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=pageable&pageSize=10&pageOffset=2");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -228,8 +227,8 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var basisResponse = await client.GetAsync("/api/back-office/users?search=basis-user");
-        var standardResponse = await client.GetAsync("/api/back-office/users?search=standard-user");
+        var basisResponse = await client.GetAsync("/internal-api/back-office/users?search=basis-user");
+        var standardResponse = await client.GetAsync("/internal-api/back-office/users?search=standard-user");
 
         // Assert
         var basisPayload = await basisResponse.Content.ReadFromJsonAsync<BackOfficeUsersResponse>();
@@ -255,24 +254,10 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=anything");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=anything");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetBackOfficeUsers_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync("/api/back-office/users?search=anything");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name, SubscriptionPlan plan = SubscriptionPlan.Basis)

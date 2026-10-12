@@ -149,7 +149,7 @@ public sealed class BillingEvent : AggregateRoot<BillingEventId>, ITenantScopedE
 /// <summary>
 ///     The type of subscription-relevant Stripe event recorded by the BillingEvent log.
 ///     IMPORTANT: when adding a new value, also add it to the multi-select on /billing-events
-///     (see <c>application/account/BackOffice/routes/billing-events/-components/BillingEventsToolbar.tsx</c>,
+///     (see <c>application/back-office/WebApp/routes/billing-events/-components/BillingEventsToolbar.tsx</c>,
 ///     constant <c>ALL_EVENT_TYPES</c>). The toolbar is hand-maintained and does not enumerate the
 ///     enum at runtime — operators won't be able to filter by a new type until that list is updated.
 /// </summary>

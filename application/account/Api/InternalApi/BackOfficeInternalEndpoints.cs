@@ -12,6 +12,7 @@ using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Domain;
 using SharedKernel.Endpoints;
+using SharedKernel.OpenApi;
 
 namespace Account.Api.InternalApi;
 
@@ -31,6 +32,10 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
     {
         var group = routes.MapGroup(RoutesPrefix)
             .WithTags("BackOfficeInternal")
+            // The back-office group keeps the internal routes out of the account SPA's document;
+            // no document is emitted for it (the staff-facing contract lives in the back-office
+            // system).
+            .WithGroupName(OpenApiDocumentNames.BackOffice)
             .RequireAuthorization(BackOfficeIdentityDefaults.DelegationPolicyName)
             .ProducesValidationProblem();
 

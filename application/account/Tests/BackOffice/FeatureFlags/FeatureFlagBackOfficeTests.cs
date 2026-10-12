@@ -18,7 +18,7 @@ using FeatureFlagScope = SharedKernel.FeatureFlags.FeatureFlagScope;
 
 namespace Account.Tests.BackOffice.FeatureFlags;
 
-// Exercises the back-office feature-flag endpoints at /api/back-office/feature-flags/*.
+// Exercises the back-office feature-flag endpoints at /internal-api/back-office/feature-flags/*.
 // All mutations (activate, deactivate, tenant/user overrides, rollout percentage, delete) carry the
 // AdminPolicyName requirement; GET queries use the regular back-office identity policy so support
 // staff can investigate state without being able to change it.
@@ -49,7 +49,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -75,7 +75,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -95,7 +95,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert
         var expectedErrors = new[]
@@ -115,7 +115,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Assert
         var expectedErrors = new[]
@@ -134,7 +134,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert - the activate route is gated by AdminPolicyName, so a regular back-office identity
         // without the admin group claim must be rejected.
@@ -150,7 +150,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -174,10 +174,10 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var flagKey = "beta-features";
         using var client = CreateAdminBackOfficeClient();
         // First deactivate to make it inactive, then deactivate again to test idempotency
-        await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -191,7 +191,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -203,11 +203,11 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         // Arrange
         var flagKey = "beta-features";
         using var client = CreateAdminBackOfficeClient();
-        await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
         TelemetryEventsCollectorSpy.Reset();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -230,7 +230,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetTenantFeatureFlagInternalCommand { TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -260,7 +260,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -284,7 +284,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -300,7 +300,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetTenantFeatureFlagInternalCommand { TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override", command);
 
         // Assert - tenant-override mutations are gated by AdminPolicyName; a regular back-office identity
         // without the admin group claim must be rejected before any repository write.
@@ -323,7 +323,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -348,7 +348,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetUserFeatureFlagInternalCommand { UserId = userId, TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/user-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -374,7 +374,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -399,7 +399,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -416,7 +416,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetUserFeatureFlagInternalCommand { UserId = userId, TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/user-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -439,7 +439,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -466,7 +466,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetUserFeatureFlagInternalCommand { UserId = userId, TenantId = otherTenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/user-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override", command);
 
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.NotFound, $"User '{userId}' not found in tenant '{otherTenantId}'.");
@@ -493,7 +493,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={otherTenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override?userId={userId}&tenantId={otherTenantId}");
 
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.NotFound, $"User '{userId}' not found in tenant '{otherTenantId}'.");
@@ -518,7 +518,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetUserFeatureFlagInternalCommand { UserId = missingUserId, TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/user-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override", command);
 
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.NotFound, $"User '{missingUserId}' not found in tenant '{tenantId}'.");
@@ -542,7 +542,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetTenantFeatureFlagInternalCommand { TenantId = missingTenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override", command);
 
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.NotFound, $"Tenant '{missingTenantId}' not found.");
@@ -566,7 +566,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetTenantFeatureFlagInternalCommand { TenantId = tenantId, Enabled = false };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -604,7 +604,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetUserFeatureFlagInternalCommand { UserId = userId, TenantId = tenantId, Enabled = false };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/user-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/user-override", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -640,7 +640,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={missingTenantId}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override?tenantId={missingTenantId}");
 
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.NotFound, $"Tenant '{missingTenantId}' not found.");
@@ -659,7 +659,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -690,7 +690,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = percentage };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -713,7 +713,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 101 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -728,7 +728,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -740,11 +740,11 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         // Arrange
         var flagKey = "beta-features";
         using var client = CreateAdminBackOfficeClient();
-        await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 });
+        await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 });
         TelemetryEventsCollectorSpy.Reset();
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 0 });
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 0 });
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -768,7 +768,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -788,7 +788,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 100 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -813,7 +813,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -839,7 +839,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -866,7 +866,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -898,7 +898,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert - manual override takes precedence over the A/B rollout.
         response.ShouldBeSuccessfulGetRequest();
@@ -925,7 +925,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert — row Source stays Manual (override is authoritative for that column), but
         // IsEnabled must be false because the global kill switch is off.
@@ -941,7 +941,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
     public async Task GetFeatureFlagTenants_WhenNonExistentFlag_ShouldReturnBadRequest()
     {
         using var client = CreateRegularBackOfficeClient();
-        var response = await client.GetAsync("/api/back-office/feature-flags/non-existent/tenants");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags/non-existent/tenants");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -949,7 +949,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
     public async Task GetFeatureFlagTenants_WhenSystemScopedFlag_ShouldReturnBadRequest()
     {
         using var client = CreateRegularBackOfficeClient();
-        var response = await client.GetAsync("/api/back-office/feature-flags/google-oauth/tenants");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags/google-oauth/tenants");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -961,7 +961,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act - DatabaseSeeder.Tenant1Owner email is "owner@tenant-1.com", so "tenant-1" hits owner email.
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?Search=tenant-1");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?Search=tenant-1");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -979,7 +979,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?Search=does-not-exist-anywhere");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?Search=does-not-exist-anywhere");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -997,8 +997,8 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var matchResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?Plans=Basis");
-        var noMatchResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?Plans=Premium");
+        var matchResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?Plans=Basis");
+        var noMatchResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?Plans=Premium");
 
         // Assert
         matchResponse.ShouldBeSuccessfulGetRequest();
@@ -1022,7 +1022,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?State=Enabled");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?State=Enabled");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1043,7 +1043,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?State=Disabled");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?State=Disabled");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1063,8 +1063,8 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var omittedResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
-        var enabledResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?State=Enabled");
+        var omittedResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
+        var enabledResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?State=Enabled");
 
         // Assert
         omittedResponse.ShouldBeSuccessfulGetRequest();
@@ -1083,7 +1083,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?PageSize=1&PageOffset=0");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?PageSize=1&PageOffset=0");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1103,7 +1103,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1121,7 +1121,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1140,7 +1140,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1160,7 +1160,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true&State=Disabled");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true&State=Disabled");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1178,7 +1178,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1207,7 +1207,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?HasOverride=true");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1227,7 +1227,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1248,7 +1248,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1268,7 +1268,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1298,7 +1298,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?search=owner@tenant-1");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1313,7 +1313,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
     public async Task GetFeatureFlagUsers_WhenNonUserScopedFlag_ShouldReturnBadRequest()
     {
         using var client = CreateRegularBackOfficeClient();
-        var response = await client.GetAsync("/api/back-office/feature-flags/sso/users");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags/sso/users");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -1325,7 +1325,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?Search=owner@tenant-1");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?Search=owner@tenant-1");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1343,7 +1343,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?Roles=Owner");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?Roles=Owner");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1363,7 +1363,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?State=Enabled");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?State=Enabled");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1383,7 +1383,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?State=Disabled");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?State=Disabled");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1401,7 +1401,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?PageSize=1&PageOffset=0");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?PageSize=1&PageOffset=0");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1417,7 +1417,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
     public async Task GetFeatureFlagUsers_WhenPageOffsetExceedsTotalPages_ShouldReturnBadRequest()
     {
         using var client = CreateRegularBackOfficeClient();
-        var response = await client.GetAsync("/api/back-office/feature-flags/compact-view/users?PageOffset=100");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags/compact-view/users?PageOffset=100");
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -1431,7 +1431,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1451,7 +1451,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?HasOverride=true");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?HasOverride=true");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1471,8 +1471,8 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var matchResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?HasOverride=true&Roles=Owner");
-        var noMatchResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?HasOverride=true&Roles=Member");
+        var matchResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?HasOverride=true&Roles=Owner");
+        var noMatchResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?HasOverride=true&Roles=Member");
 
         // Assert
         matchResponse.ShouldBeSuccessfulGetRequest();
@@ -1493,7 +1493,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/feature-flags");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1520,7 +1520,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/feature-flags");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1540,7 +1540,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/feature-flags");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1557,7 +1557,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/feature-flags?IncludeDeleted=true");
+        var response = await client.GetAsync("/internal-api/back-office/feature-flags?IncludeDeleted=true");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1580,7 +1580,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/activate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/activate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -1595,7 +1595,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.PutAsync($"/api/back-office/feature-flags/{flagKey}/deactivate", null);
+        var response = await client.PutAsync($"/internal-api/back-office/feature-flags/{flagKey}/deactivate", null);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -1612,7 +1612,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetTenantFeatureFlagInternalCommand { TenantId = tenantId, Enabled = true };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/tenant-override", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenant-override", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -1628,7 +1628,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         var command = new SetFeatureFlagRolloutPercentageCommand { RolloutPercentage = 50 };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage", command);
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -1650,7 +1650,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}");
 
         // Assert
         response.ShouldHaveEmptyHeaderAndLocationOnSuccess();
@@ -1677,7 +1677,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -1692,7 +1692,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -1710,7 +1710,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateAdminBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync("/api/back-office/feature-flags/does-not-exist");
+        var response = await client.DeleteAsync("/internal-api/back-office/feature-flags/does-not-exist");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -1725,7 +1725,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.DeleteAsync($"/api/back-office/feature-flags/{flagKey}");
+        var response = await client.DeleteAsync($"/internal-api/back-office/feature-flags/{flagKey}");
 
         // Assert - the delete route is gated by AdminPolicyName, so a regular back-office identity without
         // the admin group claim must be rejected.
@@ -1746,8 +1746,8 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var ascResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Name&SortOrder=Ascending");
-        var descResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Name&SortOrder=Descending");
+        var ascResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Name&SortOrder=Ascending");
+        var descResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Name&SortOrder=Descending");
 
         // Assert
         ascResponse.ShouldBeSuccessfulGetRequest();
@@ -1769,7 +1769,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Plan&SortOrder=Ascending");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/tenants?OrderBy=Plan&SortOrder=Ascending");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();
@@ -1786,8 +1786,8 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var ascResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?OrderBy=Name&SortOrder=Ascending");
-        var descResponse = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?OrderBy=Name&SortOrder=Descending");
+        var ascResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?OrderBy=Name&SortOrder=Ascending");
+        var descResponse = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?OrderBy=Name&SortOrder=Descending");
 
         // Assert
         ascResponse.ShouldBeSuccessfulGetRequest();
@@ -1808,7 +1808,7 @@ public sealed class FeatureFlagBackOfficeTests(BackOfficeWebApplicationFactory f
         using var client = CreateRegularBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/feature-flags/{flagKey}/users?OrderBy=Role&SortOrder=Ascending");
+        var response = await client.GetAsync($"/internal-api/back-office/feature-flags/{flagKey}/users?OrderBy=Role&SortOrder=Ascending");
 
         // Assert
         response.ShouldBeSuccessfulGetRequest();

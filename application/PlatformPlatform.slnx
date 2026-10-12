@@ -1,7 +1,7 @@
 <Solution>
     <Folder Name="/account/">
         <Project Path="account\Api\Account.Api.csproj"/>
-        <Project Path="account\BackOffice\BackOffice.esproj"/>
+        <Project Path="back-office\WebApp\BackOffice.WebApp.esproj"/>
         <Project Path="account\Core\Account.csproj"/>
         <Project Path="account\Tests\Account.Tests.csproj"/>
         <Project Path="account\WebApp\Account.WebApp.esproj"/>

@@ -69,7 +69,7 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -110,7 +110,7 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -179,7 +179,7 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -199,7 +199,7 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
