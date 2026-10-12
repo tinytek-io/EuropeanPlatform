@@ -3,7 +3,9 @@ using Account.Features.BackOffice.BillingEvents.Queries;
 using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.BackOffice.Invoices.Queries;
 using Account.Features.FeatureFlags.Queries;
+using Account.Features.Tenants.BackOffice.Commands;
 using Account.Features.Tenants.BackOffice.Queries;
+using Account.Features.Users.BackOffice.Commands;
 using Account.Features.Users.BackOffice.Queries;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
@@ -98,6 +100,15 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
             => await mediator.Send(new GetUserFeatureFlagsQuery { UserId = id })
         ).Produces<GetUserFeatureFlagsResponse>();
 
+        // Mutating internal routes: the BFF presents a short-lived delegation token instead of an
+        // antiforgery token (both authenticate the caller; the antiforgery check exists for the
+        // browser's ambient-cookie flows), so the routes opt out of antiforgery while keeping the
+        // admin gate. Admin mutations carry the delegation-admin policy; a tenant-scoped write that
+        // later needs only staff membership can use the plain delegation policy.
+        users.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (UserId id, SetUserAbInclusionPinCommand command, IMediator mediator)
+            => await mediator.Send(command with { UserId = id })
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+
         var tenants = group.MapGroup("/tenants").WithTags("BackOfficeInternalTenants");
         tenants.MapGet("/", async Task<ApiResult<TenantsResponse>> ([AsParameters] GetTenantsQuery query, IMediator mediator)
             => await mediator.Send(query)
@@ -120,5 +131,19 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         tenants.MapGet("/{id}/feature-flags", async Task<ApiResult<GetTenantFeatureFlagsResponse>> (TenantId id, IMediator mediator)
             => await mediator.Send(new GetTenantFeatureFlagsQuery { TenantId = id })
         ).Produces<GetTenantFeatureFlagsResponse>();
+        tenants.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (TenantId id, SetTenantAbInclusionPinCommand command, IMediator mediator)
+            => await mediator.Send(command with { TenantId = id })
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
+        tenants.MapPost("/{id}/reconcile-with-stripe", async Task<ApiResult<ReconcileTenantWithStripeResponse>> (TenantId id, IMediator mediator)
+                => await mediator.Send(new ReconcileTenantWithStripeCommand { TenantId = id })
+            ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName)
+            .Produces<ReconcileTenantWithStripeResponse>();
+        tenants.MapPost("/{id}/replay-archived-stripe-events", async Task<ApiResult<ReplayArchivedTenantStripeEventsResponse>> (TenantId id, IMediator mediator)
+                => await mediator.Send(new ReplayArchivedTenantStripeEventsCommand { TenantId = id })
+            ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName)
+            .Produces<ReplayArchivedTenantStripeEventsResponse>();
+        tenants.MapPost("/{id}/drift/acknowledge", async Task<ApiResult> (TenantId id, IMediator mediator)
+            => await mediator.Send(new AcknowledgeBillingDriftCommand { TenantId = id })
+        ).DisableAntiforgery().RequireAuthorization(BackOfficeIdentityDefaults.DelegationAdminPolicyName);
     }
 }

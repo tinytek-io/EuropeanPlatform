@@ -40,5 +40,9 @@ public sealed class UsersEndpoints : IEndpoints
         group.MapGet("/{id}/feature-flags", async Task<ApiResult<GetUserFeatureFlagsResponse>> (UserId id, IMediator mediator)
             => await mediator.Send(new GetUserFeatureFlagsQuery { UserId = id })
         ).Produces<GetUserFeatureFlagsResponse>();
+
+        group.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (UserId id, SetUserAbInclusionPinCommand command, IMediator mediator)
+            => await mediator.Send(command with { UserId = id })
+        ).RequireAuthorization(BackOfficeIdentityDefaults.AdminPolicyName);
     }
 }

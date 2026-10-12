@@ -48,5 +48,21 @@ public sealed class TenantsEndpoints : IEndpoints
         group.MapGet("/{id}/feature-flags", async Task<ApiResult<GetTenantFeatureFlagsResponse>> (TenantId id, IMediator mediator)
             => await mediator.Send(new GetTenantFeatureFlagsQuery { TenantId = id })
         ).Produces<GetTenantFeatureFlagsResponse>();
+
+        group.MapPut("/{id}/ab-inclusion-pin", async Task<ApiResult> (TenantId id, SetTenantAbInclusionPinCommand command, IMediator mediator)
+            => await mediator.Send(command with { TenantId = id })
+        ).RequireAuthorization(BackOfficeIdentityDefaults.AdminPolicyName);
+
+        group.MapPost("/{id}/reconcile-with-stripe", async Task<ApiResult<ReconcileTenantWithStripeResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new ReconcileTenantWithStripeCommand { TenantId = id })
+        ).Produces<ReconcileTenantWithStripeResponse>().RequireAuthorization(BackOfficeIdentityDefaults.AdminPolicyName);
+
+        group.MapPost("/{id}/replay-archived-stripe-events", async Task<ApiResult<ReplayArchivedTenantStripeEventsResponse>> (TenantId id, IMediator mediator)
+            => await mediator.Send(new ReplayArchivedTenantStripeEventsCommand { TenantId = id })
+        ).Produces<ReplayArchivedTenantStripeEventsResponse>().RequireAuthorization(BackOfficeIdentityDefaults.AdminPolicyName);
+
+        group.MapPost("/{id}/drift/acknowledge", async Task<ApiResult> (TenantId id, IMediator mediator)
+            => await mediator.Send(new AcknowledgeBillingDriftCommand { TenantId = id })
+        ).RequireAuthorization(BackOfficeIdentityDefaults.AdminPolicyName);
     }
 }

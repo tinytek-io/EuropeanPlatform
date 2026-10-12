@@ -361,6 +361,13 @@ public static class ApiDependencyConfiguration
                             policy.RequireAuthenticatedUser();
                         }
                     );
+                    authOptions.AddPolicy(BackOfficeIdentityDefaults.DelegationAdminPolicyName, policy =>
+                        {
+                            policy.AuthenticationSchemes = [BackOfficeIdentityDefaults.DelegationScheme];
+                            policy.RequireAuthenticatedUser();
+                            policy.AddRequirements(new BackOfficeAdminRequirement());
+                        }
+                    );
                 }
             );
         }

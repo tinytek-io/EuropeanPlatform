@@ -47,6 +47,11 @@ public static class BackOfficeIdentityDefaults
     // the admin requirement.
     public const string DelegationPolicyName = "BackOfficeDelegationPolicy";
 
+    // Authorization policy for MUTATING internal API endpoints gated to back-office admins: the
+    // delegation token must additionally carry the admins group (the same BackOfficeAdminRequirement
+    // the SPA-facing AdminPolicy applies, evaluated against the delegated principal's groups claim).
+    public const string DelegationAdminPolicyName = "BackOfficeDelegationAdminPolicy";
+
     public const string LoginPath = "/.auth/login/aad";
 
     public const string CallbackPath = "/.auth/login/aad/callback";
