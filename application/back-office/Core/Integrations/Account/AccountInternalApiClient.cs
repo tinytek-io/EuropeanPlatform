@@ -4,6 +4,7 @@ using System.Text.Json;
 using BackOffice.Features.BillingDrift;
 using BackOffice.Features.BillingEvents;
 using BackOffice.Features.Dashboard;
+using BackOffice.Features.FeatureFlags;
 using BackOffice.Features.Invoices;
 using BackOffice.Features.Tenants;
 using BackOffice.Features.Users;
@@ -241,6 +242,86 @@ public sealed class AccountInternalApiClient(HttpClient httpClient)
         return await SendAsync<ReplayArchivedTenantStripeEventsResponse>(HttpMethod.Post, $"/tenants/{tenantId.Value}/replay-archived-stripe-events", null, cancellationToken);
     }
 
+    public async Task<Result<GetFeatureFlagsResponse>> GetFeatureFlagsAsync(GetFeatureFlagsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<GetFeatureFlagsResponse>("/feature-flags", cancellationToken,
+            ("includeDeleted", query.IncludeDeleted)
+        );
+    }
+
+    public async Task<Result<GetFeatureFlagTenantsResponse>> GetFeatureFlagTenantsAsync(GetFeatureFlagTenantsQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<GetFeatureFlagTenantsResponse>($"/feature-flags/{Uri.EscapeDataString(query.FlagKey)}/tenants", cancellationToken,
+            ("search", query.Search),
+            ("plans", query.Plans),
+            ("state", query.State),
+            ("hasOverride", query.HasOverride),
+            ("orderBy", query.OrderBy),
+            ("sortOrder", query.SortOrder),
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<Result<GetFeatureFlagUsersResponse>> GetFeatureFlagUsersAsync(GetFeatureFlagUsersQuery query, CancellationToken cancellationToken)
+    {
+        return await GetAsync<GetFeatureFlagUsersResponse>($"/feature-flags/{Uri.EscapeDataString(query.FlagKey)}/users", cancellationToken,
+            ("search", query.Search),
+            ("roles", query.Roles),
+            ("state", query.State),
+            ("hasOverride", query.HasOverride),
+            ("orderBy", query.OrderBy),
+            ("sortOrder", query.SortOrder),
+            ("pageOffset", query.PageOffset),
+            ("pageSize", query.PageSize)
+        );
+    }
+
+    public async Task<Result> ActivateFeatureFlagAsync(string flagKey, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Put, $"/feature-flags/{Uri.EscapeDataString(flagKey)}/activate", null, cancellationToken);
+    }
+
+    public async Task<Result> DeactivateFeatureFlagAsync(string flagKey, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Put, $"/feature-flags/{Uri.EscapeDataString(flagKey)}/deactivate", null, cancellationToken);
+    }
+
+    public async Task<Result> DeleteFeatureFlagAsync(string flagKey, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Delete, $"/feature-flags/{Uri.EscapeDataString(flagKey)}", null, cancellationToken);
+    }
+
+    public async Task<Result> SetTenantFeatureFlagAsync(SetTenantFeatureFlagInternalCommand command, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Put, $"/feature-flags/{Uri.EscapeDataString(command.FlagKey)}/tenant-override", command, cancellationToken);
+    }
+
+    public async Task<Result> SetFeatureFlagRolloutPercentageAsync(SetFeatureFlagRolloutPercentageCommand command, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Put, $"/feature-flags/{Uri.EscapeDataString(command.FlagKey)}/rollout-percentage", command, cancellationToken);
+    }
+
+    public async Task<Result> RemoveTenantFeatureFlagOverrideAsync(string flagKey, TenantId tenantId, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Delete, $"/feature-flags/{Uri.EscapeDataString(flagKey)}/tenant-override", null, cancellationToken,
+            ("tenantId", tenantId.Value)
+        );
+    }
+
+    public async Task<Result> SetUserFeatureFlagAsync(SetUserFeatureFlagInternalCommand command, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Put, $"/feature-flags/{Uri.EscapeDataString(command.FlagKey)}/user-override", command, cancellationToken);
+    }
+
+    public async Task<Result> RemoveUserFeatureFlagOverrideAsync(string flagKey, UserId userId, TenantId tenantId, CancellationToken cancellationToken)
+    {
+        return await SendAsync(HttpMethod.Delete, $"/feature-flags/{Uri.EscapeDataString(flagKey)}/user-override", null, cancellationToken,
+            ("userId", userId.Value),
+            ("tenantId", tenantId.Value)
+        );
+    }
+
     private async Task<Result<T>> GetAsync<T>(string path, CancellationToken cancellationToken, params (string Key, object? Value)[] parameters)
     {
         // The paths are relative to the internal back-office route prefix; the client's BaseAddress
@@ -263,6 +344,12 @@ public sealed class AccountInternalApiClient(HttpClient httpClient)
         }
 
         return await ToErrorResultAsync(response, method, path, cancellationToken);
+    }
+
+    // Same as SendAsync, with query parameters (e.g. the DELETE-with-ids routes).
+    private async Task<Result> SendAsync(HttpMethod method, string path, object? body, CancellationToken cancellationToken, params (string Key, object? Value)[] parameters)
+    {
+        return await SendAsync(method, BuildUri(path, parameters), body, cancellationToken);
     }
 
     private async Task<Result<T>> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
