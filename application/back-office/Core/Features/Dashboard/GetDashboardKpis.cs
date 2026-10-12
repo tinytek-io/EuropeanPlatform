@@ -1,6 +1,5 @@
 using BackOffice.Integrations.Account;
 using JetBrains.Annotations;
-using MediatR;
 using SharedKernel.Cqrs;
 
 namespace BackOffice.Features.Dashboard;
@@ -42,7 +41,6 @@ public sealed class GetDashboardKpisHandler(AccountInternalApiClient accountInte
 {
     public async Task<Result<BackOfficeDashboardKpisResponse>> Handle(GetDashboardKpisQuery query, CancellationToken cancellationToken)
     {
-        var response = await accountInternalApiClient.GetDashboardKpisAsync(query.Period, cancellationToken);
-        return response;
+        return await accountInternalApiClient.GetDashboardKpisAsync(query, cancellationToken);
     }
 }
