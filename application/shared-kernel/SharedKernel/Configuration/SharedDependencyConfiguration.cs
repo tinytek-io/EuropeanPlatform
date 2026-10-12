@@ -79,7 +79,7 @@ public static class SharedDependencyConfiguration
                 .AddDefaultJsonSerializerOptions()
                 .AddDefaultHealthChecks()
                 .AddEmailClient()
-                .AddMediatRPipelineBehaviors()
+                .AddMediatRPipelineBehaviors(false) // No database: commands delegate to other systems' internal APIs.
                 .RegisterMediatRRequest(assemblies)
                 .RegisterRepositories(assemblies);
         }
@@ -178,15 +178,25 @@ public static class SharedDependencyConfiguration
             return services;
         }
 
-        private IServiceCollection AddMediatRPipelineBehaviors()
+        private IServiceCollection AddMediatRPipelineBehaviors(bool includePersistenceBehaviors = true)
         {
             // Order is important! First all Pre behaviors run, then the command is handled, and finally all Post behaviors run.
             // So Validation → Command → PublishDomainEvents → UnitOfWork → PublishTelemetryEvents.
+            //
+            // Database-less systems (the back-office BFF) pass includePersistenceBehaviors: false — their commands
+            // delegate to other systems' internal APIs, so there is no DbContext to collect domain events from and no
+            // unit of work to commit. Registering the persistence behaviors there would fail on the first command:
+            // both constructor-inject IUnitOfWork/IDomainEventCollector, which only AddPersistenceHelpers<T> registers.
             services
                 .AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationPipelineBehavior<,>)) // Pre
-                .AddTransient(typeof(IPipelineBehavior<,>), typeof(PublishTelemetryEventsPipelineBehavior<,>)) // Post
-                .AddTransient(typeof(IPipelineBehavior<,>), typeof(UnitOfWorkPipelineBehavior<,>)) // Post
-                .AddTransient(typeof(IPipelineBehavior<,>), typeof(PublishDomainEventsPipelineBehavior<,>)); // Post
+                .AddTransient(typeof(IPipelineBehavior<,>), typeof(PublishTelemetryEventsPipelineBehavior<,>)); // Post
+
+            if (includePersistenceBehaviors)
+            {
+                services
+                    .AddTransient(typeof(IPipelineBehavior<,>), typeof(UnitOfWorkPipelineBehavior<,>)) // Post
+                    .AddTransient(typeof(IPipelineBehavior<,>), typeof(PublishDomainEventsPipelineBehavior<,>)); // Post
+            }
 
             return services
                 .AddScoped<ITelemetryEventsCollector, TelemetryEventsCollector>()
