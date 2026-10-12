@@ -31,14 +31,25 @@ test.describe("back-office OIDC (Authelia harness)", () => {
 
     await step("Unauthenticated visit redirects to Authelia's login")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/`);
-      await expect(page.locator('input[name="username"]')).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Username" })).toBeVisible();
       await expect(page).toHaveURL(/localhost:9091/);
     })();
 
     await step("Log in as the harness admin (groups claim carries 'admins')")(async () => {
-      await page.locator('input[name="username"]').fill("oidcadmin");
-      await page.locator('input[name="password"]').fill("OIDCTest123!");
-      await page.locator('button[type="submit"]').click();
+      await page.getByRole("textbox", { name: "Username" }).fill("oidcadmin");
+      await page.getByRole("textbox", { name: "Password" }).fill("OIDCTest123!");
+      await page.getByRole("button", { name: "Sign in" }).click();
+    })();
+
+    // The harness client asks Authelia to auto-consent, but the first-ever sign-in on a fresh
+    // harness database still shows the consent screen listing the requested scopes. Accept when
+    // it appears within a short wait (consent persists in the harness db, so later runs skip it).
+    await step("Accept the consent request when shown")(async () => {
+      const accept = page.getByRole("button", { name: "Accept" });
+      await accept
+        .waitFor({ state: "visible", timeout: 10_000 })
+        .then(() => accept.click())
+        .catch(() => {});
     })();
 
     await step("Callback returns to the back-office dashboard with an admin identity")(async () => {
