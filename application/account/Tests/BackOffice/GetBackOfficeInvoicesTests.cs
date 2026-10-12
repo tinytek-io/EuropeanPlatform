@@ -29,7 +29,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — no Statuses query param = "All" view.
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -54,7 +54,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Invoices" view maps to Paid+Pending+Failed; only RowKind=Invoice rows match.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Paid&Statuses=Pending&Statuses=Failed&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Paid&Statuses=Pending&Statuses=Failed&PageSize=10");
 
         // Assert — all three invoice rows match (paid, paid-with-credit-note, AND the refunded transaction's
         // invoice row whose status is now Succeeded since the original payment outcome was successful).
@@ -82,7 +82,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Refunds and credit notes" maps to Refunded OR HasCreditNote.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
 
         // Assert — both transactions have a credit note, so both project to a CreditNote row.
         // No standalone Refund rows because the credit note encompasses the refund in that case.
@@ -104,7 +104,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — 2 rows: Invoice (Succeeded — not Refunded) + CreditNote.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -126,7 +126,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — Invoice (Succeeded) + Refund (no CreditNote row since CreditNoteUrl is null).
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -151,7 +151,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — Refunded filter alone matches only RowKind=Refund.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -174,7 +174,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — two rows: Invoice (Succeeded — original payment outcome) and CreditNote, both dated by the original payment date.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -200,7 +200,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
 
         // Assert — exactly the credit-note row from the legacy transaction.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -223,7 +223,7 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — descending by date is the default.
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

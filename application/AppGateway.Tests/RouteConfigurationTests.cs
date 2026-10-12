@@ -62,22 +62,20 @@ public sealed class RouteConfigurationTests(AppGatewayApplicationFactory factory
     }
 
     [Fact]
-    public void NoRoute_ShouldReferenceBackOffice()
+    public void BackOfficeRoute_ShouldTargetBackOfficeApiWithBackOfficeHostnameKey()
     {
-        // Arrange -- AppGateway must remain unaware of back-office in both Azure and localhost.
-        // Production routes back-office traffic to its own ACA container app via DNS; localhost
-        // routes it directly to account-api on a dedicated Kestrel port. Either path proves
-        // wrong if AppGateway grows a back-office route by mistake.
-        using var scope = factory.Services.CreateScope();
-        var provider = scope.ServiceProvider.GetRequiredService<IProxyConfigProvider>();
-
+        // Arrange -- both public hostnames flow through the gateway after the back-office cutover:
+        // the back-office catch-all routes to the back-office system, while the wildcard avatar/logo
+        // routes keep serving storage for both hosts.
         // Act
-        var routes = provider.GetConfig().Routes;
-        var hostnameKeys = routes.Select(r => r.Metadata?.GetValueOrDefault("HostnameKey")).ToArray();
+        var route = GetRoute("back-office");
 
         // Assert
-        routes.Should().NotContain(r => r.RouteId.Contains("back-office", StringComparison.OrdinalIgnoreCase));
-        hostnameKeys.Should().NotContain("BackOffice");
+        route.ClusterId.Should().Be("back-office-api");
+        route.Metadata?.GetValueOrDefault("HostnameKey").Should().Be("BackOffice");
+        route.Transforms.Should().Contain(
+            t => t.ContainsKey("RequestHeaderOriginalHost") && string.Equals(t["RequestHeaderOriginalHost"], "true", StringComparison.OrdinalIgnoreCase),
+            "the back-office API's RequireHost matches the original public host header");
     }
 
     private RouteConfig GetRoute(string routeId)

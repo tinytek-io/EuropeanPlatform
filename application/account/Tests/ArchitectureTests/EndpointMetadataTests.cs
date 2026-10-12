@@ -13,14 +13,15 @@ using Xunit;
 namespace Account.Tests.ArchitectureTests;
 
 // Walks the actual registered endpoints in Account.Api and enforces:
-// - Every endpoint under /api/back-office/* must declare RequireHost on the back-office host.
-//   Account-api hosts both the user-facing and back-office SPAs in one process; back-office endpoints
-//   stay host-scoped so they cannot be reached via the user-facing host.
+// - The staff-facing back-office routes live in the back-office system; the routes here are the
+//   INTERNAL API the back-office BFF consumes, and their security boundary is the delegation
+//   policy (a platform-signed short-lived JWT minted by the BFF) — not a RequireHost match.
 // - Public /api/account/* endpoints intentionally do NOT declare RequireHost. Internal-only ACA apps
 //   sit behind AppGateway and ACA's internal ingress; the host header from upstream proxies cannot
 //   be trusted as a security boundary, and AppGateway is the public trust boundary.
 // - Every endpoint under /api/account/* and /internal-api/account/* must declare WithGroupName("account").
-// - Every endpoint under /api/back-office/* must declare WithGroupName("back-office").
+// - Every endpoint under /internal-api/back-office/* must declare WithGroupName("back-office") so it
+//   stays out of the account SPA's OpenAPI document.
 public sealed class EndpointMetadataTests : IDisposable
 {
     private const string AppHost = "app.test.localhost";
@@ -56,25 +57,26 @@ public sealed class EndpointMetadataTests : IDisposable
         "OPTIONS:/internal-api/{**_}"
     ];
 
-    // Back-office write endpoints that must require AdminPolicyName. Adding a new mutation here forces
-    // the implementer to explicitly opt into either the admin set or the regular set — the assertion
-    // below catches the case where a refactor swaps PolicyName for AdminPolicyName or vice versa on a
-    // hand-listed route, which the previous "any allowed policy" check let through silently.
+    // Internal back-office write endpoints that must require DelegationAdminPolicyName. Adding a new
+    // mutation here forces the implementer to explicitly opt into either the admin set or the regular
+    // set — the assertion below catches the case where a refactor swaps the delegation policy for the
+    // delegation-admin policy or vice versa on a hand-listed route, which a relaxed check would let
+    // through silently.
     private static readonly string[] AdminPolicyBackOfficeRoutes =
     [
-        "PUT:/api/back-office/feature-flags/{flagKey}/activate",
-        "PUT:/api/back-office/feature-flags/{flagKey}/deactivate",
-        "DELETE:/api/back-office/feature-flags/{flagKey}",
-        "PUT:/api/back-office/feature-flags/{flagKey}/tenant-override",
-        "PUT:/api/back-office/feature-flags/{flagKey}/rollout-percentage",
-        "DELETE:/api/back-office/feature-flags/{flagKey}/tenant-override",
-        "PUT:/api/back-office/feature-flags/{flagKey}/user-override",
-        "DELETE:/api/back-office/feature-flags/{flagKey}/user-override",
-        "POST:/api/back-office/tenants/{id}/reconcile-with-stripe",
-        "POST:/api/back-office/tenants/{id}/replay-archived-stripe-events",
-        "POST:/api/back-office/tenants/{id}/drift/acknowledge",
-        "PUT:/api/back-office/tenants/{id}/ab-inclusion-pin",
-        "PUT:/api/back-office/users/{id}/ab-inclusion-pin"
+        "PUT:/internal-api/back-office/feature-flags/{flagKey}/activate",
+        "PUT:/internal-api/back-office/feature-flags/{flagKey}/deactivate",
+        "DELETE:/internal-api/back-office/feature-flags/{flagKey}",
+        "PUT:/internal-api/back-office/feature-flags/{flagKey}/tenant-override",
+        "PUT:/internal-api/back-office/feature-flags/{flagKey}/rollout-percentage",
+        "DELETE:/internal-api/back-office/feature-flags/{flagKey}/tenant-override",
+        "PUT:/internal-api/back-office/feature-flags/{flagKey}/user-override",
+        "DELETE:/internal-api/back-office/feature-flags/{flagKey}/user-override",
+        "POST:/internal-api/back-office/tenants/{id}/reconcile-with-stripe",
+        "POST:/internal-api/back-office/tenants/{id}/replay-archived-stripe-events",
+        "POST:/internal-api/back-office/tenants/{id}/drift/acknowledge",
+        "PUT:/internal-api/back-office/tenants/{id}/ab-inclusion-pin",
+        "PUT:/internal-api/back-office/users/{id}/ab-inclusion-pin"
     ];
 
     private readonly WebApplicationFactory<Program> _webApplicationFactory;
@@ -107,24 +109,6 @@ public sealed class EndpointMetadataTests : IDisposable
     public void Dispose()
     {
         _webApplicationFactory.Dispose();
-    }
-
-    [Fact]
-    public void BackOfficeEndpoints_ShouldAllRequireHost()
-    {
-        // Arrange
-        var routeEndpoints = GetRouteEndpoints();
-        var backOfficeEndpoints = routeEndpoints
-            .Where(endpoint => endpoint.RoutePattern.RawText is { } pattern && pattern.StartsWith("/api/back-office", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        backOfficeEndpoints.Should().NotBeEmpty("the back-office route group must register at least one endpoint");
-
-        // Assert
-        var endpointsMissingHost = backOfficeEndpoints
-            .Where(endpoint => endpoint.Metadata.GetMetadata<IHostMetadata>() is null || !endpoint.Metadata.GetMetadata<IHostMetadata>()!.Hosts.Contains(BackOfficeHost))
-            .Select(endpoint => endpoint.RoutePattern.RawText)
-            .ToList();
-        endpointsMissingHost.Should().BeEmpty($"back-office endpoints must declare RequireHost('{BackOfficeHost}') so they cannot be reached via the user-facing host");
     }
 
     [Fact]
@@ -169,8 +153,9 @@ public sealed class EndpointMetadataTests : IDisposable
         // Arrange
         var routeEndpoints = GetRouteEndpoints();
         var backOfficeEndpoints = routeEndpoints
-            .Where(endpoint => endpoint.RoutePattern.RawText is { } pattern && pattern.StartsWith("/api/back-office", StringComparison.OrdinalIgnoreCase))
+            .Where(endpoint => endpoint.RoutePattern.RawText is { } pattern && pattern.StartsWith("/internal-api/back-office", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        backOfficeEndpoints.Should().NotBeEmpty("the internal back-office API must register at least one endpoint");
 
         // Assert
         var endpointsMissingGroupName = backOfficeEndpoints
@@ -207,7 +192,7 @@ public sealed class EndpointMetadataTests : IDisposable
         // Arrange
         var routeEndpoints = GetRouteEndpoints();
         var backOfficeWriteEndpoints = routeEndpoints
-            .Where(endpoint => endpoint.RoutePattern.RawText is { } pattern && pattern.StartsWith("/api/back-office/", StringComparison.OrdinalIgnoreCase))
+            .Where(endpoint => endpoint.RoutePattern.RawText is { } pattern && pattern.StartsWith("/internal-api/back-office/", StringComparison.OrdinalIgnoreCase))
             .Where(endpoint => endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Any(method => method is "POST" or "PUT" or "PATCH" or "DELETE") == true)
             .ToList();
         backOfficeWriteEndpoints.Should().NotBeEmpty("the back-office route group must register at least one write endpoint");
@@ -219,8 +204,8 @@ public sealed class EndpointMetadataTests : IDisposable
             var endpointKey = BuildEndpointKey(endpoint);
             var declaredPolicies = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ToArray();
             var expectedPolicy = AdminPolicyBackOfficeRoutes.Contains(endpointKey)
-                ? BackOfficeIdentityDefaults.AdminPolicyName
-                : BackOfficeIdentityDefaults.PolicyName;
+                ? BackOfficeIdentityDefaults.DelegationAdminPolicyName
+                : BackOfficeIdentityDefaults.DelegationPolicyName;
 
             if (!declaredPolicies.Contains(expectedPolicy))
             {
@@ -229,7 +214,7 @@ public sealed class EndpointMetadataTests : IDisposable
         }
 
         violations.Should().BeEmpty(
-            $"every back-office write endpoint must declare its expected RequireAuthorization policy: routes listed in {nameof(AdminPolicyBackOfficeRoutes)} require '{BackOfficeIdentityDefaults.AdminPolicyName}' (admin-only), every other write endpoint requires '{BackOfficeIdentityDefaults.PolicyName}' (regular back-office). Add new admin-gated mutations to the allowlist and add a `_WhenNonAdminBackOfficeIdentity_ShouldReturnForbidden` test alongside the mutation."
+            $"every internal back-office write endpoint must declare its expected delegation policy: routes listed in {nameof(AdminPolicyBackOfficeRoutes)} require '{BackOfficeIdentityDefaults.DelegationAdminPolicyName}' (delegated staff member carries the admins group), every other write endpoint requires '{BackOfficeIdentityDefaults.DelegationPolicyName}' (any delegated staff member). Add new admin-gated mutations to the allowlist and add a `_WhenNonAdminDelegatedIdentity_ShouldReturnForbidden` test alongside the mutation."
         );
     }
 

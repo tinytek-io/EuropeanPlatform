@@ -28,7 +28,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=10");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -53,7 +53,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=0");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=0");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -66,7 +66,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=6");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=6");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

@@ -22,7 +22,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -46,7 +46,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = null };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -66,7 +66,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/users/{unknownUserId}/ab-inclusion-pin", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/users/{unknownUserId}/ab-inclusion-pin", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -89,7 +89,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act - flag is enabled without pin
-        var beforeResponse = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/feature-flags");
+        var beforeResponse = await client.GetAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/feature-flags");
         beforeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var beforeBody = await beforeResponse.Content.ReadAsStringAsync();
         beforeBody.Should().Contain("\"flagKey\":\"experimental-ui\"");
@@ -97,11 +97,11 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
 
         // Apply NeverOn pin
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.NeverOn };
-        var pinResponse = await client.PutAsJsonAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
+        var pinResponse = await client.PutAsJsonAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
         pinResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Assert - flag is disabled despite being in bucket range
-        var afterResponse = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/feature-flags");
+        var afterResponse = await client.GetAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/feature-flags");
         afterResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var afterBody = await afterResponse.Content.ReadAsStringAsync();
         afterBody.Should().Contain("\"flagKey\":\"experimental-ui\"");
@@ -117,7 +117,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -131,7 +131,7 @@ public sealed class SetUserAbInclusionPinTests(BackOfficeWebApplicationFactory f
         var command = new SetUserAbInclusionPinCommand { AbInclusionPin = AbInclusionPin.AlwaysOn };
 
         // Act
-        var response = await client.PutAsJsonAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
+        var response = await client.PutAsJsonAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/ab-inclusion-pin", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

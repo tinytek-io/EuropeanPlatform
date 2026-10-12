@@ -9,7 +9,6 @@ using Account.Features.Tenants.Domain;
 using Account.Features.Users.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Authentication.TokenGeneration;
 using SharedKernel.Domain;
@@ -39,7 +38,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -75,7 +74,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -126,7 +125,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -160,7 +159,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -185,7 +184,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -215,7 +214,7 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -235,24 +234,10 @@ public sealed class GetDashboardKpisTests(BackOfficeWebApplicationFactory factor
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/kpis");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetDashboardKpis_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/kpis");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name, SubscriptionPlan plan, DateTimeOffset createdAt)

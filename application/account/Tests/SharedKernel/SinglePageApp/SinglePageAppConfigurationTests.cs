@@ -11,7 +11,7 @@ public sealed class SinglePageAppConfigurationTests
     {
         // Act
         var act = () => new SinglePageAppConfiguration(
-            false, null, "BackOffice", "https://example.com", "https://example.com", true
+            false, null, "WebApp", "https://example.com", "https://example.com", true
         );
 
         // Assert
@@ -33,7 +33,7 @@ public sealed class SinglePageAppConfigurationTests
 
         // Act
         var configuration = new SinglePageAppConfiguration(
-            false, environmentVariables, "BackOffice", "https://example.com", "https://example.com", true
+            false, environmentVariables, "WebApp", "https://example.com", "https://example.com", true
         );
 
         // Assert

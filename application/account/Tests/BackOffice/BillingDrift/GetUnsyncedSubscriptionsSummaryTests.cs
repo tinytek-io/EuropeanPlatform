@@ -32,7 +32,7 @@ public sealed class GetUnsyncedSubscriptionsSummaryTests(BackOfficeWebApplicatio
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/unsynced-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/unsynced-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -49,7 +49,7 @@ public sealed class GetUnsyncedSubscriptionsSummaryTests(BackOfficeWebApplicatio
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-drift/unsynced-summary");
+        var response = await client.GetAsync("/internal-api/back-office/billing-drift/unsynced-summary");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

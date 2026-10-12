@@ -28,7 +28,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -51,7 +51,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -67,7 +67,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         var unknownTenantId = TenantId.NewId();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{unknownTenantId}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{unknownTenantId}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -85,7 +85,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -99,7 +99,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -112,7 +112,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -141,7 +141,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK, "the admin reconcile must complete successfully even when the Stripe price catalog is empty");
@@ -183,7 +183,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -209,7 +209,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -236,7 +236,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);

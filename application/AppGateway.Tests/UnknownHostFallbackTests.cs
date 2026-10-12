@@ -67,11 +67,11 @@ public sealed class UnknownHostFallbackTests(AppGatewayApplicationFactory factor
     }
 
     [Fact]
-    public async Task Request_WhenHostIsBackOffice_ShouldHitUnknownHostFallback()
+    public async Task Request_WhenHostIsBackOffice_ShouldNotHitUnknownHostFallback()
     {
-        // Arrange -- AppGateway is unaware of back-office post-split. Localhost mirrors the Azure
-        // topology where back-office traffic bypasses AppGateway entirely (own ACA container app
-        // and ingress in production; own Kestrel port on account-api in dev).
+        // Arrange -- the back-office hostname is a known gateway host after the cutover: requests
+        // match the back-office route (and fail on the unreachable test destination) rather than
+        // the unknown-host fallback's 404.
         var client = factory.CreateClient();
         var request = new HttpRequestMessage(HttpMethod.Get, "http://back-office.dev.localhost/");
 
@@ -79,7 +79,7 @@ public sealed class UnknownHostFallbackTests(AppGatewayApplicationFactory factor
         var response = await client.SendAsync(request);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().NotBe(HttpStatusCode.NotFound);
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 }

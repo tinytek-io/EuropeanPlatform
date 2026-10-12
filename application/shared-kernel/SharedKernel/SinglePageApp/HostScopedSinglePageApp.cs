@@ -8,7 +8,7 @@ namespace SharedKernel.SinglePageApp;
 ///     decides how to derive the <see cref="UserInfo" /> embedded in the served HTML.
 ///     One <see cref="HostScopedSinglePageApp" /> per <c>RequireHost</c>-scoped fallback registered by
 ///     <c>UseHostScopedSinglePageAppFallback</c>; the consolidated <c>account-api</c> hosts both
-///     <c>account/WebApp</c> and <c>account/BackOffice</c> through this mechanism.
+///     <c>account/WebApp</c> and the back-office system's <c>WebApp</c> through this mechanism.
 /// </summary>
 public sealed class HostScopedSinglePageApp(
     string host,

@@ -30,7 +30,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/mrr-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/mrr-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -67,7 +67,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/mrr-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/mrr-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -85,7 +85,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/mrr-trend?Period=NotAValidPeriod");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/mrr-trend?Period=NotAValidPeriod");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -98,7 +98,7 @@ public sealed class GetDashboardMrrTrendTests(BackOfficeWebApplicationFactory fa
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/mrr-trend?Period=Last30Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/mrr-trend?Period=Last30Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

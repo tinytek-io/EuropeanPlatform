@@ -60,7 +60,7 @@ public enum BillingEventType
     SubscriptionPastDue,
     PaymentFailed,
     PaymentRecovered,
-    PaymentRefund,
+    PaymentRefunded,
     BillingInfoAdded,
     BillingInfoUpdated,
     PaymentMethodUpdated,

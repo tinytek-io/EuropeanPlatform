@@ -40,7 +40,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/users");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/users");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -62,7 +62,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/users?search=charlie");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/users?search=charlie");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -84,7 +84,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/users?roles=Owner");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/users?roles=Owner");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -112,7 +112,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/users?roles=Owner&pageSize=5");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/users?roles=Owner&pageSize=5");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -132,7 +132,7 @@ public sealed class GetTenantUsersTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/users");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/users");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

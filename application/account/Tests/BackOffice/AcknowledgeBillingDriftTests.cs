@@ -29,7 +29,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -48,7 +48,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -65,7 +65,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         var unknownTenantId = TenantId.NewId();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{unknownTenantId}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{unknownTenantId}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -79,7 +79,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -92,7 +92,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

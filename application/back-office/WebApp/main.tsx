@@ -1,7 +1,37 @@
-/**
- * SPA marker for the scaffold phase of this system. The shared SPA configuration walks up from
- * the assembly location at startup looking for the WebApp project (main.tsx or dist/index.html);
- * every API host needs the marker to exist or startup fails. The real back-office SPA moves in
- * at the cutover, replacing this file with the rsbuild entry point and its built dist bundle.
- */
-export {};
+import "@repo/ui/theme.css";
+import "@repo/ui/tailwind.css";
+import { setupGlobalErrorHandlers } from "@repo/infrastructure/http/globalErrorHandlers";
+import { TelemetryProvider } from "@repo/infrastructure/telemetry/TelemetryProvider";
+import { RepoUiTranslation } from "@repo/infrastructure/translations/RepoUiTranslation";
+import { Translation } from "@repo/infrastructure/translations/Translation";
+import { Toaster } from "@repo/ui/components/Sonner";
+import { RouterProvider } from "@tanstack/react-router";
+import React from "react";
+import reactDom from "react-dom/client";
+
+import { router } from "@/shared/lib/router/router";
+
+const { TranslationProvider } = await Translation.create(
+  (locale) => import(`@/shared/translations/locale/${locale}.ts`)
+);
+
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Root element not found.");
+}
+
+setupGlobalErrorHandlers();
+
+reactDom.createRoot(rootElement).render(
+  <React.StrictMode>
+    <TranslationProvider>
+      <RepoUiTranslation>
+        <TelemetryProvider>
+          <RouterProvider router={router} />
+          <Toaster position="top-center" closeButton={true} style={{ zIndex: 60 }} />
+        </TelemetryProvider>
+      </RepoUiTranslation>
+    </TranslationProvider>
+  </React.StrictMode>
+);

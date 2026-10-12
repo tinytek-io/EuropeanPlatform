@@ -35,7 +35,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/payment-history?pageSize=2");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/payment-history?pageSize=2");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -72,7 +72,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/payment-history");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/payment-history");
 
         // Assert — invoice row at invoiceDate AND credit-note row at creditNoteDate, descending so credit note first.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -113,7 +113,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/payment-history");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/payment-history");
 
         // Assert — Invoice (Succeeded) + Refund (no CreditNote row since CreditNoteUrl is null).
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -134,7 +134,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/payment-history");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/payment-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -153,7 +153,7 @@ public sealed class GetTenantPaymentHistoryTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/payment-history");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/payment-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
