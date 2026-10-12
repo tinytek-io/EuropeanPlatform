@@ -2,8 +2,11 @@ using Account.Features.BackOffice.BillingDrift.Queries;
 using Account.Features.BackOffice.BillingEvents.Queries;
 using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.BackOffice.Invoices.Queries;
+using Account.Features.FeatureFlags.Queries;
+using Account.Features.Users.BackOffice.Queries;
 using SharedKernel.ApiResults;
 using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Domain;
 using SharedKernel.Endpoints;
 
 namespace Account.Api.InternalApi;
@@ -76,5 +79,22 @@ public sealed class BackOfficeInternalEndpoints : IEndpoints
         billingDrift.MapGet("/mrr-consistency-summary", async Task<ApiResult<DashboardMrrConsistencySummaryResponse>> ([AsParameters] GetDashboardMrrConsistencySummaryQuery query, IMediator mediator)
             => await mediator.Send(query)
         ).Produces<DashboardMrrConsistencySummaryResponse>();
+
+        var users = group.MapGroup("/users").WithTags("BackOfficeInternalUsers");
+        users.MapGet("/", async Task<ApiResult<BackOfficeUsersResponse>> ([AsParameters] GetBackOfficeUsersQuery query, IMediator mediator)
+            => await mediator.Send(query)
+        ).Produces<BackOfficeUsersResponse>();
+        users.MapGet("/{id}", async Task<ApiResult<BackOfficeUserDetailResponse>> (UserId id, IMediator mediator)
+            => await mediator.Send(new GetBackOfficeUserDetailQuery(id))
+        ).Produces<BackOfficeUserDetailResponse>();
+        users.MapGet("/{id}/sessions", async Task<ApiResult<BackOfficeUserSessionsResponse>> (UserId id, [AsParameters] GetBackOfficeUserSessionsQuery query, IMediator mediator)
+            => await mediator.Send(query with { Id = id })
+        ).Produces<BackOfficeUserSessionsResponse>();
+        users.MapGet("/{id}/login-history", async Task<ApiResult<BackOfficeUserLoginHistoryResponse>> (UserId id, [AsParameters] GetBackOfficeUserLoginHistoryQuery query, IMediator mediator)
+            => await mediator.Send(query with { Id = id })
+        ).Produces<BackOfficeUserLoginHistoryResponse>();
+        users.MapGet("/{id}/feature-flags", async Task<ApiResult<GetUserFeatureFlagsResponse>> (UserId id, IMediator mediator)
+            => await mediator.Send(new GetUserFeatureFlagsQuery { UserId = id })
+        ).Produces<GetUserFeatureFlagsResponse>();
     }
 }
