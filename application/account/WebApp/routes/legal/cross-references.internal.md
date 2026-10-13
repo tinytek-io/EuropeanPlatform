@@ -36,7 +36,7 @@ These legal templates are designed for:
 - No "we will work with you to..." promises
 - No "contact us and we'll help you..." commitments
 - Direct customers to Compliance Center page with self-service documents
-- Reference Microsoft Azure Compliance Center for infrastructure compliance
+- Reference Scaleway's compliance documentation (scaleway.com/en/compliance) for infrastructure compliance
 - Make all compliance documentation (pen tests, certifications, security docs) publicly available for self-service
 
 **3. Account-Level Operations**
@@ -184,14 +184,14 @@ This allows customers to resubscribe (important for seasonal use like ERP system
 
 ### International Data Transfers
 
-| Document           | Section    | Text                                                                                                                                                                     |
-| ------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Privacy Policy** | Section 12 | "These transfers are protected by Microsoft's Data Processing Agreement incorporating Standard Contractual Clauses approved by the European Commission"                  |
-| **DPA**            | Section 9  | "These transfers are protected by Microsoft's Data Processing Agreement incorporating Standard Contractual Clauses... where required by applicable data protection laws" |
+| Document           | Section    | Text                                                                                                                                                                                                                                                                                                                      |
+| ------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Privacy Policy** | Section 12 | "Scaleway, our cloud infrastructure provider, is a French company subject to EU data protection law; its processing on our behalf is governed by our Data Processing Agreement complying with GDPR Article 28. Processing within the EU requires no additional transfer safeguards such as Standard Contractual Clauses." |
+| **DPA**            | Section 9  | "Scaleway, our cloud infrastructure provider, is a French company subject to EU data protection law; its processing on our behalf is governed by this DPA complying with GDPR Article 28. Processing within the EU requires no additional transfer safeguards such as Standard Contractual Clauses."                      |
 
 **Direction:** Analytics data flows INTO EU (from non-EU customers), NOT out of EU.
 
-**Key principle:** Personal/business data stays in selected Azure region. Only pseudonymized analytics goes to EU region.
+**Key principle:** All data (personal, business, and pseudonymized analytics) stays in the EU — Scaleway's Paris region. Nothing is transferred outside the EU.
 
 ### Sub-Processor Notice Period
 
@@ -292,13 +292,12 @@ When used generically (not as defined term), use lowercase: "your account settin
 
 **We HAVE (describe in DPA Schedule 3):**
 
-- Encryption in transit: HTTPS/TLS 1.2+ (PostgreSQL Flexible Server enforced, Ssl Mode=VerifyFull)
-- Encryption at rest: Azure platform encryption
-- RBAC: Entra ID authentication
-- PostgreSQL audit logging: log_statement=mod with 90-day retention to diagnostic storage account
-- Virtual network isolation: Private Endpoint with Private DNS Zone
-- Restricted outbound network access: No permanent firewall rules, temporary CI/CD access only
-- Application Insights: Monitoring and logging (may be sampled)
+- Encryption in transit: HTTPS/TLS at the edge, plus in-cluster service-to-service TLS via an internally managed certificate authority
+- Encryption at rest: Scaleway platform encryption (database, object storage); the Data Protection keyring is additionally encrypted with a customer-managed key in Scaleway Secret Manager
+- Per-workload identities: Scaleway IAM applications with least-privilege access to exactly their own secrets
+- Database isolation: the database runs on the cluster's private network with no public endpoint
+- Edge security: WAF in blocking mode (managed OWASP ruleset); cluster nodes without public IP addresses
+- Telemetry: OpenTelemetry to Scaleway Cockpit (EU) for monitoring and logging (may be sampled)
 - Telemetry events: Activity logging for mutations (not comprehensive audit)
 
 **We DON'T have (don't claim in DPA):**
@@ -308,13 +307,13 @@ When used generically (not as defined term), use lowercase: "your account settin
 - Background checks for employees
 - Formal security training programs
 - Custom IDS/IPS
-- Comprehensive audit trails (only SQL logs + telemetry)
+- Comprehensive audit trails (only telemetry events — database audit logging is not currently enabled)
 - Vulnerability management program
 - Formal DPIA procedures
 - Business continuity documentation
 - SOC 2 or ISO 27001 certifications
 
-**Guidance:** Only describe what Azure PaaS provides + what we implement. Don't invent practices.
+**Guidance:** Only describe what Scaleway managed services provide + what we implement. Don't invent practices.
 
 ---
 

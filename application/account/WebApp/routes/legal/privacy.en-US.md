@@ -108,11 +108,10 @@ We may share information in the following circumstances:
 
 We use the following data processors to operate our Service:
 
-- **Microsoft Azure**: Cloud infrastructure and services
-- **Azure Application Insights**: Analytics and performance monitoring
+- **Scaleway**: Cloud infrastructure and services (EU), including first-party analytics and performance monitoring, email delivery, and secrets management
 - **Stripe**: Payment processing (where applicable)
 
-These processors are contractually bound to protect data and process it only according to our instructions. Our data processing relationship is governed by a Data Processing Agreement (DPA) that complies with GDPR Article 28 requirements. Our DPA template is publicly available at [Data Processing Agreement](/legal/dpa).
+All infrastructure processing takes place within the EU (Scaleway's Paris region). These processors are contractually bound to protect data and process it only according to our instructions. Our data processing relationship is governed by a Data Processing Agreement (DPA) that complies with GDPR Article 28 requirements. Our DPA template is publicly available at [Data Processing Agreement](/legal/dpa).
 
 ## 5. Data Security
 
@@ -195,11 +194,13 @@ Account Owners and Account Administrators have access to usage data and activity
 
 ## 12. International Data Transfers
 
-Personal and business data is stored within the Azure region selected when signing up and is not transferred outside that region.
+Personal and business data is stored and processed exclusively within the EU (Scaleway's Paris region) and is not transferred outside the EU to provide the Service.
 
-Pseudonymized analytics data (Azure Application Insights telemetry) is processed within the EU region. For customers located outside the EU, your analytics data will be transferred from your local region to our EU-based Azure Application Insights instance for centralized processing. These transfers are protected by Microsoft's Data Processing Agreement incorporating Standard Contractual Clauses approved by the European Commission.
+Pseudonymized analytics data (OpenTelemetry telemetry processed in Scaleway Cockpit) is processed within the same EU region. For customers located outside the EU, your data is processed within the EU; no data is transferred to your local region.
 
-You have the right to obtain information about these safeguards and request a copy of the Standard Contractual Clauses by contacting us.
+Scaleway, our cloud infrastructure provider, is a French company subject to EU data protection law; its processing on our behalf is governed by our [Data Processing Agreement](/legal/dpa) complying with GDPR Article 28. Processing within the EU requires no additional transfer safeguards such as Standard Contractual Clauses.
+
+You have the right to obtain information about these safeguards by contacting us.
 
 ## 13. Changes to This Policy
 
