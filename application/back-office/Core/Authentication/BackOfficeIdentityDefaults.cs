@@ -14,7 +14,7 @@ public static class BackOfficeIdentityDefaults
 
     // Authorization policy used by all read endpoints under `/api/back-office/*`. Deliberately
     // permissive: any authenticated back-office identity passes — no group claim is required. This
-    // is by design — all PlatformPlatform employees have read access to back-office data, and no
+    // is by design — all EuropeanPlatform employees have read access to back-office data, and no
     // back-office data is restricted to a subset of staff. The read/write split is intentional.
     public const string PolicyName = "BackOfficePolicy";
 

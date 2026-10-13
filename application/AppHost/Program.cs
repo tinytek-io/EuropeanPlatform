@@ -45,7 +45,7 @@ if (isPublishMode)
     kubernetes = builder.AddKubernetesEnvironment("kubernetes")
         .WithHelm(helm => helm
             .WithChartName("platformplatform")
-            .WithChartDescription("PlatformPlatform self-contained systems on Kubernetes")
+            .WithChartDescription("EuropeanPlatform self-contained systems on Kubernetes")
         );
 
     // Images publish to the Scaleway Container Registry created by the bootstrap Terraform module

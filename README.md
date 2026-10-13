@@ -1,10 +1,10 @@
-# 👋 Welcome to PlatformPlatform
+# 👋 Welcome to EuropeanPlatform
 
 Kick-start building top-tier B2B & B2C cloud SaaS products with sleek design, fully localized and accessible, vertical slice architecture, automated and fast DevOps, and top-notch security.
 
 Ships with signup and login via Google or email one-time password, Stripe-powered subscription and payment management with plan upgrades, downgrades, and invoicing, feature flags with A/B-rollout, plan-gating, and per-user/tenant overrides, and a back-office dashboard with MRR and revenue trends, plan distribution, and tenant growth.
 
-Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Scaleway, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where PlatformPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
+Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Scaleway, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where EuropeanPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
 
 ## What's inside
 
@@ -14,7 +14,7 @@ Built to demonstrate seamless flow: backend contracts feed a fully-typed React U
 * **Infrastructure** - Cost efficient and scalable Scaleway services like Kapsule (Kubernetes), Managed PostgreSQL, and Object Storage
 * **Developer CLI** - Extendable .NET CLI for DevEx - set up CI/CD is one command and a couple of questions
 * **AI rules** - 30+ rules & skills, refined and battle-tested over a year of daily use, capturing our opinionated patterns
-* **Multi-agent development** - Agent Teams workflow where specialized Claude Code agents with deep PlatformPlatform expertise collaborate end-to-end
+* **Multi-agent development** - Agent Teams workflow where specialized Claude Code agents with deep EuropeanPlatform expertise collaborate end-to-end
 
 Follow our [up-to-date roadmap](https://github.com/orgs/PlatformPlatform/projects/2/views/2).
 
@@ -31,7 +31,7 @@ Operate the platform from a dedicated SPA on its own hostname, behind its own st
 * **Billing events** - Authoritative event log of subscription, payment, and billing transitions, filterable by event type and account, with deep-link from dashboard cards
 * **Feature flags** - Four levers (System / Subscription plan / Account / User) plus A/B-rollout with rich telemetry; declared in C# and surfaced as a strongly-typed React hook; back-office UI for rollouts and overrides
 
-<img src="https://platformplatformgithub.blob.core.windows.net/BackOffice.gif" alt="PlatformPlatform Back Office" title="PlatformPlatform Back Office" />
+<img src="https://platformplatformgithub.blob.core.windows.net/BackOffice.gif" alt="EuropeanPlatform Back Office" title="EuropeanPlatform Back Office" />
 
 ### User-facing SaaS product
 
@@ -47,7 +47,7 @@ Production-ready end-user surfaces — fully localized, accessible, and ready to
 * **User preferences** - Theme (light/dark/system) and zoom per device, language per profile
 * **Sessions** - Active session list with device type, browser, and OS, plus one-click revocation of any session
 
-<img src="https://platformplatformgithub.blob.core.windows.net/$root/PlatformPlatformDemo.gif" alt="PlatformPlatform Demo" title="PlatformPlatform Demo" />
+<img src="https://platformplatformgithub.blob.core.windows.net/$root/EuropeanPlatformDemo.gif" alt="EuropeanPlatform Demo" title="EuropeanPlatform Demo" />
 
 # Getting Started
 
@@ -252,7 +252,7 @@ We recommend you keep the commit history, which serves as a great learning and t
 
 ## 2. (Optional) Install the Developer CLI
 
-The PlatformPlatform CLI provides convenient commands for common tasks. From the cloned repository, install it globally to use the `pp` command from anywhere in your terminal.
+The EuropeanPlatform CLI provides convenient commands for common tasks. From the cloned repository, install it globally to use the `pp` command from anywhere in your terminal.
 
 ```bash
 cd developer-cli
@@ -288,7 +288,7 @@ Once the Aspire dashboard fully loads, click to the WebApp and sign up for a new
 
 ### 3.1 (Optional) Set up Google OAuth for "Sign in with Google" on localhost
 
-PlatformPlatform supports authentication via Google OAuth using OpenID Connect with PKCE. This is optional for local development since email-based one-time passwords work without any configuration. The Aspire dashboard prompts whether to enable Google OAuth on first startup.
+EuropeanPlatform supports authentication via Google OAuth using OpenID Connect with PKCE. This is optional for local development since email-based one-time passwords work without any configuration. The Aspire dashboard prompts whether to enable Google OAuth on first startup.
 
 <details>
 
@@ -319,7 +319,7 @@ All values are stored securely in .NET user secrets and persist across restarts.
 
 ### 3.2 (Optional) Set up Stripe sandbox for localhost
 
-PlatformPlatform includes a comprehensive Stripe integration for subscription management and payments: embedded Stripe checkout and payment elements, prorated plan upgrades and downgrades, tax management, localized UI and invoice text, refund overview in billing history, telemetry events for the subscription lifecycle, grandfather pricing for existing subscribers, dunning and failed payment recovery, and full sync between Stripe and the local database via webhooks. The Stripe Dashboard must be set up and configured according to the Stripe Dashboard setup guide below before enabling Stripe in Aspire.
+EuropeanPlatform includes a comprehensive Stripe integration for subscription management and payments: embedded Stripe checkout and payment elements, prorated plan upgrades and downgrades, tax management, localized UI and invoice text, refund overview in billing history, telemetry events for the subscription lifecycle, grandfather pricing for existing subscribers, dunning and failed payment recovery, and full sync between Stripe and the local database via webhooks. The Stripe Dashboard must be set up and configured according to the Stripe Dashboard setup guide below before enabling Stripe in Aspire.
 
 <details>
 
@@ -480,7 +480,7 @@ Add the back-office CNAME record the same way as the app hostname (see the
 
 # Multi-Agent Development with Claude Code
 
-PlatformPlatform includes a multi-agent autonomous development workflow powered by [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams). Specialized AI agents collaborate to deliver complete features, from requirements to production-ready code, while enforcing enterprise-grade quality standards.
+EuropeanPlatform includes a multi-agent autonomous development workflow powered by [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams). Specialized AI agents collaborate to deliver complete features, from requirements to production-ready code, while enforcing enterprise-grade quality standards.
 
 The entire process can take several hours depending on complexity, but at the end you get a fully implemented feature: backend logic, database migrations, API endpoints, frontend UI, localization, and end-to-end tests. All committed. All tests passing. Ready to ship.
 
@@ -494,7 +494,7 @@ The agents work like a real engineering team, inside the tools you already use. 
 
 **Native Agent Teams coordination**: Built on Claude Code's Agent Teams primitives: `TeamCreate`, `Task` with `team_name`, `SendMessage`, and a shared `TaskList`. The team lead spawns and coordinates all agents automatically.
 
-**Real collaboration via `SendInterruptSignal`**: Native Agent Teams are fragile out of the box. Agents treat `SendMessage` like an inbox: they finish their current task fully before reading the next message, so a team lead that sends a nudge mid-flight never hears back. Team leads then assume the agent is stuck, spawn replacements, and the new agents behave the same way. PlatformPlatform ships a custom MCP command, `SendInterruptSignal`, that solves this. It pairs with an ID-correlated follow-up `SendMessage` and is auto-delivered by a `PostToolUse` hook as a blocking error on the target agent's next tool call. Agents skip stale queued messages until they find the matching interrupt ID. Engineers interrupt QA when contracts change. Reviewers interrupt engineers with in-progress findings. The result is agents that truly collaborate in real time instead of talking past each other.
+**Real collaboration via `SendInterruptSignal`**: Native Agent Teams are fragile out of the box. Agents treat `SendMessage` like an inbox: they finish their current task fully before reading the next message, so a team lead that sends a nudge mid-flight never hears back. Team leads then assume the agent is stuck, spawn replacements, and the new agents behave the same way. EuropeanPlatform ships a custom MCP command, `SendInterruptSignal`, that solves this. It pairs with an ID-correlated follow-up `SendMessage` and is auto-delivered by a `PostToolUse` hook as a blocking error on the target agent's next tool call. Agents skip stale queued messages until they find the matching interrupt ID. Engineers interrupt QA when contracts change. Reviewers interrupt engineers with in-progress findings. The result is agents that truly collaborate in real time instead of talking past each other.
 
 **Plan before acting**: The team lead always starts in plan mode. Before spawning any agents, it investigates the work, then presents a plan describing which agents will be spawned, what each will do, and the expected sequence. Implementation begins only once the user approves. Small tasks get brief plans, large tasks get detailed plans.
 
@@ -581,7 +581,7 @@ The pair programmer is a standalone agent that works directly with you as a hand
 
 # Inside Our Monorepo
 
-PlatformPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) containing all application code, infrastructure, tools, libraries, documentation, etc. A monorepo is a powerful way to organize a codebase, used by Google, Facebook, Uber, Microsoft, etc.
+EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) containing all application code, infrastructure, tools, libraries, documentation, etc. A monorepo is a powerful way to organize a codebase, used by Google, Facebook, Uber, Microsoft, etc.
 
 ```bash
 .
@@ -671,7 +671,7 @@ The frontend is built with these technologies:
 
 ### Scaleway Infrastructure With Enterprise-Grade Security and Zero Secrets
 
-PlatformPlatform's cloud infrastructure is built on Scaleway managed services, defined entirely
+EuropeanPlatform's cloud infrastructure is built on Scaleway managed services, defined entirely
 in Terraform and deployed through the Aspire pipeline:
 
 - [Kapsule](https://www.scaleway.com/en/docs/containers/kubernetes/) - managed Kubernetes (Cilium networking, Gateway API ingress)
