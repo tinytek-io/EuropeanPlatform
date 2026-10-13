@@ -165,6 +165,33 @@ public sealed partial class DeployCommand : Command
         // plain environment value.
         var internalCaPem = (await RunTerraformAsync(environmentModuleFolder, "output -raw internal_ca_pem", "read the internal CA certificate")).Trim();
 
+        // The API images compose the SPA bundles straight from the working tree (the csproj
+        // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
+        // running dev stack can leave a dev-mode index.html (unhashed asset references) on top
+        // of production artifacts — deploying that state serves a white screen. Build fresh
+        // and verify every referenced asset exists before handing over to the pipeline.
+        PrintHeader("Building and validating the SPA bundles");
+
+        if (RunCommand.IsAspireRunning())
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning: a local Aspire dev stack is running. Its dev servers can rewrite dist/index.html mid-deploy; if the bundle validation below fails, stop it and deploy again.[/]");
+        }
+
+        ProcessHelper.Run("npm install --silent", Configuration.ApplicationFolder, "npm install", quiet: true);
+        var buildResult = ProcessHelper.ExecuteQuietly("npm run build", Configuration.ApplicationFolder);
+        if (!buildResult.Success)
+        {
+            AnsiConsole.MarkupLine("[red]The frontend build failed; the deploy is aborted so a broken bundle cannot ship.[/]");
+            Console.WriteLine(buildResult.CombinedOutput);
+            return;
+        }
+
+        foreach (var system in SelfContainedSystemHelper.GetAvailableSelfContainedSystems())
+        {
+            ValidateSpaBundle(Configuration.ApplicationFolder, system);
+            AnsiConsole.MarkupLine($"  [green]✓[/] {system} SPA bundle consistent");
+        }
+
         PrintHeader("Running the Aspire deploy pipeline");
 
         // The Aspire chart is regenerated on every deploy; a stale chart folder confuses
@@ -369,6 +396,33 @@ public sealed partial class DeployCommand : Command
         var response = await httpClient.GetAsync($"{RegistryApiBaseUrl}/{relativeUrl}");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>();
+    }
+
+    // Fails loud when a SPA's index.html references an asset that is not in the dist — the
+    // signature of a dev-polluted or stale dist (dev servers write unhashed references over
+    // hashed production bundles), which would deploy a white screen.
+    private static void ValidateSpaBundle(string applicationFolder, string system)
+    {
+        var distFolder = Path.Combine(applicationFolder, system, "WebApp", "dist");
+        var indexPath = Path.Combine(distFolder, "index.html");
+        if (!File.Exists(indexPath))
+        {
+            throw new InvalidOperationException($"Missing {indexPath}. The frontend build should have produced it; investigate before deploying.");
+        }
+
+        var html = File.ReadAllText(indexPath);
+        foreach (Match match in Regex.Matches(html, "(?:src|href)=\"([^\"]+)\""))
+        {
+            var reference = match.Groups[1].Value;
+            if (reference.StartsWith("http", StringComparison.Ordinal) || reference.StartsWith("data:", StringComparison.Ordinal)) continue;
+
+            var relativePath = reference.Replace("%CDN_URL%/", "", StringComparison.Ordinal).TrimStart('/');
+            if (!File.Exists(Path.Combine(distFolder, relativePath)))
+            {
+                throw new InvalidOperationException(
+                    $"{indexPath} references '{reference}', which does not exist in the dist. The dist is stale or was overwritten by a running dev stack. Stop the dev stack, rerun the frontend build, and deploy again.");
+            }
+        }
     }
 
     private static async Task<string> RunTerraformAsync(string workingDirectory, string arguments, string failureHint)
