@@ -6,7 +6,7 @@
  */
 
 /**
- * Pattern to match PlatformPlatform entity IDs
+ * Pattern to match EuropeanPlatform entity IDs
  * Format: prefix_26CHARACTERS where prefix is 2-5 lowercase letters
  * Examples: usr_01K1FYBDQ2NSPQ4NPJQ8Q5XCNY, eng_01JSNZ5NBF6RRBE2GK1K2PY0WM
  */

@@ -4,7 +4,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 
 /**
  * Save authentication state from a page's context to a file
- * Only captures cookies as session storage is not needed for PlatformPlatform's token architecture
+ * Only captures cookies as session storage is not needed for EuropeanPlatform's token architecture
  */
 export async function saveAuthenticationState(page: Page, filePath: string): Promise<void> {
   // Ensure directory exists
