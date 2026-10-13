@@ -17,7 +17,7 @@
 
   "branding": {
     // Product/platform name displayed throughout the application.
-    "productName": "PlatformPlatform",
+    "productName": "EuropeanPlatform",
 
     // PWA chrome colors. "themeColor.light/dark" tints the mobile browser/PWA toolbar (the iOS
     // Dynamic Island "tint band") -- the frontend swaps the `<meta name="theme-color">` value at
@@ -54,12 +54,12 @@
     // listed under "web" must also be listed under "mail" (Settings.cs fails loud at startup if not).
     "tagline": {
       "web": {
-        "en-US": "Free, open-source .NET and React starter kit for building modern SaaS applications.",
-        "da-DK": "Gratis, open-source .NET og React startpakke til at bygge moderne SaaS-applikationer."
+        "en-US": "Free, open-source .NET and React starter kit for building EU-hosted, GDPR-native SaaS applications.",
+        "da-DK": "Gratis, open-source .NET og React startpakke til at bygge EU-hostede, GDPR-native SaaS-applikationer."
       },
       "mail": {
-        "en-US": "Free, open-source .NET and React starter kit for building modern SaaS applications.",
-        "da-DK": "Gratis, open-source .NET og React startpakke til at bygge moderne SaaS-applikationer."
+        "en-US": "Free, open-source .NET and React starter kit for building EU-hosted, GDPR-native SaaS applications.",
+        "da-DK": "Gratis, open-source .NET og React startpakke til at bygge EU-hostede, GDPR-native SaaS-applikationer."
       }
     },
 
