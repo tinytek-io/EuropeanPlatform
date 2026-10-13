@@ -30,8 +30,8 @@ We have determined that this processing does not require a Data Protection Impac
 
 **How we process it:**
 
-- Data is collected via Azure Application Insights (first-party analytics)
-- Data flows to our own endpoint before being processed by Microsoft Azure as our data processor
+- Data is collected via first-party OpenTelemetry instrumentation and processed in Scaleway Cockpit (EU)
+- Data flows to our own endpoint before being processed by Scaleway as our data processor
 - Data is used for aggregated analysis, individual troubleshooting, and Service improvement
 
 **Who is affected:**
@@ -110,7 +110,7 @@ These interests are genuine, clearly defined, and represent real business needs 
 **Safeguards we have implemented:**
 
 - Clear disclosure in Privacy Policy explaining what we collect and why
-- Data processor agreement with Microsoft Azure
+- Data processing agreement with Scaleway (GDPR Article 28)
 - Analytics data used for aggregate trend analysis, not individual profiling
 - Security measures to protect data in transit and at rest
 - GDPR rights disclosure in Privacy Policy (though full deletion requires Account cancellation)
