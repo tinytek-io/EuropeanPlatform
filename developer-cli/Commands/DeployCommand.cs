@@ -177,7 +177,7 @@ public sealed partial class DeployCommand : Command
             AnsiConsole.MarkupLine("[yellow]Warning: a local Aspire dev stack is running. Its dev servers can rewrite dist/index.html mid-deploy; if the bundle validation below fails, stop it and deploy again.[/]");
         }
 
-        ProcessHelper.Run("npm install --silent", Configuration.ApplicationFolder, "npm install", quiet: true);
+        ProcessHelper.Run("npm install --silent", Configuration.ApplicationFolder, "npm install", true);
         var buildResult = ProcessHelper.ExecuteQuietly("npm run build", Configuration.ApplicationFolder);
         if (!buildResult.Success)
         {
@@ -253,6 +253,12 @@ public sealed partial class DeployCommand : Command
         await PruneRegistryTagsAsync(bootstrapModuleFolder);
 
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
+
+        // DNS drift is invisible to Terraform (the public zone lives at an external provider), so
+        // every deploy ends by printing the expected records and their live resolution —
+        // informational here, never failing the deploy; the standalone dns-check exits non-zero.
+        PrintHeader("Verifying the DNS records");
+        await DnsCheckCommand.PrintDnsReportAsync();
     }
 
     /// <summary>
@@ -420,7 +426,8 @@ public sealed partial class DeployCommand : Command
             if (!File.Exists(Path.Combine(distFolder, relativePath)))
             {
                 throw new InvalidOperationException(
-                    $"{indexPath} references '{reference}', which does not exist in the dist. The dist is stale or was overwritten by a running dev stack. Stop the dev stack, rerun the frontend build, and deploy again.");
+                    $"{indexPath} references '{reference}', which does not exist in the dist. The dist is stale or was overwritten by a running dev stack. Stop the dev stack, rerun the frontend build, and deploy again."
+                );
             }
         }
     }
