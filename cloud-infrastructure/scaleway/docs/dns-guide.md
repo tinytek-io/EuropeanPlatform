@@ -5,6 +5,13 @@ domain's nameservers currently point at Hetzner DNS, so the web records are crea
 Hetzner DNS console unless you delegate the staging sub-zone to Scaleway DNS (see the last
 section). The same record shapes apply on any other DNS provider (Simply.com, Cloudflare, ...).
 
+## 0. Let the tooling check it for you
+
+The `dns-check` command derives every record below from the Terraform state (never mutating it),
+resolves each one against live DNS, and prints a table with ok/missing/mismatch per record — it
+also runs automatically at the end of every `pp deploy`. Fix whatever it reports here in the DNS
+console.
+
 ## 1. Web traffic: point the staging hostnames at the Edge Services pipelines
 
 Public traffic never touches the cluster's Load Balancer directly: each public hostname is a
