@@ -30,19 +30,23 @@ domain: see the [DNS guide](docs/dns-guide.md).
 One bootstrap module and one environment module serve every tier. An environment is a
 **tier file** (`environment/environments/<terraform-environment>.tfvars`) plus a bootstrap
 apply — never a module change. The deploy command refuses to plan an environment without its
-tier file, and every environment-specific value lives in that file (hostnames, sizing,
+tier file, and every environment-specific value lives in that file (the domain, sizing,
 durability, the CCM-captured LB ids) with module defaults reproducing staging exactly.
 
 | Knob | preview (future) | staging (`stage.tfvars`) | production (future) |
 |---|---|---|---|
 | Bootstrap project | `pp-preview` + own state bucket | `pp-stage` | `pp-prod` + own state bucket |
-| Hostnames | `*.preview.tinytek.dev` | `app./back-office.staging.tinytek.dev` | `app./back-office.tinytek.dev` (apex zone) |
+| Domain (`domain_name`) | `preview.europeanplatform.net` | `staging.europeanplatform.net` | `europeanplatform.net` (apex) |
 | Node pool | 1 x DEV1-S | 2 x PLAY2-NANO | 2+ x PLAY2-NANO or larger |
 | Database tier / HA | db-dev-s, no HA | db-dev-s, no HA | db-s or larger, HA (`database_ha = true`) |
 | Backups | 24 h / 7 d | 24 h / 7 d (pinned) | 24 h / longer retention |
-| TEM domain | sub-zone | `staging.tinytek.dev` | apex `tinytek.dev` |
 | Edge | own plan, own pipelines | professional plan, 2 pipelines | own plan, apex hostnames |
 | Registry | private; cluster pulls via the read-only registry-pull identity | same | same |
+
+The domain is the single public-facing knob: the edge hostnames derive as `app.<domain>` /
+`back-office.<domain>`, Transactional Email sends from the zone itself, and the deploy command
+passes all three to the AppHost (`Hostnames__App`, `Hostnames__BackOffice`, `Email__Sender`)
+so application configuration never duplicates them.
 
 Bootstrap runs on **local state**; each environment's bootstrap state is a separate file
 (`terraform apply -state=terraform.<environment>.tfstate`), because the project resource is keyed

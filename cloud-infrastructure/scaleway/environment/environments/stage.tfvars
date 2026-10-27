@@ -18,13 +18,11 @@ database_ha        = false     # Staging tolerates a database host failure; prod
 backup_schedule_frequency = 24 # Automated backups: once a day...
 backup_schedule_retention = 7  # ...kept seven days (Scaleway's default cadence, pinned explicitly)
 
-edge_hostnames = {
-  app         = "app.staging.tinytek.dev"
-  back-office = "back-office.staging.tinytek.dev"
-}
-edge_pipeline_name_prefix = "staging"
+# The environment's zone on the public domain — the single domain knob: the edge hostnames
+# derive as app.<domain> / back-office.<domain>, and Transactional Email sends from the zone.
+domain_name = "staging.europeanplatform.net"
 
-tem_domain_name = "staging.tinytek.dev"
+edge_pipeline_name_prefix = "staging"
 
 # gateway_lb_frontend_id, gateway_lb_backend_id, and operator_user_id are cluster- and
 # operator-specific: they come from TF_VAR_* environment variables and are never committed
