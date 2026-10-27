@@ -169,13 +169,13 @@ resource "scaleway_vpc_gateway_network" "nat" {
 # (scw-loadbalancer-id + scw-loadbalancer-externally-managed) — see cluster-ops. The name MUST
 # NOT start with the cluster id: the CCM refuses to manage such LBs in externally-managed mode.
 resource "scaleway_lb_ip" "gateway" {
-  zone       = "fr-par-1"
+  zone       = "${var.region}-1"
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_lb" "gateway" {
-  zone       = "fr-par-1"
+  zone       = "${var.region}-1"
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-gateway"
   type       = "lb-s"
@@ -959,7 +959,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
   lb_backend_config {
     lb_config {
       id          = scaleway_lb.gateway.id
-      zone        = "fr-par-1"
+      zone        = "${var.region}-1"
       frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.
