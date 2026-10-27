@@ -25,6 +25,38 @@ namespace, and the deploy pipeline credentials.
 After the first deploy, point the staging hostnames at the cluster and verify the sending
 domain: see the [DNS guide](docs/dns-guide.md).
 
+## Environment tiers (preview / staging / production)
+
+One bootstrap module and one environment module serve every tier. An environment is a
+**tier file** (`environment/environments/<terraform-environment>.tfvars`) plus a bootstrap
+apply — never a module change. The deploy command refuses to plan an environment without its
+tier file, and every environment-specific value lives in that file (hostnames, sizing,
+durability, the CCM-captured LB ids) with module defaults reproducing staging exactly.
+
+| Knob | preview (future) | staging (`stage.tfvars`) | production (future) |
+|---|---|---|---|
+| Bootstrap project | `pp-preview` + own state bucket | `pp-stage` | `pp-prod` + own state bucket |
+| Hostnames | `*.preview.tinytek.dev` | `app./back-office.staging.tinytek.dev` | `app./back-office.tinytek.dev` (apex zone) |
+| Node pool | 1 x DEV1-S | 2 x PLAY2-NANO | 2+ x PLAY2-NANO or larger |
+| Database tier / HA | db-dev-s, no HA | db-dev-s, no HA | db-s or larger, HA (`database_ha = true`) |
+| Backups | 24 h / 7 d | 24 h / 7 d (pinned) | 24 h / longer retention |
+| TEM domain | sub-zone | `staging.tinytek.dev` | apex `tinytek.dev` |
+| Edge | own plan, own pipelines | professional plan, 2 pipelines | own plan, apex hostnames |
+| Registry | private; cluster pulls via the read-only registry-pull identity | same | same |
+
+Bootstrap runs on **local state**; each environment's bootstrap state is a separate file
+(`terraform apply -state=terraform.<environment>.tfstate`), because the project resource is keyed
+by the environment name — applying a second environment into one state file would REPLACE the
+first environment's project. The environment module's remote state bucket is per-environment
+(created by that environment's bootstrap); switching the working copy between environments is
+`terraform init -reconfigure` with the target bucket.
+
+Known provider gap (terraform-provider-scaleway ~> 2.86): `scaleway_k8s_cluster` has no
+apiserver access-restriction attributes, so the Kubernetes API server stays publicly reachable
+with no allow-list. Revisit on the next provider upgrade; until then it is documented exposure,
+mitigated by kubeconfig being the only credential.
+
+
 ## Usage
 
 Credentials come from the environment (`SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,

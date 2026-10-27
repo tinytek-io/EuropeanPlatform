@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
@@ -82,7 +83,7 @@ public sealed partial class DeployCommand : Command
 
     private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck)
     {
-        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform);
+        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
 
         if (!TerraformEnvironmentNames.TryGetValue(aspireEnvironment, out var terraformEnvironment))
         {
@@ -103,8 +104,19 @@ public sealed partial class DeployCommand : Command
         if (!skipPlanCheck)
         {
             PrintHeader("Checking Terraform convergence");
+
+            // The tier file is the environment's configuration contract (hostnames, sizing,
+            // durability); a missing one means the environment is not configured, not that
+            // defaults are fine.
+            var tierFile = Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.tfvars");
+            if (!File.Exists(tierFile))
+            {
+                AnsiConsole.MarkupLine($"[red]No tier configuration found at {tierFile}.[/] Every environment must declare its tier file (see environments/stage.tfvars).");
+                Environment.Exit(1);
+            }
+
             var plan = await ProcessHelper.ExecuteQuietlyAsync(
-                $"terraform plan -detailed-exitcode -input=false -no-color -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
+                $"terraform plan -detailed-exitcode -input=false -no-color -var-file=environments/{terraformEnvironment}.tfvars -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
                 environmentModuleFolder,
                 ("SCW_DEFAULT_PROJECT_ID", projectId)
             );
@@ -164,6 +176,18 @@ public sealed partial class DeployCommand : Command
         // APIs' in-cluster TLS. Public material — like the Cockpit endpoints, it passes as a
         // plain environment value.
         var internalCaPem = (await RunTerraformAsync(environmentModuleFolder, "output -raw internal_ca_pem", "read the internal CA certificate")).Trim();
+
+        // The registry namespace is private: the cluster pulls workload images through a
+        // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
+        // identity (Kapsule nodes have no native registry authentication). Applied idempotently
+        // here — before the release's first pod pulls — so every deploy converges the Secret to
+        // the current pull key.
+        PrintHeader("Applying the cluster's registry pull secret");
+
+        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_endpoint", "read the registry endpoint output")).Trim();
+        var registryHost = registryEndpoint.Split('/')[0];
+        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
+        ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
 
         // The API images compose the SPA bundles straight from the working tree (the csproj
         // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
@@ -443,6 +467,52 @@ public sealed partial class DeployCommand : Command
         }
 
         return result.StdOut;
+    }
+
+    // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
+    // exists on disk only in the temp manifest, only for the duration of the apply.
+    private static void ApplyRegistryPullSecret(string kubeconfigPath, string registryHost, string secretKey)
+    {
+        var dockerConfigJson = JsonSerializer.Serialize(new
+            {
+                auths = new Dictionary<string, object>
+                {
+                    // Scaleway registry auth: the username is a fixed placeholder, the secret key
+                    // authenticates.
+                    [registryHost] = new { username = "nologin", password = secretKey }
+                }
+            }
+        );
+        var secretManifest = $"""
+                              ---
+                              apiVersion: "v1"
+                              kind: "Secret"
+                              metadata:
+                                name: "scaleway-registry-pull"
+                                namespace: "default"
+                              type: "kubernetes.io/dockerconfigjson"
+                              data:
+                                .dockerconfigjson: "{Convert.ToBase64String(Encoding.UTF8.GetBytes(dockerConfigJson))}"
+                              """;
+
+        var manifestPath = Path.Combine(Path.GetTempPath(), $"pp-registry-pull-secret-{Guid.NewGuid():N}.yaml");
+        File.WriteAllText(manifestPath, secretManifest);
+        try
+        {
+            var result = ProcessHelper.ExecuteQuietly($"kubectl --kubeconfig {kubeconfigPath} apply -f {manifestPath}");
+            if (!result.Success)
+            {
+                AnsiConsole.MarkupLine("[red]Applying the registry pull secret failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
+                AnsiConsole.MarkupLine("[dim]The registry is private, so without the pull secret no pod can pull its image.[/]");
+                Environment.Exit(result.ExitCode);
+            }
+
+            AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
+        }
+        finally
+        {
+            File.Delete(manifestPath);
+        }
     }
 
     private static void PrintHeader(string title)

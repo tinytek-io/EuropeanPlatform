@@ -41,11 +41,43 @@ resource "scaleway_object_bucket" "terraform_state" {
 }
 
 # One registry namespace for all application images; `aspire deploy` pushes here. (The registry
-# namespace resource does not support tags.)
+# namespace resource does not support tags.) Private: nobody pulls anonymously — the cluster pulls
+# through the read-only registry-pull identity below (a dockerconfigjson Secret the deploy command
+# applies; Kapsule nodes have no native registry authentication). Flip is sequenced: apply the pull
+# identity first, deploy once with the pull Secret in place, only then let this visibility change
+# reach the live namespace.
 resource "scaleway_registry_namespace" "registry" {
   name       = "${var.prefix}-${var.environment}-registry"
   region     = var.region
   project_id = scaleway_account_project.environment.id
+  is_public  = false
+}
+
+# The cluster's pull identity: read-only registry access for image pulls. The deploy pipeline
+# keeps its separate FullAccess identity for pushes — this one is deliberately scoped down and is
+# the credential embedded in the cluster's dockerconfigjson pull Secret.
+resource "scaleway_iam_application" "registry_pull" {
+  name        = "${var.prefix}-${var.environment}-registry-pull"
+  description = "Read-only registry pulls for the ${var.environment} cluster nodes"
+}
+
+resource "scaleway_iam_policy" "registry_pull" {
+  name           = "${var.prefix}-${var.environment}-registry-pull"
+  description    = "Registry pulls for the cluster nodes (read-only)"
+  application_id = scaleway_iam_application.registry_pull.id
+
+  rule {
+    permission_set_names = ["ContainerRegistryReadOnly"]
+    project_ids          = [scaleway_account_project.environment.id]
+  }
+}
+
+# See the deploy pipeline key for the expiry-pinning rationale; rotate by changing the date.
+resource "scaleway_iam_api_key" "registry_pull" {
+  application_id     = scaleway_iam_application.registry_pull.id
+  description        = "API key for the ${var.environment} cluster's image pulls (registry pull Secret)"
+  expires_at         = var.registry_pull_key_expiry
+  default_project_id = scaleway_account_project.environment.id
 }
 
 # The deploy pipeline's identity: pushes images and reads/writes remote state.
