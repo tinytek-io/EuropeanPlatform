@@ -5,8 +5,8 @@ namespace SharedKernel.PipelineBehaviors;
 
 public sealed class PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>(
     ITelemetryEventsCollector telemetryEventsCollector,
-    ConcurrentCommandCounter concurrentCommandCounter,
-    ILogger<PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>> logger
+    TelemetryClient telemetryClient,
+    ConcurrentCommandCounter concurrentCommandCounter
 ) : IPipelineBehavior<TRequest, TResponse> where TRequest : ICommand where TResponse : ResultBase
 {
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
@@ -18,8 +18,7 @@ public sealed class PublishTelemetryEventsPipelineBehavior<TRequest, TResponse>(
             while (telemetryEventsCollector.HasEvents)
             {
                 var telemetryEvent = telemetryEventsCollector.Dequeue();
-
-                logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
+                telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
             }
         }
 

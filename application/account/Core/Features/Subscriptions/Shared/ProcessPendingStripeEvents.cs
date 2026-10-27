@@ -30,6 +30,7 @@ public sealed class ProcessPendingStripeEvents(
     StripeClientFactory stripeClientFactory,
     TimeProvider timeProvider,
     ITelemetryEventsCollector events,
+    TelemetryClient telemetryClient,
     PlanBasedFeatureFlagEvaluator planBasedFeatureFlagEvaluator,
     ILogger<ProcessPendingStripeEvents> logger
 )
@@ -775,7 +776,7 @@ public sealed class ProcessPendingStripeEvents(
         while (events.HasEvents)
         {
             var telemetryEvent = events.Dequeue();
-            logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
+            telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
         }
     }
 

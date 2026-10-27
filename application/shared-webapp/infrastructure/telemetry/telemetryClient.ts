@@ -1,6 +1,6 @@
 // The web application's own telemetry client: a tiny batched fetch sender to /api/track, which
-// the APIs turn into structured logs (flowing through OpenTelemetry to the dashboard/Cockpit).
-// Telemetry must never break the application: every failure is swallowed.
+// the APIs turn into OpenTelemetry events (log records with an event.name attribute) flowing to
+// the dashboard/Cockpit. Telemetry must never break the application: every failure is swallowed.
 
 export type TrackEventType = "pageview" | "pageviewPerformance" | "interaction" | "exception";
 
