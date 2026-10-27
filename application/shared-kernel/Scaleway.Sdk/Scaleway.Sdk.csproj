@@ -27,7 +27,7 @@
         <Description>A typed .NET client for the Scaleway API, generated from Scaleway's published OpenAPI schemas. No Aspire dependency: the same surface serves a workload, a deploy bootstrap, and the Aspire.Hosting.Scaleway package.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <RepositoryUrl>https://github.com/tinytek-io/ScalewayPlatform</RepositoryUrl>
+        <RepositoryUrl>https://github.com/tinytek-io/EuropeanPlatform</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
     </PropertyGroup>
 
