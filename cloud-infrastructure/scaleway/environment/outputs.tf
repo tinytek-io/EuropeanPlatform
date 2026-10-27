@@ -94,3 +94,13 @@ output "internal_ca_pem" {
   description = "The public internal CA certificate (PEM) that signs the workloads' in-cluster TLS certificates; the deploy passes it to the chart (Envoy validation) and the app-gateway"
   value       = tls_self_signed_cert.internal_ca.cert_pem
 }
+
+output "domain_name" {
+  description = "The environment's zone on the public domain — the single source for the edge hostnames and the Transactional Email sending domain"
+  value       = var.domain_name
+}
+
+output "edge_hostnames" {
+  description = "Public hostname per edge pipeline (app and back-office), derived from domain_name; the deploy passes them to the AppHost as Hostnames__App / Hostnames__BackOffice"
+  value       = local.edge_hostnames
+}

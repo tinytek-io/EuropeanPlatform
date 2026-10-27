@@ -125,7 +125,7 @@ Verify (in this order — the site must stay green throughout):
 
 ```bash
 kubectl get cnp -n default                                    # all policies present
-curl -sI https://app.staging.tinytek.dev | head -1             # public path unchanged
+curl -sI https://app.staging.europeanplatform.net | head -1   # public path unchanged
 kubectl logs -n default deploy/account-api --tail=20          # no secret-manager/DB errors
 kubectl rollout status deploy/account-api -n default
 # Prove the deny actually denies: a pod that is NOT in an allow path cannot reach an API.

@@ -614,25 +614,23 @@ variable "workload_key_expiry" {
 # a module change. The defaults reproduce staging exactly, so an unconfigured plan is staging's
 # plan; production's tier file overrides these.
 
-variable "edge_hostnames" {
-  description = "Public hostname per edge pipeline (the map key names the pipeline). Each becomes one edge pipeline with its managed certificate and WAF/cache stages."
-  type        = map(string)
-  default = {
-    app         = "app.staging.tinytek.dev"
-    back-office = "back-office.staging.tinytek.dev"
-  }
+variable "domain_name" {
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the platform serves exactly two edge pipelines); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  type        = string
+  default     = "staging.europeanplatform.net"
+}
+
+locals {
+  # Everything public derives from domain_name: one edge pipeline per hostname, and the TEM
+  # sending domain is the zone itself.
+  edge_hostnames  = { app = "app.${var.domain_name}", back-office = "back-office.${var.domain_name}" }
+  tem_domain_name = var.domain_name
 }
 
 variable "edge_pipeline_name_prefix" {
   description = "Edge pipeline names are \"<prefix>-<hostname key>\". Staging keeps its historical \"staging-\" prefix; other environments use their tier name."
   type        = string
   default     = "staging"
-}
-
-variable "tem_domain_name" {
-  description = "Transactional Email sending domain for this environment. Staging sends from the staging sub-zone (isolated reputation); production registers the apex domain."
-  type        = string
-  default     = "staging.tinytek.dev"
 }
 
 variable "gateway_lb_frontend_id" {
@@ -911,7 +909,7 @@ resource "scaleway_iam_api_key" "workload" {
 # keeps its historical "staging" label for every environment: renaming it would force a domain
 # replacement (re-verification, DKIM re-check) with no benefit.
 resource "scaleway_tem_domain" "staging" {
-  name       = var.tem_domain_name
+  name       = local.tem_domain_name
   accept_tos = true
   project_id = var.project_id
   region     = var.region
@@ -935,7 +933,7 @@ locals {
   # The CCM creates the gateway LB's own frontends and backends; their ids arrive as variables
   # (captured after each environment's first deploy) because they belong to the cluster, not to
   # this module's resources.
-  edge_pipelines = { for key, fqdn in var.edge_hostnames : key => { fqdn = fqdn } }
+  edge_pipelines = { for key, fqdn in local.edge_hostnames : key => { fqdn = fqdn } }
 }
 
 # Dedicated origin frontend for the back-office pipeline (app keeps the CCM-managed 443

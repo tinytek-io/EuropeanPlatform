@@ -105,7 +105,7 @@ public sealed partial class DeployCommand : Command
         {
             PrintHeader("Checking Terraform convergence");
 
-            // The tier file is the environment's configuration contract (hostnames, sizing,
+            // The tier file is the environment's configuration contract (the domain, sizing,
             // durability); a missing one means the environment is not configured, not that
             // defaults are fine.
             var tierFile = Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.tfvars");
@@ -177,6 +177,28 @@ public sealed partial class DeployCommand : Command
         // plain environment value.
         var internalCaPem = (await RunTerraformAsync(environmentModuleFolder, "output -raw internal_ca_pem", "read the internal CA certificate")).Trim();
 
+        // The environment's domain and the hostnames derived from it: the AppHost's Hostnames
+        // and the transactional email sender must match the edge pipelines' custom FQDNs and
+        // the TEM sending domain, so they resolve from the same Terraform outputs instead of
+        // being duplicated in AppHost configuration.
+        var edgeHostnamesJson = await RunTerraformAsync(environmentModuleFolder, "output -json edge_hostnames", "read the edge hostnames output");
+        var edgeHostnames = JsonSerializer.Deserialize<Dictionary<string, string>>(edgeHostnamesJson)
+                            ?? throw new InvalidOperationException("Could not parse edge_hostnames output.");
+        // The platform serves exactly two edge pipelines; both hostnames must be present.
+        if (!edgeHostnames.TryGetValue("app", out var appHostname))
+        {
+            AnsiConsole.MarkupLine("[red]The edge_hostnames output is missing the 'app' hostname.[/] The platform serves exactly two edge pipelines; check the environment module.");
+            Environment.Exit(1);
+        }
+
+        if (!edgeHostnames.TryGetValue("back-office", out var backOfficeHostname))
+        {
+            AnsiConsole.MarkupLine("[red]The edge_hostnames output is missing the 'back-office' hostname.[/] The platform serves exactly two edge pipelines; check the environment module.");
+            Environment.Exit(1);
+        }
+
+        var domainName = (await RunTerraformAsync(environmentModuleFolder, "output -raw domain_name", "read the domain name output")).Trim();
+
         // The registry namespace is private: the cluster pulls workload images through a
         // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
         // identity (Kapsule nodes have no native registry authentication). Applied idempotently
@@ -239,6 +261,9 @@ public sealed partial class DeployCommand : Command
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
         environmentVariables.Add(("InternalTls__CaPem", internalCaPem));
+        environmentVariables.Add(("Hostnames__App", appHostname));
+        environmentVariables.Add(("Hostnames__BackOffice", backOfficeHostname));
+        environmentVariables.Add(("Email__Sender", $"noreply@{domainName}"));
 
         int exitCode;
         try
