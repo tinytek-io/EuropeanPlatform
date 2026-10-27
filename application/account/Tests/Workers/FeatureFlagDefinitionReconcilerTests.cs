@@ -437,7 +437,8 @@ public sealed class FeatureFlagDefinitionReconcilerTests(AccountWebApplicationFa
         var featureFlagRepository = scope.ServiceProvider.GetRequiredService<IFeatureFlagRepository>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AccountDbContext>();
         var telemetryCollector = scope.ServiceProvider.GetRequiredService<ITelemetryEventsCollector>();
-        var reconciler = new FeatureFlagDefinitionReconciler(featureFlagRepository, dbContext, TimeProvider, telemetryCollector, NullLogger<FeatureFlagDefinitionReconciler>.Instance);
+        var telemetryClient = scope.ServiceProvider.GetRequiredService<TelemetryClient>();
+        var reconciler = new FeatureFlagDefinitionReconciler(featureFlagRepository, dbContext, TimeProvider, telemetryCollector, telemetryClient, NullLogger<FeatureFlagDefinitionReconciler>.Instance);
         await reconciler.ReconcileAsync(CancellationToken.None);
     }
 }

@@ -200,7 +200,8 @@ public static class SharedDependencyConfiguration
 
             return services
                 .AddScoped<ITelemetryEventsCollector, TelemetryEventsCollector>()
-                .AddScoped<ConcurrentCommandCounter>();
+                .AddScoped<ConcurrentCommandCounter>()
+                .AddScoped<TelemetryClient>();
         }
 
         private IServiceCollection RegisterMediatRRequest(Assembly[] assemblies)
