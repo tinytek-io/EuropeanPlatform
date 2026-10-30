@@ -69,16 +69,6 @@ variable "operator_user_id" {
   type        = string
 }
 
-variable "gateway_lb_frontend_id" {
-  description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
-  type        = string
-}
-
-variable "gateway_lb_backend_id" {
-  description = "Zone-qualified id of the CCM-created Envoy TCP backend the edge backend stages target. Same capture flow as the frontend id; supply it as TF_VAR_gateway_lb_backend_id."
-  type        = string
-}
-
 variable "kubernetes_version" {
   description = "Kapsule Kubernetes version; 1.37 ships Cilium 1.20 (Gateway API ExternalAuth available)"
   type        = string
@@ -92,15 +82,33 @@ variable "node_type" {
 }
 
 variable "node_count" {
-  description = "Pool size. One node is enough for staging; use at least two in production so workloads stay up while Kapsule reboots a node for upgrades."
+  description = "Pool size. Two nodes so workloads stay up while Kapsule reboots or drains a node for version upgrades and host maintenance; a single node is a full-outage single point of failure."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "database_node_type" {
   description = "Managed PostgreSQL node type. db-dev-s (2 vCPU / 2 GB) is the development tier: fine for staging and a starting point for production, with no SLA. Production should move to db-s or larger."
   type        = string
   default     = "db-dev-s"
+}
+
+variable "database_ha" {
+  description = "Runs the managed PostgreSQL instance as a high-availability cluster, so the database survives a Scaleway host failure. Roughly doubles the database cost — production tier, not staging."
+  type        = bool
+  default     = false
+}
+
+variable "backup_schedule_frequency" {
+  description = "Automated backup frequency in hours. Pinned explicitly to Scaleway's default cadence (verified against the product docs) so the durability contract travels with the environment."
+  type        = number
+  default     = 24
+}
+
+variable "backup_schedule_retention" {
+  description = "Automated backup retention in days."
+  type        = number
+  default     = 7
 }
 
 variable "database_admin_user" {
@@ -161,13 +169,13 @@ resource "scaleway_vpc_gateway_network" "nat" {
 # (scw-loadbalancer-id + scw-loadbalancer-externally-managed) — see cluster-ops. The name MUST
 # NOT start with the cluster id: the CCM refuses to manage such LBs in externally-managed mode.
 resource "scaleway_lb_ip" "gateway" {
-  zone       = "fr-par-1"
+  zone       = "${var.region}-1"
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_lb" "gateway" {
-  zone       = "fr-par-1"
+  zone       = "${var.region}-1"
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-gateway"
   type       = "lb-s"
@@ -183,10 +191,18 @@ resource "scaleway_rdb_instance" "main" {
   project_id    = var.project_id
   engine        = "PostgreSQL-17"
   node_type     = var.database_node_type
-  is_ha_cluster = false
+  is_ha_cluster = var.database_ha
   user_name     = var.database_admin_user
   password      = random_password.database.result
   tags          = local.tags
+
+  # Durability: automated backups are pinned explicitly instead of relying on Scaleway's invisible
+  # defaults (autobackup on, once a day, 7-day retention — verified against the product docs), so
+  # the durability contract travels with the environment. Restore path: restore a backup to a NEW
+  # instance (console/API), verify it, then cut over by pointing this resource at the clone —
+  # never restore in place under a running workload.
+  backup_schedule_frequency = var.backup_schedule_frequency
+  backup_schedule_retention = var.backup_schedule_retention
 
   private_network {
     pn_id       = scaleway_vpc_private_network.vpc.id
@@ -435,8 +451,8 @@ resource "scaleway_object_bucket" "data_protection" {
   tags       = local.bucket_tags
 
   lifecycle {
-    # Create the replacement before destroying the old bucket: the keyring blobs are copied
-    # across during a rename (see the decision notes) and a gap between buckets would have every
+    # Create the replacement before destroying the old bucket: a rename requires copying the
+    # keyring blobs to the replacement bucket first, and a gap between buckets would have every
     # API mint and validate against an empty ring. The provider has no force_destroy (2.84), so a
     # rename with content requires hand-emptying the old bucket; the keyring itself is recreatable
     # by the app (the key-ring owner generates a fresh ring on an empty bucket) at the cost of one
@@ -590,6 +606,41 @@ variable "workload_key_expiry" {
   description = "Expiry of the per-workload Secret Manager API keys (RFC3339). Change to rotate."
   type        = string
   default     = "2027-10-05T00:00:00Z"
+}
+
+# Tier configuration: every environment-specific value lives here or in a sibling tfvars file
+# (environments/<environment>.tfvars, selected by the deploy command). One module serves
+# preview/staging/production; a new environment is a new tier file plus a bootstrap apply, never
+# a module change. The defaults reproduce staging exactly, so an unconfigured plan is staging's
+# plan; production's tier file overrides these.
+
+variable "domain_name" {
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the platform serves exactly two edge pipelines); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  type        = string
+  default     = "staging.europeanplatform.net"
+}
+
+locals {
+  # Everything public derives from domain_name: one edge pipeline per hostname, and the TEM
+  # sending domain is the zone itself.
+  edge_hostnames  = { app = "app.${var.domain_name}", back-office = "back-office.${var.domain_name}" }
+  tem_domain_name = var.domain_name
+}
+
+variable "edge_pipeline_name_prefix" {
+  description = "Edge pipeline names are \"<prefix>-<hostname key>\". Staging keeps its historical \"staging-\" prefix; other environments use their tier name."
+  type        = string
+  default     = "staging"
+}
+
+variable "gateway_lb_frontend_id" {
+  description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
+  type        = string
+}
+
+variable "gateway_lb_backend_id" {
+  description = "Zone-qualified id of the CCM-created Envoy TCP backend the edge backend stages target. Same capture flow as the frontend id; supply it as TF_VAR_gateway_lb_backend_id."
+  type        = string
 }
 
 # The HMAC token-signing key is shared by the token-issuing APIs and the token-validating gateway,
@@ -854,9 +905,11 @@ resource "scaleway_iam_api_key" "workload" {
 # Transactional Email: the environment-specific sending domain — staging mail stays isolated
 # from production's domain reputation, and the apex domain stays free for the production project
 # to register. The offer subscription itself has no Terraform resource (read-only data source),
-# so subscribing to the essential plan stays an imperative one-time step.
+# so subscribing to the essential plan stays an imperative one-time step. The resource's ADDRESS
+# keeps its historical "staging" label for every environment: renaming it would force a domain
+# replacement (re-verification, DKIM re-check) with no benefit.
 resource "scaleway_tem_domain" "staging" {
-  name       = "staging.tinytek.dev"
+  name       = local.tem_domain_name
   accept_tos = true
   project_id = var.project_id
   region     = var.region
@@ -878,17 +931,9 @@ resource "scaleway_edge_services_plan" "main" {
 
 locals {
   # The CCM creates the gateway LB's own frontends and backends; their ids arrive as variables
-  # because they belong to the cluster, not to this module's resources.
-  edge_app_frontend_id  = var.gateway_lb_frontend_id # LB 443 frontend (CCM-managed)
-  edge_envoy_backend_id = var.gateway_lb_backend_id  # Envoy TCP backend (CCM-managed, zone-localized id)
-  edge_pipelines = {
-    app = {
-      fqdn = "app.staging.tinytek.dev"
-    }
-    back-office = {
-      fqdn = "back-office.staging.tinytek.dev"
-    }
-  }
+  # (captured after each environment's first deploy) because they belong to the cluster, not to
+  # this module's resources.
+  edge_pipelines = { for key, fqdn in local.edge_hostnames : key => { fqdn = fqdn } }
 }
 
 # Dedicated origin frontend for the back-office pipeline (app keeps the CCM-managed 443
@@ -898,12 +943,12 @@ resource "scaleway_lb_frontend" "back_office" {
   lb_id        = scaleway_lb.gateway.id
   name         = "${var.prefix}-${var.environment}-back-office-https"
   inbound_port = 8443
-  backend_id   = local.edge_envoy_backend_id
+  backend_id   = var.gateway_lb_backend_id
 }
 
 resource "scaleway_edge_services_pipeline" "gateway" {
   for_each   = local.edge_pipelines
-  name       = "staging-${each.key}"
+  name       = "${var.edge_pipeline_name_prefix}-${each.key}"
   project_id = var.project_id
 }
 
@@ -914,8 +959,8 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
   lb_backend_config {
     lb_config {
       id          = scaleway_lb.gateway.id
-      zone        = "fr-par-1"
-      frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : local.edge_app_frontend_id
+      zone        = "${var.region}-1"
+      frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.
       domain_name   = local.edge_pipelines[each.key].fqdn

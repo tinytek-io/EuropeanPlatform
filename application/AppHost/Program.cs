@@ -22,7 +22,7 @@ OverrideAspireDashboardEnvironmentVariables(ports);
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Publish mode targets a real cluster, so the localhost-only concerns below (port probing, dev
-// certificates, Azurite bootstrapping) must not run. CheckPortAvailability in particular calls
+// certificates, emulator bootstrapping) must not run. CheckPortAvailability in particular calls
 // Environment.Exit(1) when Aspire is already running locally, which would abort every publish.
 var isPublishMode = builder.ExecutionContext.IsPublishMode;
 
@@ -45,7 +45,7 @@ if (isPublishMode)
     kubernetes = builder.AddKubernetesEnvironment("kubernetes")
         .WithHelm(helm => helm
             .WithChartName("platformplatform")
-            .WithChartDescription("PlatformPlatform self-contained systems on Kubernetes")
+            .WithChartDescription("EuropeanPlatform self-contained systems on Kubernetes")
         );
 
     // Images publish to the Scaleway Container Registry created by the bootstrap Terraform module
@@ -160,7 +160,7 @@ if (isPublishMode)
 }
 else
 {
-    // Fixed local development credentials, safe like the Azurite key they replace. SeaweedFS's
+    // Fixed local development credentials, safe for a local-only emulator. SeaweedFS's
     // default IAM accepts any credentials without configuration, so the values only exist to keep
     // the connection string shape identical to production.
     const string storageAccessKey = "seaweed-admin";
@@ -516,9 +516,9 @@ if (isPublishMode)
 // HTTPS-only Kestrel (SharedKernel's AddInternalTls), and probes/env/routing on 8443.
 string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway", "back-office-api"];
 
-// Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
-// the YARP gateway; the back-office hostname bypasses it and hits account-api directly,
-// mirroring the Azure post-split topology. cert-manager is installed BY THE CHART (same
+// Public ingress: one Cilium (Envoy) Gateway with two hostnames. Both terminate at the YARP
+// gateway, which routes the app hostname to the feature APIs and the back-office hostname to
+// the back-office API. cert-manager is installed BY THE CHART (same
 // upstream v1.20.2 the cluster-ops steps used to apply by hand, with CRDs and the Gateway API
 // shim enabled) and owns the production issuer: DNS/TLS bring-up is complete and the staging
 // endpoint's rate-limit protection is no longer needed.
@@ -601,6 +601,8 @@ const string jobTemplate = """
                                    app.kubernetes.io/instance: "{{ .Release.Name }}"
                                spec:
                                  restartPolicy: Never
+                                 imagePullSecrets:
+                                   - name: "scaleway-registry-pull"
                                  containers:
                                    - name: "RESOURCE"
                                      image: "{{ .Values.parameters.VALUES_KEY.VALUES_KEY_image }}"
@@ -640,6 +642,8 @@ async Task PatchGeneratedChart(PipelineStepContext context)
     PatchGatewayRoutesForwardedProto(templatesFolder);
     AddInternalTlsManifests(templatesFolder);
     PatchWorkloadsForInternalTls(templatesFolder);
+    PatchWorkloadReplicas(templatesFolder);
+    PatchWorkloadImagePullSecrets(templatesFolder);
 }
 
 // The internal TLS trust chain, written as chart manifests because the Aspire publisher has no
@@ -719,6 +723,76 @@ void PatchWorkloadsForInternalTls(string templatesFolder)
         File.WriteAllText(deploymentPath, yaml);
         Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes, ports, certificate mount).");
     }
+}
+
+// Redundancy at the workload tier: the serving workloads (the internal-TLS set) run with
+// `Workload:ServingReplicas` replicas instead of the generated single pod, so a pod loss or a node
+// drain (the pool runs two nodes for the same reason) never drops the serving path. Workers stay
+// single-replica: they take no user traffic and reschedule on node loss. The value is tier
+// configuration (appsettings.staging.json today; per-environment files later), absent in local
+// publish smoke runs — 1 keeps the chart valid without pretending redundancy.
+void PatchWorkloadReplicas(string templatesFolder)
+{
+    var replicas = builder.Configuration["Workload:ServingReplicas"];
+    if (string.IsNullOrWhiteSpace(replicas))
+    {
+        Console.WriteLine("Replicas patch: Workload:ServingReplicas unset, serving workloads stay at 1.");
+        return;
+    }
+
+    if (!int.TryParse(replicas, out var count) || count < 1)
+    {
+        throw new InvalidOperationException($"Workload:ServingReplicas is '{replicas}' — it must be a positive integer.");
+    }
+
+    foreach (var workload in internalTlsWorkloads)
+    {
+        var deploymentPath = Path.Combine(templatesFolder, workload, "deployment.yaml");
+        var yaml = File.ReadAllText(deploymentPath);
+        if (!yaml.Contains("  replicas: 1"))
+        {
+            throw new InvalidOperationException($"Expected 'replicas: 1' in {workload}'s deployment — the generated chart layout changed, update the replicas patch.");
+        }
+
+        File.WriteAllText(deploymentPath, yaml.Replace("  replicas: 1", $"  replicas: {count}"));
+    }
+
+    Console.WriteLine($"Replicas patch: {internalTlsWorkloads.Length} serving workloads pinned to {count} replicas.");
+}
+
+// The registry namespace is private (zero trust: no anonymous pulls), so every pod that pulls a
+// workload image authenticates through the cluster's dockerconfigjson Secret — the deploy command
+// applies it (idempotently) from the bootstrap module's read-only registry-pull identity. Kapsule
+// nodes have no native registry authentication, and the Secret must exist before the first pod of
+// a release pulls; the name here matches the Secret the deploy command creates.
+void PatchWorkloadImagePullSecrets(string templatesFolder)
+{
+    const string podSpecAnchor = "    spec:\n      containers:";
+    const string imagePullSecrets = "    spec:\n      imagePullSecrets:\n        - name: \"scaleway-registry-pull\"\n      containers:";
+
+    var deployments = Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories);
+    if (deployments.Length == 0)
+    {
+        throw new InvalidOperationException("No deployment.yaml found in the generated chart — the chart layout changed, update the image-pull-secret patch.");
+    }
+
+    foreach (var deployment in deployments)
+    {
+        var yaml = File.ReadAllText(deployment);
+        if (yaml.Contains("imagePullSecrets:"))
+        {
+            continue;
+        }
+
+        if (!yaml.Contains(podSpecAnchor))
+        {
+            throw new InvalidOperationException($"No pod-spec anchor found in {deployment} — the generated chart layout changed, update the image-pull-secret patch.");
+        }
+
+        File.WriteAllText(deployment, yaml.Replace(podSpecAnchor, imagePullSecrets));
+    }
+
+    Console.WriteLine($"Image-pull-secret patch: {deployments.Length} deployments pull through scaleway-registry-pull.");
 }
 
 // The public requests' TLS terminates twice: at the Scaleway edge (its certificate) and again at

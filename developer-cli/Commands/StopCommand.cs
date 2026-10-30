@@ -8,7 +8,7 @@ namespace DeveloperCli.Commands;
 
 /// <summary>
 ///     Command to stop the Aspire AppHost and its Docker containers. Defaults to the current
-///     worktree; pass <c>--all</c> for every PlatformPlatform worktree, <c>--port</c> for a
+///     worktree; pass <c>--all</c> for every EuropeanPlatform worktree, <c>--port</c> for a
 ///     specific base port, or <c>--select</c> to pick interactively from running stacks.
 /// </summary>
 public sealed class StopCommand : Command
@@ -149,7 +149,7 @@ public sealed class StopCommand : Command
     {
         if (stack is { IsExternal: false, BasePort: { } basePort })
         {
-            // PlatformPlatform worktree: use the existing path-and-port-aware stop logic.
+            // EuropeanPlatform worktree: use the existing path-and-port-aware stop logic.
             RunCommand.StopAspire(stack.SourceFolder, new PortAllocation(basePort));
         }
         else if (stack.AspirePid is not null)
@@ -174,7 +174,7 @@ public sealed class StopCommand : Command
         var stacks = new List<StoppableStack>();
         var ppWorktreePaths = GetAllWorktreePaths().ToArray();
 
-        // 1. PlatformPlatform worktrees with running Aspire and/or leftover Docker containers.
+        // 1. EuropeanPlatform worktrees with running Aspire and/or leftover Docker containers.
         foreach (var worktreePath in ppWorktreePaths)
         {
             if (!PortAllocation.PortFileExists(worktreePath)) continue;

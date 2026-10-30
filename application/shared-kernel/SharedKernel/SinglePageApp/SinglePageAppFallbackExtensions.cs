@@ -111,7 +111,7 @@ public static class SinglePageAppFallbackExtensions
         return configuration;
     }
 
-    // In Azure, rsbuild has already copied the SPA's public/ assets into BundleDirectory at build time,
+    // Deployed, rsbuild has already copied the SPA's public/ assets into BundleDirectory at build time,
     // so the bundle provider serves them directly. In local dev, rsbuild's dev server holds public/
     // assets and never materializes them into BundleDirectory, leading to 404s on /manifest.json,
     // /favicon.ico, etc. Layering the public/ directory underneath the bundle provider closes that

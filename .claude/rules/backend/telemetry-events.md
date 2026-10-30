@@ -23,7 +23,7 @@ Guidelines for implementing telemetry events in the backend, including event str
 10. Don't track IDs of many-to-many aggregates—track the IDs of the two main aggregates instead
 11. Don't track IDs of single-use operations that are merely unique identifiers, as they provide no analytical value and may contain PII
 
-Note: Telemetry events are automatically annotated with extra data from the request, including current tenant ID, authenticated user ID, user role, application version, user's location, device type, browser, etc.
+Note: Telemetry events are published through the OpenTelemetry TelemetryClient as OTel events — log records with an `event.name` attribute holding the snake_case form of the event class name (e.g. `LoginCompleted` -> `login_completed`), which flow through the OTLP exporters to the Aspire dashboard locally and Scaleway Cockpit when deployed. Every property travels as a flat, individually indexed attribute, and the execution context (current tenant ID, authenticated user ID, user role) is attached automatically. No IP address, location, device, or browser data is attached: a raw IP in a log attribute is PII.
 
 ## Examples
 

@@ -15,7 +15,7 @@ backend (LB)`. There is one pipeline per public hostname:
 
 | | staging-app | staging-back-office |
 |---|---|---|
-| custom FQDN (head) | app.staging.tinytek.dev | back-office.staging.tinytek.dev |
+| custom FQDN (head) | app.staging.europeanplatform.net | back-office.staging.europeanplatform.net |
 | CNAME target | `<pipeline-id>.svc.edge.scw.cloud` | `<pipeline-id>.svc.edge.scw.cloud` |
 | origin frontend | LB 443 (CCM-created) | LB 8443 (`scaleway_lb_frontend.back_office`, TF-created) |
 | WAF | log_only, paranoia 1 | log_only, paranoia 1 |
@@ -57,8 +57,8 @@ SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
 ## DNS (user action)
 
 ```
-app.staging.tinytek.dev.         CNAME <app-pipeline-id>.svc.edge.scw.cloud.
-back-office.staging.tinytek.dev. CNAME <back-office-pipeline-id>.svc.edge.scw.cloud.
+app.staging.europeanplatform.net.         CNAME <app-pipeline-id>.svc.edge.scw.cloud.
+back-office.staging.europeanplatform.net. CNAME <back-office-pipeline-id>.svc.edge.scw.cloud.
 ```
 
 See the [DNS guide](../docs/dns-guide.md) for the full record set (web + email) and

@@ -65,6 +65,33 @@ The LB name must NOT start with the Kapsule cluster id (the CCM refuses such LBs
 externally-managed mode). The CCM still owns the frontend/backend on the adopted LB — that is
 by design (the pool contains node IPs) — so `set-gateway-lb-failover.sh` still applies.
 
+## 5b. Capture the CCM-created LB frontend/backend ids (after the first deploy)
+
+The CCM owns the frontends and backends it creates on the adopted LB; Terraform owns only the
+LB shell and its flexible IP. The edge configuration needs two of those CCM-created ids as
+INPUTS — the app pipeline's backend stage targets the CCM's 443 frontend, and the TF-created
+back-office 8443 frontend targets the CCM's Envoy TCP backend — so capture them once per
+cluster, after the first deploy has created the annotated gateway Service:
+
+```bash
+cd ../environment
+LB_ID=$(terraform output -raw gateway_lb_ref)   # zone/lb-id; the scw CLI wants the bare id
+LB_ID=${LB_ID##*/}
+
+scw lb frontend list "lb-id=${LB_ID}" -o json \
+  | jq -r '.[] | select(.inbound_port == 443) | .id'                      # -> gateway_lb_frontend_id
+scw lb backend list "lb-id=${LB_ID}" -o json \
+  | jq -r '.[] | select(.forward_protocol == "tcp") | "fr-par-1/\(.id)"'  # -> gateway_lb_backend_id
+```
+
+Export both as `TF_VAR_gateway_lb_frontend_id` and `TF_VAR_gateway_lb_backend_id` (they are
+cluster-specific and never committed) and apply — the edge backend stages reference them.
+
+The CCM names its resources `<gateway-service-uid>_tcp_<port>`; anything named
+`<prefix>-<environment>-*` is Terraform-owned. If the 443 frontend or the TCP backend is
+missing after a deploy, the §5 adoption annotations did not take — re-run §5, redeploy, and
+capture again.
+
 ## 6. Verify
 
 ```bash
@@ -74,3 +101,77 @@ kubectl get deploy -n cert-manager-chart        # chart-installed cert-manager
 kubectl get gateway public-gateway   # ADDRESS + Programmed=True once the LB is up
 kubectl get svc cilium-gateway-public-gateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
+
+## 6b. cert-manager manual-install cleanup (one-time)
+
+If a cert-manager was applied by hand BEFORE the chart owned it (staging's history), every
+deploy's `helm-install-cert-manager-chart` step fails with "CustomResourceDefinition ... exists
+and cannot be imported into the current release" — the app rollout still succeeds, but the
+pipeline is noisy and the chart's cert-manager never becomes the live one. Recovery (restores
+pipeline-intended state, so it is an allowed hand-fix):
+
+```bash
+helm list -A | grep -i cert-manager           # a hand-installed release shows here
+kubectl get deploy -A | grep cert-manager     # note the namespace the hand install used
+helm uninstall <release> -n <namespace>       # if helm-owned
+# ...or, if applied as raw manifests: kubectl delete -f <the manifests used>
+kubectl delete issuer <manual-issuer> -n default 2>/dev/null
+```
+
+The next deploy re-installs cert-manager + the production issuer from the chart and the step
+goes green. Verify with the §6 checks plus one deploy.
+
+## 6c. Registry pull secret (per environment, once — then deploy-owned)
+
+The registry namespace is private; Kapsule nodes have no native registry authentication. The
+deploy command applies the `scaleway-registry-pull` dockerconfigjson Secret (from the bootstrap
+module's read-only registry-pull identity) on every deploy, and the generated chart's workloads
+reference it via `imagePullSecrets`. Nothing to do by hand as long as deploys run; after the
+first deploy with the secret, verify pulls authenticate:
+
+```bash
+kubectl get secret scaleway-registry-pull -n default
+kubectl run pull-test --rm -it --image=rg.fr-par.scw.cloud/<namespace>/<image>:<tag> --restart=Never -- command -v true
+```
+
+## 7. East-west network policies (default-deny + derived allows)
+
+`network-policies.yaml` enforces zero-trust east-west: default-deny in and out for every
+workload in `default`, with only the traffic the AppHost wiring declares (see the file's header
+for the per-workload map). The RDB placeholders are resolved from Terraform outputs first:
+
+```bash
+cd ../environment
+RDB_IP=$(terraform output -raw database_endpoint_ip)
+RDB_PORT=$(terraform output -raw database_endpoint_port)
+cd ../cluster-ops
+sed -e "s/<rdb-ip>/$RDB_IP/" -e "s/<rdb-port>/$RDB_PORT/" network-policies.yaml | kubectl apply -f -
+```
+
+Verify (in this order — the site must stay green throughout):
+
+```bash
+kubectl get cnp -n default                                    # all policies present
+curl -sI https://app.staging.europeanplatform.net | head -1   # public path unchanged
+kubectl logs -n default deploy/account-api --tail=20          # no secret-manager/DB errors
+kubectl rollout status deploy/account-api -n default
+# Prove the deny actually denies: a pod that is NOT in an allow path cannot reach an API.
+kubectl run deny-test --rm -it --image=busybox --restart=Never -- wget -qO- --timeout=5 https://account-api-service:8443 || echo "denied (correct)"
+```
+
+The `toFQDNs` rules depend on Cilium's DNS proxy. If Cockpit/Secret Manager lookups fail under
+policy (Kapsule's managed Cilium config is the unknown), the interim fallback is `toEntities:
+[world]` + the same port scoping (weaker: any IP on those ports) until the DNS proxy is proven.
+
+Rollback restores the pre-policy state exactly (Cilium without policies is allow-all):
+
+```bash
+kubectl delete -f network-policies.yaml
+```
+
+## Known gap: the Kubernetes API server
+
+The pinned Terraform provider (scaleway ~> 2.86) has no apiserver access-restriction attributes,
+so the cluster's API server is publicly reachable with no allow-list. Mitigation: kubeconfig is
+the only credential; revisit on a provider upgrade.
+

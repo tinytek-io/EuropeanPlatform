@@ -9,11 +9,11 @@ namespace Account.Workers;
 ///     (no DriftCheckedAt yet, or older than the configured staleness threshold) and asks
 ///     <see cref="ProcessPendingStripeEvents" /> to flag drift via <c>SyncMode.Detect</c>. The worker is a
 ///     tripwire — it never mutates persisted state beyond <see cref="Subscription.SetDriftStatus" />, so any
-///     real remediation stays on the webhook hot path and the back-office reconcile admin action. Azure
-///     Container Apps Workers scale down to zero replicas when idle and Azure sends SIGTERM on scale-down,
-///     so the <see cref="BackgroundService" /> lifecycle naturally bounds this pass to a single run per
-///     scale-up; we deliberately do not use a <see cref="PeriodicTimer" /> because the in-memory timer would
-///     never tick before the container exited.
+///     real remediation stays on the webhook hot path and the back-office reconcile admin action.
+///     Kubernetes sends SIGTERM when the pod terminates or the deployment scales down, so the
+///     <see cref="BackgroundService" /> lifecycle naturally bounds this pass to a single run per
+///     start; we deliberately do not use a <see cref="PeriodicTimer" /> because the in-memory timer would
+///     never tick before the pod exited.
 /// </summary>
 public sealed class BillingDriftWorker(IServiceProvider serviceProvider, IConfiguration configuration, TimeProvider timeProvider, ILogger<BillingDriftWorker> logger) : BackgroundService
 {

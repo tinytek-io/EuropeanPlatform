@@ -97,7 +97,7 @@ public sealed class GoogleOAuthProvider(HttpClient httpClient, IConfiguration co
             ValidateAudience = true,
             ValidAudiences = [_configuration.ClientId],
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromSeconds(10), // Both Azure and Google use NTP-synced clocks, so minimal skew is safe
+            ClockSkew = TimeSpan.FromSeconds(10), // Identity providers use NTP-synced clocks, so minimal skew is safe
             IssuerSigningKeys = openIdConfiguration.SigningKeys,
             ValidateIssuerSigningKey = true,
             ValidAlgorithms = [SecurityAlgorithms.RsaSha256]

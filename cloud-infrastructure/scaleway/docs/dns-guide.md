@@ -1,9 +1,16 @@
-# DNS and email setup for staging (tinytek.dev)
+# DNS and email setup for staging (europeanplatform.net)
 
 This guide covers the records you need to create **once**, after the first `aspire deploy`. The
-domain's nameservers currently point at Hetzner DNS, so the web records are created in the
-Hetzner DNS console unless you delegate the staging sub-zone to Scaleway DNS (see the last
-section). The same record shapes apply on any other DNS provider (Simply.com, Cloudflare, ...).
+records are created in the DNS console of wherever the `europeanplatform.net` zone is hosted,
+unless you delegate the staging sub-zone to Scaleway DNS (see the last section). The same record
+shapes apply on any other DNS provider (Hetzner, Simply.com, Cloudflare, ...).
+
+## 0. Let the tooling check it for you
+
+The `dns-check` command derives every record below from the Terraform state (never mutating it),
+resolves each one against live DNS, and prints a table with ok/missing/mismatch per record — it
+also runs automatically at the end of every `pp deploy`. Fix whatever it reports here in the DNS
+console.
 
 ## 1. Web traffic: point the staging hostnames at the Edge Services pipelines
 
@@ -42,7 +49,7 @@ cert-manager issuance path described above depends on the hostnames resolving th
 ## 2. Email: verify the Transactional Email sending domain
 
 Transactional email is sent through Scaleway TEM with the environment-specific sending domain
-`staging.tinytek.dev` (isolated from the apex domain's reputation; the apex stays free for the
+`staging.europeanplatform.net` (isolated from the apex domain's reputation; the apex stays free for the
 production environment). After `terraform apply` registers the domain
 (`scaleway_tem_domain`), get the expected records:
 
@@ -57,7 +64,7 @@ Create three records in the DNS console for the `staging` zone:
 |------|--------------------------|--------------------------------------------------|
 | TXT  | `staging` (zone apex)    | `v=spf1 include:_spf.tem.scaleway.com ~all`     |
 | TXT  | `tem._domainkey.staging` | the `dkim_config` value from the command above  |
-| TXT  | `_dmarc.staging`         | `v=DMARC1; p=none; rua=mailto:ops@tinytek.dev`   |
+| TXT  | `_dmarc.staging`         | `v=DMARC1; p=none; rua=mailto:ops@europeanplatform.net` |
 
 Then ask Scaleway to re-check the records:
 
@@ -76,15 +83,16 @@ resource.
 SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
 
 # Record-by-record:
-dig +short app.staging.tinytek.dev         # should chain to the pipeline endpoint IPs
-dig +short back-office.staging.tinytek.dev
-curl -sI https://app.staging.tinytek.dev/         # expect 200
-curl -sI https://back-office.staging.tinytek.dev/ # expect 401 (auth gate) while MockEasyAuth is active
+dig +short app.staging.europeanplatform.net         # should chain to the pipeline endpoint IPs
+dig +short back-office.staging.europeanplatform.net
+curl -sI https://app.staging.europeanplatform.net/         # expect 200
+curl -sI https://back-office.staging.europeanplatform.net/ # expect 401 (auth gate) while MockEasyAuth is active
 ```
 
 ## 4. Optional: delegate the staging sub-zone to Scaleway DNS
 
-Instead of maintaining records on an external provider, you can delegate `staging.tinytek.dev`
-to Scaleway DNS (`scw-dns` manages the zone, TEM/Edge record changes become Scaleway-side).
-That is a trade-off between provider consolidation and keeping all DNS for the apex in one
-console — staging currently runs with the records on Hetzner DNS.
+Instead of maintaining records on an external provider, you can delegate
+`staging.europeanplatform.net` to Scaleway DNS (`scw-dns` manages the zone, TEM/Edge record
+changes become Scaleway-side). That is a trade-off between provider consolidation and keeping
+all DNS for the apex in one console — until the delegation, the records live with the zone's
+DNS provider.
