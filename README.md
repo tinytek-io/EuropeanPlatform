@@ -22,7 +22,7 @@ Show your support for our project - give us a star on GitHub! It truly means a l
 
 ### Back office
 
-Operate the platform from a dedicated SPA on its own hostname, secured by Entra ID Easy Auth:
+Operate the platform from a dedicated SPA on its own hostname, behind its own staff sign-in (a standard OIDC provider, with a mock identity selector as the stand-in in development and staging):
 
 * **Dashboard** - KPI tiles for total accounts, blended MRR, all-time revenue, active users, and live sessions; trend cards for MRR, revenue, tenant growth, plan distribution, user logins; activity feeds for recent signups, payments, logins, and Stripe webhook events
 * **Accounts** - Search and filter every tenant; drill into detail with owner, plan, and signup activity
@@ -408,8 +408,8 @@ The back-office staff sign-in uses any standard OpenID Connect provider (Entra I
 Workspace, Auth0, ...) when one is configured; otherwise environments fall back to the mock
 identity selector (local development, and staging until a provider exists).
 
-To wire a provider, set — as Secret Manager entries for the account workloads or environment
-variables on the account API — the keys under `BackOffice:Oidc`:
+To wire a provider, set — as Secret Manager entries for the back-office workloads or environment
+variables on the back-office API — the keys under `BackOffice:Oidc`:
 
 - `BackOffice:Oidc:Authority` — the provider's base URL with a discoverable
   `.well-known/openid-configuration` (e.g. `https://login.microsoftonline.com/{tenant}/v2.0`)
@@ -419,7 +419,8 @@ variables on the account API — the keys under `BackOffice:Oidc`:
 
 Register the redirect URI `https://back-office.<your-domain>/.auth/login/aad/callback` with the
 provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` set to the
-value the provider issues in the `groups` claim for staff administrators. When these keys are
+value the provider issues in the `groups` claim for staff administrators — the back-office's own
+admin policy and account's internal-API admin gate both read it. When these keys are
 configured, the mock identity selector is disabled automatically.
 
 #### Test the OIDC flow locally with the Authelia harness
@@ -464,10 +465,11 @@ Provision the **Publishable Key**, **API Key** (Secret key), and **Webhook Secre
 
 ### Back-office access
 
-The back-office host runs on its own hostname (`back-office.<domain>`) in front of the same
-application, protected by an authentication gate: on staging this is MockEasyAuth (a deliberate
-stand-in until a proper OIDC provider for staff accounts is configured), and the edge pipelines
-serve its hostname with the same TLS, WAF, and caching as the app.
+The back-office runs as its own self-contained system — a backend-for-frontend over the feature
+systems' internal APIs — on its own hostname (`back-office.<domain>`), protected by an
+authentication gate: on staging this is MockEasyAuth (a deliberate stand-in until a proper OIDC
+provider for staff accounts is configured), and the edge pipelines serve its hostname with the
+same TLS, WAF, and caching as the app.
 
 To grant a person access once staff OIDC is configured, add them to the administrator group in
 the identity provider; the platform-issued token then carries the claim the back-office uses to
@@ -598,13 +600,18 @@ PlatformPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 │  │   ├─ Core           # Core business logic, application use cases, and infrastructure
 │  │   ├─ Workers        # Background workers for long-running tasks and event processing
 │  │   └─ Tests          # Tests for the Api, Core, and Workers
-│  ├─ account            # Federated module for authentication, user and account management; also hosts the back-office surface
+│  ├─ account            # Federated module for authentication, user and account management
 │  │   ├─ WebApp         # React SPA loaded into main via Module Federation
-│  │   ├─ BackOffice     # React SPA for operations and support, served on its own host (Entra ID Easy Auth)
-│  │   ├─ Api             # Presentation layer exposing both account and back-office endpoints
-│  │   ├─ Core            # Core business logic, application use cases, and infrastructure
-│  │   ├─ Workers         # Background workers for long-running tasks and event processing
-│  │   └─ Tests           # Tests for the Api, Core, and Workers
+│  │   ├─ Api            # Presentation layer exposing the API and the internal back-office API
+│  │   ├─ Core           # Core business logic, application use cases, and infrastructure
+│  │   ├─ Workers        # Background workers for long-running tasks and event processing
+│  │   ├─ Migrator       # Run-once database migrator, deployed as a pre-upgrade Job
+│  │   └─ Tests          # Tests for the Api, Core, and Workers
+│  ├─ back-office        # Staff surface for operations and support, on its own hostname
+│  │   ├─ WebApp         # React SPA served to staff (OIDC sign-in, mock selector in development)
+│  │   ├─ Api            # BFF over the feature systems' internal APIs
+│  │   ├─ Core           # Staff identity, delegation, and BFF use cases
+│  │   └─ Tests          # System tests over the full BFF pipeline
 │  ├─ shared-kernel      # Reusable components and default configuration for all systems
 │  └─ shared-webapp      # Reusable ShadCN 2.0 components with Base UI that affect all systems
 ├─ cloud-infrastructure  # Infrastructure as Code (Terraform) and cluster operation scripts for Scaleway
@@ -614,7 +621,7 @@ PlatformPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 └─ developer-cli         # A .NET CLI tool for automating common developer tasks
 ```
 
-** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The back-office surface for operations and support is hosted by the `account` SCS as a separate SPA on its own hostname, authenticated via a staff identity provider (MockEasyAuth on staging and in development until then).
+** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The `back-office` SCS is the staff surface for operations and support on its own hostname — a backend-for-frontend over the feature systems' internal APIs, with its own staff identity (MockEasyAuth on staging and in development until a proper OIDC provider is configured).
 
 # Technologies
 

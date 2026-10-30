@@ -4,7 +4,6 @@ using Account.Features.BackOffice.Dashboard.Queries;
 using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -24,11 +23,11 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         SeedTenant("Middle", future.AddDays(-1));
         SeedTenant("Oldest", future.AddDays(-2));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=10");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -49,11 +48,11 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
     public async Task GetDashboardRecentSignups_WhenCalledWithInvalidLimit_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=0");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=0");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -66,7 +65,7 @@ public sealed class GetDashboardRecentSignupsTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/recent-signups?Limit=6");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/recent-signups?Limit=6");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

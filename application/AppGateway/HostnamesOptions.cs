@@ -8,13 +8,17 @@ public sealed class HostnamesOptions
 
     public string App { get; init; } = string.Empty;
 
-    public string[] AllHostnames => [App];
+    public string BackOffice { get; init; } = string.Empty;
+
+    // Wildcard routes (avatars, logos, email static) serve both public hostnames.
+    public string[] AllHostnames => [App, BackOffice];
 
     public string? Resolve(string hostnameKey)
     {
         return hostnameKey switch
         {
             "App" => App,
+            "BackOffice" => BackOffice,
             _ => null
         };
     }

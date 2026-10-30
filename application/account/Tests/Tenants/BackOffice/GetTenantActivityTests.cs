@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using Account.Features.Tenants.BackOffice.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using Xunit;
 
@@ -16,11 +15,11 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
     {
         // Arrange
         var tenant = DatabaseSeeder.Tenant1;
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenant.Id}/activity");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenant.Id}/activity");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -34,11 +33,11 @@ public sealed class GetTenantActivityTests(BackOfficeWebApplicationFactory facto
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/activity");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/activity");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

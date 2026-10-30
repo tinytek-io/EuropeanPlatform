@@ -4,7 +4,6 @@ using Account.Features.FeatureFlags.Domain;
 using Account.Features.FeatureFlags.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -18,11 +17,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
     {
         // Arrange
         var tenantId = DatabaseSeeder.Tenant1.Id;
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -42,11 +41,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         var flagKey = "sso";
         ActivateBaseRow(flagKey);
         InsertTenantOverride(tenantId, flagKey, "Manual", TimeProvider.System.GetUtcNow());
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -65,11 +64,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         var flagKey = "sso";
         ActivateBaseRow(flagKey);
         InsertTenantOverride(tenantId, flagKey, "Plan", TimeProvider.System.GetUtcNow());
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -94,11 +93,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
                 ("bucket_end", 99)
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -122,11 +121,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
         );
         Connection.Update("feature_flags", "id", baseRowId, [("enabled_at", null)]);
         InsertTenantOverride(tenantId, flagKey, "Manual", TimeProvider.System.GetUtcNow());
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert — the row Source stays Manual (the override is authoritative for that column), but
         // IsEnabled must be false because the base row is globally deactivated.
@@ -143,11 +142,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
     {
         // Arrange
         var nonExistentId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{nonExistentId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{nonExistentId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -158,11 +157,11 @@ public sealed class GetTenantFeatureFlagsTests(BackOfficeWebApplicationFactory f
     {
         // Arrange
         var tenantId = DatabaseSeeder.Tenant1.Id;
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}/feature-flags");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}/feature-flags");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

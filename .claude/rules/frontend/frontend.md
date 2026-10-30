@@ -42,7 +42,7 @@ Use browser MCP tools to test at `https://app.dev.localhost:<appGateway>`. Look 
 4. **API Integration**:
    - API client auto-generated from OpenAPI spec
    - Located in `shared/lib/api/client.ts`
-   - A SPA only calls its own self-contained system's endpoints via that system's generated OpenAPI client. Prefixes: `main` → `/api/*`, `account` (user-facing app) → `/api/account/*`, `account` (back-office surface) → `/api/back-office/*`. Cross-system needs go backend-to-backend via `/internal-api/...`, exposed to the SPA through a facade endpoint in its own system
+   - A SPA only calls its own self-contained system's endpoints via that system's generated OpenAPI client. Prefixes: `main` → `/api/*`, `account` → `/api/account/*`, `back-office` → `/api/back-office/*` (its own SCS). Cross-system needs go backend-to-backend via `/internal-api/...` — the back-office BFF over account's internal API is the pattern to follow
    - Never make direct fetch calls
    - Server state lives in TanStack Query only
    - Use `queryClient.invalidateQueries()` to refresh data after mutations

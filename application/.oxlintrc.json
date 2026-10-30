@@ -199,7 +199,7 @@
       }
     },
     {
-      "files": ["**/main/WebApp/shared/lib/router/router.tsx", "**/BackOffice/shared/lib/router/router.tsx"],
+      "files": ["**/main/WebApp/shared/lib/router/router.tsx", "**/back-office/WebApp/shared/lib/router/router.tsx"],
       "rules": {
         "no-restricted-imports": "off"
       }

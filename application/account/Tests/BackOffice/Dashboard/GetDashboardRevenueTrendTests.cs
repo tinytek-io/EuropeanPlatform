@@ -6,7 +6,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -29,11 +28,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, todayTimestamp, PaymentTransactionStatus.Succeeded, null)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -69,11 +68,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, paidOn, PaymentTransactionStatus.Refunded, refundedOn)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -105,11 +104,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, paidOn, PaymentTransactionStatus.Succeeded, null, "https://stripe.com/credit_note/test")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -136,11 +135,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, paidOn, PaymentTransactionStatus.Succeeded, null, null)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -174,11 +173,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, todayTimestamp, PaymentTransactionStatus.Failed, null)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -205,11 +204,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, currentWindowPayment, PaymentTransactionStatus.Succeeded, null)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -242,11 +241,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
             (149m, ancientPayment, PaymentTransactionStatus.Succeeded, null)
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -264,11 +263,11 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
     public async Task GetDashboardRevenueTrend_WhenNoPaymentTransactions_ShouldReturnZeroFilledSeries()
     {
         // Arrange — no subscriptions seeded with transactions; both series fill the period with zeros.
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend?Period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend?Period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -287,7 +286,7 @@ public sealed class GetDashboardRevenueTrendTests(BackOfficeWebApplicationFactor
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/revenue-trend");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/revenue-trend");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

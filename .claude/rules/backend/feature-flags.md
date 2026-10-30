@@ -25,11 +25,11 @@ Switching subtypes on an existing flag changes the row owner on the next reconci
 
 The startup reconciler marks orphaned rows (`OrphanedAt`), and re-adding the same key restores them — including any orphaned tenant/user overrides. **But** once a row is `DeletedAt`-stamped (back-office hard-delete), re-adding the same key in C# throws on startup and aborts deployment. Don't re-use a name; pick a new one.
 
-## The Four BackOffice Query Mirrors Drift Silently
+## The Four Back-Office Query Mirrors Drift Silently
 
-`FeatureFlagEvaluator` is the canonical runtime path. The four BackOffice query handlers (`GetUserFeatureFlags`, `GetTenantFeatureFlags`, `GetFeatureFlagUsers`, `GetFeatureFlagTenants`) each carry their own copy of `EvaluateAbRollout`, `ComputeInclusionThresholdPercentage`, and `ComputeDefaultEnabled`. They agree today by construction, not by tests — if you change evaluation math, update all five and rely on `FeatureFlagEvaluatorTests` for the canonical contract.
+`FeatureFlagEvaluator` is the canonical runtime path. The four back-office query handlers (`GetUserFeatureFlags`, `GetTenantFeatureFlags`, `GetFeatureFlagUsers`, `GetFeatureFlagTenants` — account handlers backing the internal API the back-office BFF consumes) each carry their own copy of `EvaluateAbRollout`, `ComputeInclusionThresholdPercentage`, and `ComputeDefaultEnabled`. They agree today by construction, not by tests — if you change evaluation math, update all five and rely on `FeatureFlagEvaluatorTests` for the canonical contract.
 
-Known divergences worth being aware of: the mirrors do NOT consult parent-dependency, and `EvaluateOverride` in the bulk-list mirrors returns `IsEnabled=true` without checking `baseRow.IsActive`. BackOffice display can therefore report a flag as enabled while runtime evaluation excludes it.
+Known divergences worth being aware of: the mirrors do NOT consult parent-dependency, and `EvaluateOverride` in the bulk-list mirrors returns `IsEnabled=true` without checking `baseRow.IsActive`. The back-office display can therefore report a flag as enabled while runtime evaluation excludes it.
 
 ## Disable Semantics Are Asymmetric
 

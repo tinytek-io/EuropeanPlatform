@@ -8,8 +8,6 @@ using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,11 +23,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants");
+        var response = await client.GetAsync("/internal-api/back-office/tenants");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -59,11 +57,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?search=acme");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?search=acme");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -79,11 +77,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants?search={tenantA.Value}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants?search={tenantA.Value}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -100,11 +98,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?plans=Premium");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?plans=Premium");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -121,11 +119,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?plans=Standard&plans=Premium");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?plans=Standard&plans=Premium");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -142,11 +140,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?orderBy=MonthlyRecurringRevenue&sortOrder=Descending");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?orderBy=MonthlyRecurringRevenue&sortOrder=Descending");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -162,11 +160,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?orderBy=CreatedAt&sortOrder=Ascending");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?orderBy=CreatedAt&sortOrder=Ascending");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -180,11 +178,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
     {
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?pageOffset=5&pageSize=25");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?pageOffset=5&pageSize=25");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -197,11 +195,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
         SeedTenant("Cyrus Co", SubscriptionPlan.Basis, null, null, null, false, SubscriptionPlan.Standard, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?pageSize=2&orderBy=Name&sortOrder=Ascending");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?pageSize=2&orderBy=Name&sortOrder=Ascending");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -222,11 +220,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 30);
         SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Active");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Active");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -242,11 +240,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantC = SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Downgrading");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Downgrading");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -262,11 +260,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         // Arrange
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 20);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Canceling");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Canceling");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -283,11 +281,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         var tenantD = SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Canceled");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Canceled");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -304,11 +302,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 30);
         SeedTenant("Delta Ltd", SubscriptionPlan.Basis, null, null, null, false, null, 20, true);
         var tenantE = SeedTenant("Epsilon Inc", SubscriptionPlan.Basis, null, null, null, false, null, 10);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Free");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Free");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -326,11 +324,11 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         var tenantA = SeedTenant("Acme Corp", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, null, 50);
         var tenantB = SeedTenant("Beta Industries", SubscriptionPlan.Premium, 199.00m, "EUR", "DE", true, null, 40);
         SeedTenant("Cyrus Co", SubscriptionPlan.Standard, 49.99m, MockStripeClient.MockStandardCurrency, "US", false, SubscriptionPlan.Basis, 30);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants?statuses=Active&statuses=Canceling");
+        var response = await client.GetAsync("/internal-api/back-office/tenants?statuses=Active&statuses=Canceling");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -348,24 +346,10 @@ public sealed class GetTenantsTests(BackOfficeWebApplicationFactory factory) : B
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/tenants");
+        var response = await client.GetAsync("/internal-api/back-office/tenants");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetTenants_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync("/api/back-office/tenants");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name, SubscriptionPlan plan, decimal? mrr, string? currency, string? country, bool cancelAtPeriodEnd, SubscriptionPlan? scheduledPlan, int createdMinutesAgo, bool hasEverSubscribed = false)

@@ -10,8 +10,8 @@
       "account\\Workers\\Account.Workers.csproj",
       "account\\Api\\Account.Api.csproj",
       "account\\WebApp\\Account.WebApp.esproj",
-      "account\\BackOffice\\BackOffice.esproj",
-      "account\\Tests\\Account.Tests.csproj"
+      "account\\Tests\\Account.Tests.csproj",
+      "account\\Migrator\\Account.Migrator.csproj"
     ]
   }
 }

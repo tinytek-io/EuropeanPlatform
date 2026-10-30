@@ -6,7 +6,6 @@ using Account.Features.Tenants.BackOffice.Commands;
 using Account.Integrations.OAuth;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -23,12 +22,12 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
                 ("stripe_customer_id", MockStripeClient.MockCustomerId)
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -47,11 +46,11 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenSubscriptionHasNoStripeCustomer_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -61,13 +60,13 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenTenantDoesNotExist_ShouldReturnNotFound()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
         var unknownTenantId = TenantId.NewId();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{unknownTenantId}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{unknownTenantId}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -81,11 +80,11 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
                 ("stripe_customer_id", MockStripeClient.MockCustomerId)
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -95,11 +94,11 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
     public async Task ReconcileTenantWithStripe_WhenCalledByNonAdmin_ShouldReturnForbidden()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -112,7 +111,7 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -136,12 +135,12 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         StripeState.ScheduledPlan = SubscriptionPlan.Premium;
         StripeState.PriceCatalogOmittedPlans.Add(SubscriptionPlan.Standard);
         StripeState.PriceCatalogOmittedPlans.Add(SubscriptionPlan.Premium);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK, "the admin reconcile must complete successfully even when the Stripe price catalog is empty");
@@ -178,12 +177,12 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -204,12 +203,12 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -231,12 +230,12 @@ public sealed class ReconcileTenantWithStripeTests(BackOfficeWebApplicationFacto
         // SubscriptionCurrency to USD makes SyncSubscriptionStateAsync return USD, which the boundary
         // guard then rejects against the cached platform currency.
         StripeState.SubscriptionCurrency = "USD";
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         client.DefaultRequestHeaders.Add("Cookie", $"{OAuthProviderFactory.UseMockProviderCookieName}=true");
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/reconcile-with-stripe", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);

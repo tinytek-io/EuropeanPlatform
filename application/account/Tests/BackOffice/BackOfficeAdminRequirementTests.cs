@@ -2,7 +2,7 @@ using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
-using SharedKernel.Authentication.BackOfficeIdentity;
+using SharedKernel.Authentication;
 using Xunit;
 
 namespace Account.Tests.BackOffice;
@@ -55,8 +55,8 @@ public sealed class BackOfficeAdminRequirementTests
 
     private static AuthorizationHandlerContext CreateAuthorizationContext(IAuthorizationRequirement requirement, string[] groups)
     {
-        var claims = groups.Select(group => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, group));
-        var identity = new ClaimsIdentity(claims, BackOfficeIdentityDefaults.AuthenticationScheme);
+        var claims = groups.Select(group => new Claim(BackOfficeDelegationDefaults.GroupsClaimType, group));
+        var identity = new ClaimsIdentity(claims, BackOfficeDelegationDefaults.DelegationScheme);
         var principal = new ClaimsPrincipal(identity);
         return new AuthorizationHandlerContext([requirement], principal, null);
     }

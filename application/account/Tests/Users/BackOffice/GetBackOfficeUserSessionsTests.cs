@@ -9,8 +9,6 @@ using Account.Features.Users.BackOffice.Queries;
 using Account.Features.Users.Domain;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Authentication.TokenGeneration;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
@@ -27,11 +25,11 @@ public sealed class GetBackOfficeUserSessionsTests(BackOfficeWebApplicationFacto
         var user = DatabaseSeeder.Tenant1Owner;
         SeedSession(DatabaseSeeder.Tenant1.Id, user.Id, false);
         SeedSession(DatabaseSeeder.Tenant1.Id, user.Id, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{user.Id}/sessions");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{user.Id}/sessions");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -56,11 +54,11 @@ public sealed class GetBackOfficeUserSessionsTests(BackOfficeWebApplicationFacto
         SeedSession(DatabaseSeeder.Tenant1.Id, primaryUserId, false);
         SeedSession(otherTenantId, siblingUserId, false);
         SeedSession(otherTenantId, siblingUserId, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{primaryUserId}/sessions");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{primaryUserId}/sessions");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -77,11 +75,11 @@ public sealed class GetBackOfficeUserSessionsTests(BackOfficeWebApplicationFacto
     {
         // Arrange
         var unknownUserId = UserId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{unknownUserId}/sessions");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{unknownUserId}/sessions");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -95,24 +93,10 @@ public sealed class GetBackOfficeUserSessionsTests(BackOfficeWebApplicationFacto
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/sessions");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/sessions");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetBackOfficeUserSessions_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/sessions");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name)

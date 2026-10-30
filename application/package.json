@@ -5,7 +5,7 @@
   "private": true,
   "packageManager": "npm@11.6.1",
   "workspaces": [
-    "account/BackOffice",
+    "back-office/WebApp",
     "account/WebApp",
     "account/WebApp/emails",
     "main/WebApp",
