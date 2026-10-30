@@ -44,7 +44,8 @@ public sealed class FindAsyncBannedTests
     private static string GetRepositoryRoot([CallerFilePath] string callerFilePath = "")
     {
         var directory = Path.GetDirectoryName(callerFilePath)!;
-        while (!string.IsNullOrEmpty(directory) && !Directory.Exists(Path.Combine(directory, ".git")))
+        // Path.Exists rather than Directory.Exists: in a git worktree ".git" is a file, not a directory.
+        while (!string.IsNullOrEmpty(directory) && !Path.Exists(Path.Combine(directory, ".git")))
         {
             directory = Path.GetDirectoryName(directory)!;
         }

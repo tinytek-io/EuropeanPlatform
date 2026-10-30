@@ -3,7 +3,6 @@ using System.Text;
 using Account.Database;
 using Account.Features;
 using Account.Features.FeatureFlags.Domain;
-using Microsoft.ApplicationInsights;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.FeatureFlags;
 using SharedKernel.Telemetry;
@@ -37,7 +36,6 @@ public sealed class FeatureFlagDefinitionReconciler(
     AccountDbContext accountDbContext,
     TimeProvider timeProvider,
     ITelemetryEventsCollector telemetryEventsCollector,
-    TelemetryClient telemetryClient,
     ILogger<FeatureFlagDefinitionReconciler> logger
 )
 {
@@ -220,7 +218,7 @@ public sealed class FeatureFlagDefinitionReconciler(
         while (telemetryEventsCollector.HasEvents)
         {
             var telemetryEvent = telemetryEventsCollector.Dequeue();
-            telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
+            logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
         }
 
         logger.LogInformation(

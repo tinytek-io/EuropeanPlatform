@@ -1,11 +1,11 @@
 import { t } from "@lingui/core/macro";
-import { useTrackOpen } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { authSyncService } from "@repo/infrastructure/auth/AuthSyncService";
 import { loginPath } from "@repo/infrastructure/auth/constants";
 import { useUserInfo } from "@repo/infrastructure/auth/hooks";
 import { hasPermission } from "@repo/infrastructure/auth/routeGuards";
 import { createLoginUrlWithReturnPath } from "@repo/infrastructure/auth/util";
 import { productName } from "@repo/infrastructure/branding";
+import { useTrackOpen } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@repo/ui/components/DropdownMenu";
 import { collapsedContext, overlayContext } from "@repo/ui/components/Sidebar";
 import { TenantLogo } from "@repo/ui/components/TenantLogo";

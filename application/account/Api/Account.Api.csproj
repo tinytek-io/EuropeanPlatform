@@ -9,6 +9,11 @@
         <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)\..\WebApp\shared\lib\api\</OpenApiDocumentsDirectory>
         <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
         <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+        <!-- Aspire's container publish is a self-contained linux-x64 build, whose assembly layout the
+             OpenAPI document generator cannot load. The documents exist for SPA codegen in regular
+             builds, so container publishes skip them. -->
+        <OpenApiGenerateDocumentsOnBuild Condition="'$(SKIP_OPENAPI_DOCUMENTS)' == 'true'">false</OpenApiGenerateDocumentsOnBuild>
+        <OpenApiGenerateDocuments Condition="'$(SKIP_OPENAPI_DOCUMENTS)' == 'true'">false</OpenApiGenerateDocuments>
         <!--
             Emit only the 'account' document via the built-in pipeline. With multiple OpenApi documents
             registered (account + back-office), dotnet-getdocument always appends a {DocumentName} suffix
@@ -42,12 +47,42 @@
     </ItemGroup>
 
     <!--
+        The Api serves the account WebApp and BackOffice SPA bundles and the WebApp email templates.
+        The walk-up resolution in SharedKernel finds them at <project>/dist inside the container,
+        so they are copied into the publish output only (local development keeps resolving to the
+        live source tree). The Condition guards against early-stage builds (e.g. test phase) where
+        the frontend build has not run yet.
+    -->
+    <ItemGroup Condition="Exists('..\WebApp\dist')">
+        <Content Include="..\WebApp\dist\**\*">
+            <Link>WebApp\dist\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="Exists('..\BackOffice\dist')">
+        <Content Include="..\BackOffice\dist\**\*">
+            <Link>BackOffice\dist\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+    <ItemGroup Condition="Exists('..\WebApp\emails\dist')">
+        <Content Include="..\WebApp\emails\dist\**\*">
+            <Link>WebApp\emails\dist\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+
+    <!--
         Emit the feature flag manifest JSON for the frontend codegen step. Runs after Build by
         invoking Account.Api.dll with the emit-feature-flags-manifest argument. The frontend script
         application/shared-webapp/ui/scripts/generateFeatureFlagArtifacts.mjs reads this JSON and
         produces application/shared-webapp/ui/featureFlags/labels.generated.ts and
         registry.generated.ts with Lingui macros and runtime metadata for every flag declared in
         FeatureFlags.cs. Inputs/Outputs let MSBuild skip the target when nothing has changed.
+
+        Cross-architecture builds (Aspire's container publish is a linux-x64 build) cannot execute
+        the built assembly on the host, so the target only runs for RID-less or host-RID builds.
+        The frontend consumes the manifest from the last host build.
     -->
     <PropertyGroup>
         <_FeatureFlagsManifestPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\shared-webapp\ui\featureFlags\featureFlags.generated.json'))</_FeatureFlagsManifestPath>
@@ -56,7 +91,7 @@
         <_FeatureFlagsSourcePath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\shared-kernel\SharedKernel\FeatureFlags\FeatureFlags.cs'))</_FeatureFlagsSourcePath>
         <_FeatureFlagsCodegenScriptPath>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\shared-webapp\ui\scripts\generateFeatureFlagArtifacts.mjs'))</_FeatureFlagsCodegenScriptPath>
     </PropertyGroup>
-    <Target Name="GenerateFeatureFlagsManifest" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'"
+    <Target Name="GenerateFeatureFlagsManifest" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)')"
             Inputs="$(_FeatureFlagsSourcePath);$(_FeatureFlagsCodegenScriptPath);$(TargetPath)"
             Outputs="$(_FeatureFlagsManifestPath);$(_FeatureFlagsLabelsPath);$(_FeatureFlagsRegistryPath)">
         <Message Importance="high" Text="%0AGenerateFeatureFlagsManifest:" />

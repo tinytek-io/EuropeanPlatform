@@ -1,7 +1,7 @@
-import { PageTracker } from "@repo/infrastructure/applicationInsights/PageTracker";
 import { AuthenticationProvider } from "@repo/infrastructure/auth/AuthenticationProvider";
 import { themeColor } from "@repo/infrastructure/branding";
 import { useErrorTrigger } from "@repo/infrastructure/development/useErrorTrigger";
+import { PageTracker } from "@repo/infrastructure/telemetry/PageTracker";
 import { useInitializeLocale } from "@repo/infrastructure/translations/useInitializeLocale";
 import { BannerContainer } from "@repo/ui/components/BannerContainer";
 import { ThemeModeProvider } from "@repo/ui/theme/mode/ThemeMode";

@@ -22,7 +22,7 @@ public static class BackOfficeDevStaticProxy
 
     public static IApplicationBuilder UseBackOfficeDevStaticProxy(this WebApplication app, string backOfficeHostname)
     {
-        if (SharedInfrastructureConfiguration.IsRunningInAzure) return app;
+        if (SharedInfrastructureConfiguration.IsRunningInCloud) return app;
 
         var rawPort = Environment.GetEnvironmentVariable("BACK_OFFICE_STATIC_PORT");
         if (!int.TryParse(rawPort, out var staticPort) || staticPort <= 0) return app;

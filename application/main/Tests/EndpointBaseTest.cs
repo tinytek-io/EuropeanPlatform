@@ -1,9 +1,6 @@
 using System.Net.Http.Headers;
 using Bogus;
 using JetBrains.Annotations;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,7 +77,6 @@ public abstract class EndpointBaseTest<TContext> : IDisposable where TContext : 
         Services.AddMainServices();
         Services.AddScoped<ITelemetryEventsCollector>(_ => TelemetryEventsCollectorSpy);
         Services.AddScoped<IEmailClient>(_ => EmailClient);
-        Services.AddSingleton(new TelemetryClient(new TelemetryConfiguration { TelemetryChannel = Substitute.For<ITelemetryChannel>() }));
         Services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
         // Fill this test's database from the seeded template with a fast binary copy instead of

@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.ApplicationInsights.DataContracts;
 using SharedKernel.Domain;
 using SharedKernel.Telemetry;
 using Xunit;
@@ -39,17 +38,6 @@ public sealed class TenantScopedTelemetryContextTests
 
             var subscriptionPlanTag = activity.Tags.FirstOrDefault(t => t.Key == "tenant.subscription_plan");
             subscriptionPlanTag.Value.Should().Be("Premium");
-
-            // Assert - Application Insights properties
-            var telemetry = new RequestTelemetry();
-            var initializer = new ApplicationInsightsTelemetryInitializer();
-            initializer.Initialize(telemetry);
-
-            telemetry.Context.User.AccountId.Should().Be("99999");
-            telemetry.Context.GlobalProperties["tenant.id"].Should().Be("99999");
-            telemetry.Context.GlobalProperties["tenant.subscription_plan"].Should().Be("Premium");
-            telemetry.Context.GlobalProperties.Should().NotContainKey("user.session_id");
-            telemetry.Context.User.AuthenticatedUserId.Should().BeNull();
         }
     }
 }

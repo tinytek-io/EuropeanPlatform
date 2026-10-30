@@ -110,6 +110,10 @@ export declare global {
      * Whether subscription/billing is enabled (Stripe configured)
      **/
     PUBLIC_SUBSCRIPTION_ENABLED: string;
+    /**
+     * Whether the mock identity selector is available (local development and opted-in environments)
+     **/
+    PUBLIC_MOCK_EASY_AUTH_ENABLED: string;
   }
 
   export interface UserInfoEnv {

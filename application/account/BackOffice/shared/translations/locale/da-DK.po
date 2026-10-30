@@ -356,8 +356,8 @@ msgstr "Tilbage"
 msgid "Back Office"
 msgstr "Back Office"
 
-msgid "Back Office - Localhost"
-msgstr "Back Office - Localhost"
+msgid "Back Office - Sign in"
+msgstr "Back Office - Log ind"
 
 msgid "Back Office overview · {today}"
 msgstr "Back Office oversigt · {today}"
@@ -1305,9 +1305,6 @@ msgstr "Linkunderstregning"
 
 msgid "Link variants"
 msgstr "Linkvarianter"
-
-msgid "Local development sign-in. Production uses Azure Container Apps built-in Entra ID authentication."
-msgstr "Login til lokal udvikling. Produktion bruger Azure Container Apps' indbyggede Entra ID-godkendelse."
 
 msgid "Local seasonal"
 msgstr "Lokalt og sæsonbestemt"
@@ -2317,6 +2314,9 @@ msgstr "Sidemenu"
 
 msgid "Sidebar footer"
 msgstr "Sidemenu-sidefod"
+
+msgid "Sign in with a mock identity. Production requires authenticated staff sign-in."
+msgstr "Log ind med en mock-identitet. Produktion kræver autentificeret login for personale."
 
 msgid "Sign in without a password using your device."
 msgstr "Log ind uden adgangskode ved hjælp af din enhed."

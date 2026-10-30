@@ -1,8 +1,5 @@
 using Account.Database;
 using Account.Integrations.Stripe;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -115,7 +112,6 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(services.Single(d => d.ServiceType == typeof(IEmailClient)));
                 services.AddTransient<IEmailClient>(_ => Substitute.For<IEmailClient>());
 
-                services.AddSingleton(new TelemetryClient(new TelemetryConfiguration { TelemetryChannel = Substitute.For<ITelemetryChannel>() }));
                 services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
                 ConfigureAdditionalTestServices(services);

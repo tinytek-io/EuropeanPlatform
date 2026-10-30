@@ -1,20 +1,18 @@
-using Azure.Storage.Blobs.Models;
-
 namespace SharedKernel.Integrations.BlobStorage;
 
 public interface IBlobStorageClient
 {
-    Task UploadAsync(string containerName, string blobName, string contentType, Stream stream, CancellationToken cancellationToken);
+    Task UploadAsync(string bucketName, string blobName, string contentType, Stream stream, CancellationToken cancellationToken);
 
-    Task<(Stream Stream, string ContentType)?> DownloadAsync(string containerName, string blobName, CancellationToken cancellationToken);
+    Task<string[]> ListBlobNamesAsync(string bucketName, string prefix, CancellationToken cancellationToken);
 
-    string GetBlobUrl(string container, string blobName);
+    Task<(Stream Stream, string ContentType)?> DownloadAsync(string bucketName, string blobName, CancellationToken cancellationToken);
 
-    Task<bool> DeleteIfExistsAsync(string containerName, string blobName, CancellationToken cancellationToken);
+    string GetBlobUrl(string bucketName, string blobName);
 
-    string GetSharedAccessSignature(string container, TimeSpan expiresIn);
+    Task<bool> DeleteIfExistsAsync(string bucketName, string blobName, CancellationToken cancellationToken);
 
-    Uri GetBlobUriWithSharedAccessSignature(string container, string blobName, TimeSpan expiresIn);
+    Uri GetPresignedUri(string bucketName, string blobName, TimeSpan expiresIn);
 
-    Task CreateContainerIfNotExistsAsync(string containerName, PublicAccessType publicAccessType, CancellationToken cancellationToken);
+    Task CreateBucketIfNotExistsAsync(string bucketName, bool publicRead, CancellationToken cancellationToken);
 }

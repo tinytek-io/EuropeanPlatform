@@ -9,6 +9,11 @@
         <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)\..\WebApp\shared\lib\api\</OpenApiDocumentsDirectory>
         <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
         <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+        <!-- Aspire's container publish is a self-contained linux-x64 build, whose assembly layout the
+             OpenAPI document generator cannot load. The documents exist for SPA codegen in regular
+             builds, so container publishes skip them. -->
+        <OpenApiGenerateDocumentsOnBuild Condition="'$(SKIP_OPENAPI_DOCUMENTS)' == 'true'">false</OpenApiGenerateDocumentsOnBuild>
+        <OpenApiGenerateDocuments Condition="'$(SKIP_OPENAPI_DOCUMENTS)' == 'true'">false</OpenApiGenerateDocuments>
         <DefaultItemExcludes>$(DefaultItemExcludes);publish\**;Dockerfile</DefaultItemExcludes>
     </PropertyGroup>
 
@@ -29,6 +34,19 @@
             <IncludeAssets>runtime; build; native; contentFiles; analyzers; buildTransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+    </ItemGroup>
+
+    <!--
+        The Api serves the main WebApp SPA bundle; the walk-up resolution in SharedKernel finds it at
+        <WebApp>/dist inside the container, so it is copied into the publish output only (local
+        development keeps resolving to the live source tree). The Condition guards against
+        early-stage builds (e.g. test phase) where the frontend build has not run yet.
+    -->
+    <ItemGroup Condition="Exists('..\WebApp\dist')">
+        <Content Include="..\WebApp\dist\**\*">
+            <Link>WebApp\dist\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
     </ItemGroup>
 
 </Project>

@@ -1,12 +1,10 @@
 using System.Text.Json;
-using Azure.Security.KeyVault.Keys;
-using Azure.Security.KeyVault.Keys.Cryptography;
-using Azure.Security.KeyVault.Secrets;
 using FluentValidation;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -31,25 +29,12 @@ public static class SharedDependencyConfiguration
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public static ITokenSigningClient GetTokenSigningService()
+    public static ITokenSigningClient GetTokenSigningService(IConfiguration? configuration = null)
     {
-        if (SharedInfrastructureConfiguration.IsRunningInAzure)
-        {
-            var keyVaultUri = new Uri(Environment.GetEnvironmentVariable("KEYVAULT_URL")!);
-            var keyClient = new KeyClient(keyVaultUri, SharedInfrastructureConfiguration.DefaultAzureCredential);
-            var cryptographyClient = new CryptographyClient(
-                keyClient.GetKey("authentication-token-signing-key").Value.Id,
-                SharedInfrastructureConfiguration.DefaultAzureCredential
-            );
-
-            var secretClient = new SecretClient(keyVaultUri, SharedInfrastructureConfiguration.DefaultAzureCredential);
-            var issuer = secretClient.GetSecret("authentication-token-issuer").Value.Value;
-            var audience = secretClient.GetSecret("authentication-token-audience").Value.Value;
-
-            return new AzureTokenSigningClient(cryptographyClient, issuer, audience);
-        }
-
-        return new DevelopmentTokenSigningClient();
+        // Signs with the symmetric key from configuration (Scaleway Secret Manager in deployed
+        // workloads); falls back to the AUTHENTICATION_TOKEN_SIGNING_KEY environment variable and
+        // during local development to the user-secrets key the AppHost generates.
+        return new HmacTokenSigningClient(configuration);
     }
 
     extension(IServiceCollection services)
@@ -64,7 +49,7 @@ public static class SharedDependencyConfiguration
 
             return services
                 .AddServiceDiscovery()
-                .AddSingleton(GetTokenSigningService())
+                .AddSingleton(sp => GetTokenSigningService(sp.GetService<IConfiguration>()))
                 .AddCrossServiceDataProtection()
                 .AddSingleton(Settings.Current)
                 .AddTimeProvider()
@@ -80,15 +65,20 @@ public static class SharedDependencyConfiguration
 
         private IServiceCollection AddCrossServiceDataProtection()
         {
-            // Configure shared data protection to ensure encrypted data can be shared across all self-contained systems
-            var dataProtection = services.AddDataProtection();
+            // Antiforgery tokens cross service boundaries by design: the module-federated SPA page (and its
+            // token) is minted by main-api while API calls land on account-api. That requires ONE keyring and
+            // ONE application name everywhere. Locally every service shares the machine keyring; in cloud the
+            // keyring persists in Object Storage — without it each container invents ephemeral keys and every
+            // cross-service (or post-restart) token validation fails with 400 (found live: signup).
+            // The key lifetime is pinned rather than left to the framework's implicit default so the coupling
+            // is visible: keys must outlive the sessions that depend on them, and a refresh token is valid for
+            // 90 days (RefreshTokenGenerator.ValidForHours).
+            services.AddDataProtection()
+                .SetApplicationName(Settings.Current.Branding.ProductName)
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 
-            if (!SharedInfrastructureConfiguration.IsRunningInAzure)
-            {
-                // Set a common application name for all self-contained systems for local development (handled automatically by Azure Container Apps Environment)
-                dataProtection.SetApplicationName(Settings.Current.Branding.ProductName);
-            }
-
+            // The cloud keyring persistence (Object Storage) is registered by AddApiServices: only the
+            // SPA-serving APIs mint and validate antiforgery tokens, and workers hold no token flows.
             return services;
         }
 
@@ -141,18 +131,27 @@ public static class SharedDependencyConfiguration
 
         private IServiceCollection AddEmailClient()
         {
-            if (SharedInfrastructureConfiguration.IsRunningInAzure)
-            {
-                var keyVaultUri = new Uri(Environment.GetEnvironmentVariable("KEYVAULT_URL")!);
-                services
-                    .AddSingleton(_ => new SecretClient(keyVaultUri, SharedInfrastructureConfiguration.DefaultAzureCredential))
-                    .AddTransient<IEmailClient, AzureEmailClient>();
-            }
-            else
+            // Local development delivers through the Mailpit container; deployed environments
+            // deliver through Scaleway Transactional Email's HTTP API. The API authenticates with
+            // the workload's own IAM key (the same SCW_SECRET_KEY the Secret Manager configuration
+            // provider uses), so unlike SMTP there are no separate credentials to provision, and
+            // Scaleway blocks SMTP ports across its compute products anyway.
+            if (!SharedInfrastructureConfiguration.IsRunningInCloud)
             {
                 services
                     .AddSingleton(_ => PortAllocation.Load())
                     .AddTransient<IEmailClient, DevelopmentEmailClient>();
+            }
+            else
+            {
+                services.AddHttpClient<IEmailClient, ScalewayTransactionalEmailClient>(client =>
+                    {
+                        var region = Environment.GetEnvironmentVariable("SCW_DEFAULT_REGION") ?? "fr-par";
+                        client.BaseAddress = new Uri($"https://api.scaleway.com/transactional-email/v1alpha1/regions/{region}/");
+                        client.DefaultRequestHeaders.Add("X-Auth-Token", Environment.GetEnvironmentVariable("SCW_SECRET_KEY"));
+                        client.Timeout = TimeSpan.FromSeconds(30);
+                    }
+                );
             }
 
             return services;
