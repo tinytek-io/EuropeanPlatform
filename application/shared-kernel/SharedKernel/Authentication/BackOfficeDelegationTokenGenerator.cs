@@ -7,10 +7,10 @@ namespace SharedKernel.Authentication;
 
 /// <summary>
 ///     Mints the short-lived delegation token the back-office BFF presents to the feature systems'
-///     internal APIs: the staff principal (established by the BackOfficeIdentity scheme — mock Easy
-///     Auth or a staff OIDC provider) is re-signed as a platform JWT carrying the staff claims.
+///     internal APIs: the staff principal (established by the BackOfficeIdentity scheme — the mock
+///     identity selector or a staff OIDC provider) is re-signed as a platform JWT carrying the staff claims.
 ///     The internal endpoints validate it with the BackOfficeDelegation scheme, so in-cluster
-///     callers cannot forge a staff identity by injecting EasyAuth-style headers.
+///     callers cannot forge a staff identity without the platform signing key.
 /// </summary>
 public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient tokenSigningClient, TimeProvider timeProvider)
 {

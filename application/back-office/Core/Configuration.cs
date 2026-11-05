@@ -77,7 +77,7 @@ public static class Configuration
             // The staff identity scheme and the SPA-facing policies. The shared API stack
             // registers the platform's application scheme and the delegation contract; the staff
             // identity is this system's own: the handler resolves the principal from the mock
-            // selector's EasyAuth-style headers or the OIDC session cookie.
+            // selector's in-process identity or the OIDC session cookie, never from request headers.
             services
                 .AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, BackOfficeIdentityHandler>(BackOfficeIdentityDefaults.AuthenticationScheme, _ => { });

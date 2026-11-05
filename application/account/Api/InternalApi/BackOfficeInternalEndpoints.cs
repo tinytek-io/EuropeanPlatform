@@ -20,7 +20,7 @@ namespace Account.Api.InternalApi;
 // folded /api/back-office/* routes, exposed under /internal-api/back-office/* for the BFF's typed
 // clients. Every route requires the delegation policy — a platform-signed short-lived JWT minted by
 // the BFF from the signed-in staff principal — so in-cluster callers cannot reach back-office
-// data by injecting EasyAuth-style headers. In-cluster only: the gateway blocks /internal-api/*
+// data with a forged staff identity. In-cluster only: the gateway blocks /internal-api/*
 // from public traffic. No OpenAPI group: the SPA-facing documents must not leak the internal
 // contract. Mutating routes combine the delegation policy with the admin requirement when they
 // arrive.
