@@ -45,12 +45,9 @@ var backOfficePublicUrl =
     ?? $"https://{backOfficeHostname}";
 var backOfficeCdnUrl = Environment.GetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey) ?? backOfficePublicUrl;
 
-// The /login picker belongs to the MockEasyAuth identity selector: available during local
-// development and on environments where MockEasyAuth:Enabled explicitly opts in, blocked everywhere
-// else. Superseded whenever an OIDC provider is configured above.
-var mockEasyAuthEnabled = !backOfficeOidcConfigured
-                          && (app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>()
-                              || SharedInfrastructureConfiguration.IsRunningInCloud is false);
+// The /login picker belongs to the MockEasyAuth identity selector; the same decision registers its
+// middleware below (see MockEasyAuthMiddlewareExtensions.IsMockEasyAuthEnabled).
+var mockEasyAuthEnabled = MockEasyAuthMiddlewareExtensions.IsMockEasyAuthEnabled(app.Configuration, app.Environment);
 
 // Runtime feature flags injected into the SPA HTML so the React shell can branch on capability
 // without a preview API call (same keys account's folded back-office hosting injected).
@@ -76,9 +73,9 @@ if (!mockEasyAuthEnabled)
 // Dev-only; short-circuits before the auth-gated SPA fallback (see AddBackOfficeDevStaticProxy).
 app.UseBackOfficeDevStaticProxy(backOfficeHostname);
 
-// The MockEasyAuth selector (local development and explicitly opted-in environments) injects the
-// staff identity headers from the dev cookie; must run before authentication.
-app.UseMockEasyAuthInDevelopment();
+// The MockEasyAuth selector resolves the staff identity from its dev cookie; must run before
+// authentication.
+app.UseMockEasyAuthWhenEnabled();
 
 app.UseApiServices(); // Add common configuration for all APIs like Swagger, HSTS, and DeveloperExceptionPage.
 

@@ -41,4 +41,20 @@ public sealed class MeTests(BackOfficeWebApplicationFactory factory)
         body.GetProperty("isAdmin").GetBoolean().Should().BeFalse();
         body.GetProperty("groups").EnumerateArray().Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task GetMe_WhenAnonymousRequestCarriesSpoofedIdentityHeaders_ShouldReturnUnauthorized()
+    {
+        // The Azure Easy Auth header shape a forged request would use: the staff identity must
+        // never be taken from request headers.
+        using var client = CreateAnonymousClient();
+        var forgedPrincipal = Convert.ToBase64String("""{"claims":[{"typ":"groups","val":"BackOfficeAdmins"}]}"""u8.ToArray());
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "attacker");
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-ID", AdminIdentity.ObjectId);
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL", forgedPrincipal);
+
+        var response = await client.GetAsync("/api/back-office/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 }

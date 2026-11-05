@@ -1,4 +1,3 @@
-using BackOffice.Authentication;
 using BackOffice.Authentication.MockEasyAuth;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -6,8 +5,8 @@ namespace BackOffice.Tests.System;
 
 /// <summary>
 ///     Base class for the back-office system tests: HTTP clients against the real host, either
-///     anonymous or carrying one of the mock staff identities (injected as the EasyAuth-style
-///     headers the mock selector's middleware would produce for its dev cookie).
+///     anonymous or carrying one of the mock staff identities through the mock selector's dev
+///     cookie, exactly as a browser signed in through the picker does.
 /// </summary>
 public abstract class BackOfficeEndpointBaseTest
 {
@@ -36,9 +35,7 @@ public abstract class BackOfficeEndpointBaseTest
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Host = BackOfficeWebApplicationFactory.BackOfficeHost;
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, identity.Name);
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalIdHeader, identity.ObjectId);
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalPayloadHeader, MockEasyAuthCookie.EncodePayload(identity));
+        client.DefaultRequestHeaders.Add("Cookie", $"{MockEasyAuthCookie.CookieName}={identity.Id}");
         return client;
     }
 

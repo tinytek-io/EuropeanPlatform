@@ -1,8 +1,7 @@
 using System.Net;
 using System.Security.Claims;
-using System.Text;
 using System.Text.Encodings.Web;
-using System.Text.Json;
+using BackOffice.Authentication.MockEasyAuth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,8 +15,6 @@ public sealed class BackOfficeIdentityHandler(
     UrlEncoder encoder
 ) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
     {
         if (PrefersHtml(Request))
@@ -44,24 +41,18 @@ public sealed class BackOfficeIdentityHandler(
         return Task.CompletedTask;
     }
 
+    // Staff identity never comes from request headers: the mock selector hands its cookie-resolved
+    // identity over in-process (HttpContext.Items, unreachable from the network), and otherwise the
+    // OIDC session cookie authenticates. Any client-supplied identity header is ignored.
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var headerName = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalNameHeader].ToString();
-        if (string.IsNullOrWhiteSpace(headerName))
+        var mockIdentity = MockEasyAuthIdentities.GetAttached(Context);
+        if (mockIdentity is not null)
         {
-            // No Easy Auth-style headers: fall back to the OIDC session cookie (registered only
-            // when a staff identity provider is configured). Absent scheme or cookie -> NoResult.
-            return await TryAuthenticateOidcCookieAsync();
+            return AuthenticateResult.Success(new AuthenticationTicket(BuildMockPrincipal(mockIdentity), Scheme.Name));
         }
 
-        var oid = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalIdHeader].ToString();
-        var payload = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalPayloadHeader].ToString();
-        var principal = string.IsNullOrWhiteSpace(payload) ? null : TryDecodePayload(payload);
-
-        var claims = BuildClaims(headerName, oid, principal);
-        var identity = new ClaimsIdentity(claims, BackOfficeIdentityDefaults.AuthenticationScheme, ClaimTypes.Name, ClaimTypes.Role);
-        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
-        return AuthenticateResult.Success(ticket);
+        return await TryAuthenticateOidcCookieAsync();
     }
 
     private async Task<AuthenticateResult> TryAuthenticateOidcCookieAsync()
@@ -86,41 +77,18 @@ public sealed class BackOfficeIdentityHandler(
             : AuthenticateResult.NoResult();
     }
 
-    // The PrincipalNameHeader carries the UPN/email in real Easy Auth. The friendly display name
-    // lives in the payload's OIDC `name` claim, which we prefer when present.
-    private static List<Claim> BuildClaims(string headerName, string oid, BackOfficeClientPrincipal? principal)
+    private static ClaimsPrincipal BuildMockPrincipal(MockEasyAuthIdentity identity)
     {
-        var displayName = principal?.Claims?
-            .FirstOrDefault(claim => claim.Type == BackOfficeIdentityDefaults.NameClaimType)?
-            .Value;
-        if (string.IsNullOrWhiteSpace(displayName))
+        var claims = new List<Claim>
         {
-            displayName = headerName;
-        }
+            new(ClaimTypes.Name, identity.Name),
+            new(ClaimTypes.NameIdentifier, identity.ObjectId),
+            new(ClaimTypes.Email, identity.Email)
+        };
+        claims.AddRange(identity.Groups.Select(group => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, group)));
 
-        var claims = new List<Claim> { new(ClaimTypes.Name, displayName) };
-
-        if (!string.IsNullOrWhiteSpace(oid))
-        {
-            claims.Add(new Claim(ClaimTypes.NameIdentifier, oid));
-        }
-
-        if (principal?.Claims is null) return claims;
-
-        foreach (var claim in principal.Claims)
-        {
-            if (IsReservedClaim(claim.Type)) continue;
-            claims.Add(new Claim(claim.Type, claim.Value));
-        }
-
-        return claims;
-    }
-
-    private static bool IsReservedClaim(string? claimType)
-    {
-        if (string.IsNullOrEmpty(claimType)) return true;
-        if (claimType is ClaimTypes.Name or ClaimTypes.NameIdentifier) return true;
-        return claimType == BackOfficeIdentityDefaults.NameClaimType;
+        var claimsIdentity = new ClaimsIdentity(claims, BackOfficeIdentityDefaults.AuthenticationScheme, ClaimTypes.Name, ClaimTypes.Role);
+        return new ClaimsPrincipal(claimsIdentity);
     }
 
     private static bool PrefersHtml(HttpRequest request)
@@ -128,23 +96,5 @@ public sealed class BackOfficeIdentityHandler(
         var accept = request.Headers.Accept.ToString();
         if (string.IsNullOrEmpty(accept)) return false;
         return accept.Contains("text/html", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static BackOfficeClientPrincipal? TryDecodePayload(string base64Payload)
-    {
-        try
-        {
-            var bytes = Convert.FromBase64String(base64Payload);
-            var json = Encoding.UTF8.GetString(bytes);
-            return JsonSerializer.Deserialize<BackOfficeClientPrincipal>(json, JsonOptions);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 }

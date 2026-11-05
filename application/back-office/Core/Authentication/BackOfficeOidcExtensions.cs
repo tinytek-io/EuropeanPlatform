@@ -109,7 +109,7 @@ public static class BackOfficeOidcExtensions
     }
 
     /// <summary>
-    ///     Maps the Easy Auth-style login/logout endpoints that redirect into the provider. Only
+    ///     Maps the login/logout endpoints that redirect into the provider. Only
     ///     mapped when the provider is configured; otherwise the mock identity selector owns these
     ///     paths. The callback itself is consumed by the OIDC handler, not an endpoint.
     /// </summary>
