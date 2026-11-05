@@ -101,6 +101,14 @@ var appPublicUrl = $"https://{appPublicHostname}";
 // production leaves MockEasyAuth:Enabled unset so the middleware and the /login picker stay off.
 var mockEasyAuthEnabled = isPublishMode && builder.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
 
+// The staff group whose members get the back-office admin capability. Development uses the mock
+// admin identity's group; deployed environments name it explicitly per tier (the group the staff
+// identity provider emits), so admin gating never silently depends on the public mock constant.
+var backOfficeAdminsGroupId = isPublishMode
+    ? builder.Configuration["BackOffice:AdminsGroupId"]
+      ?? throw new InvalidOperationException("Publish mode requires BackOffice:AdminsGroupId in AppHost configuration.")
+    : MockEasyAuthIdentities.MockAdminsGroupId;
+
 // cert-manager contact email for the Let's Encrypt issuer (publish mode only).
 var acmeEmail = isPublishMode
     ? builder.Configuration["Acme:Email"]
@@ -242,7 +250,7 @@ var accountApi = builder
     // bound by the AccountAndBackOffice document layout); the host value only satisfies its
     // startup validation — the staff-facing routes live in the back-office system.
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
     .WithReference(accountDatabase)
     .WithReference(blobStorage)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
@@ -313,12 +321,11 @@ if (isPublishMode)
 }
 
 // The standalone back-office system: a BFF over the feature systems' internal APIs, owning the
-// staff identity outright. Deployed dark during the migration — the edge still routes the
-// back-office hostname to account's folded routes — until the cutover flips the Gateway route.
+// staff identity outright; the gateway routes the back-office hostname here.
 var backOfficeApi = builder
     .AddProject<BackOffice_Api>("back-office-api")
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
     // Force-on so staff see the back-office billing UI without Stripe configured — the same
     // force-on account-api applies: the staff dashboard is where billing/revenue data lives.
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
