@@ -1,6 +1,6 @@
 using System.CommandLine;
-using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
 using Spectre.Console;
@@ -21,7 +21,7 @@ namespace DeveloperCli.Commands;
 ///     Terraform never owns the public zone (it lives at Hetzner today — see docs/dns-guide.md), so
 ///     Terraform alone cannot report drift: this command is the drift detector.
 /// </remarks>
-public sealed class DnsCheckCommand : Command
+public sealed partial class DnsCheckCommand : Command
 {
     public DnsCheckCommand() : base(
         "dns-check",
@@ -53,21 +53,22 @@ public sealed class DnsCheckCommand : Command
 
         // terraform show reads the remote state; the state-bucket credentials are the same ones the
         // deploy pipeline exports (see cloud-infrastructure/scaleway/environment/main.tf backend block).
-        var stateJson = await RunCaptureAsync("terraform show -json", environmentModuleFolder, "read the Terraform state");
-        if (stateJson is null)
+        // The full state carries every secret, so it is captured in memory only (never logged).
+        var stateResult = await ProcessHelper.ExecuteSensitiveAsync("terraform show -json", environmentModuleFolder);
+        if (!stateResult.Success)
         {
             AnsiConsole.MarkupLine("[red]Could not read the Terraform state.[/] Export the Scaleway and state-bucket credentials (see cloud-infrastructure/scaleway/environment) and try again.");
             return 1;
         }
 
-        var expected = DeriveExpectedRecords(stateJson);
+        var expected = DeriveExpectedRecords(stateResult.StdOut);
         if (expected.Count == 0)
         {
             AnsiConsole.MarkupLine("[yellow]The state holds no edge pipelines or email domains to verify.[/]");
             return 0;
         }
 
-        var digAvailable = !string.IsNullOrWhiteSpace(await RunCaptureAsync("which dig", null, "locate dig"));
+        var digAvailable = (await ProcessHelper.ExecuteQuietlyAsync("which dig")).Success;
         if (!digAvailable)
         {
             AnsiConsole.MarkupLine("[yellow]dig is not installed — printing the expected records without live verification (install dig for the full check).[/]");
@@ -83,7 +84,7 @@ public sealed class DnsCheckCommand : Command
         var mismatches = 0;
         foreach (var record in expected)
         {
-            var live = digAvailable ? ResolveRecord(record) : null;
+            var live = digAvailable ? await ResolveRecordAsync(record) : null;
             var status = !digAvailable
                 ? "[yellow]not checked[/]"
                 : live is null || live.Count == 0
@@ -108,11 +109,10 @@ public sealed class DnsCheckCommand : Command
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine(mismatches == 0
             ? "[green]All DNS records resolve as expected.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for how to fix any record by hand."
-            : $"[red]{mismatches} record(s) missing or mismatched.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for the exact values to create in the DNS console.");
+            : $"[red]{mismatches} record(s) missing or mismatched.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for the exact values to create in the DNS console."
+        );
         return mismatches;
     }
-
-    private sealed record ExpectedRecord(string Type, string Name, string Value);
 
     private static List<ExpectedRecord> DeriveExpectedRecords(string stateJson)
     {
@@ -176,61 +176,36 @@ public sealed class DnsCheckCommand : Command
             {
                 records.Add(new ExpectedRecord("TXT", $"{projectId}._domainkey.{domainName}", dkimConfig));
             }
+
             records.Add(new ExpectedRecord("TXT", $"_dmarc.{domainName}", "v=DMARC1; p=none"));
         }
 
         return records;
     }
 
-    private static List<string>? ResolveRecord(ExpectedRecord record)
+    private static async Task<List<string>> ResolveRecordAsync(ExpectedRecord record)
     {
-        var output = RunCaptureAsync($"dig +short +time=3 +tries=1 {record.Type} {record.Name}", null, $"resolve {record.Name}");
-        var result = output?.GetAwaiter().GetResult()?.Trim();
-        if (string.IsNullOrEmpty(result))
-        {
-            return new List<string>();
-        }
+        // ProcessHelper runs dig directly (no shell), so record names from state are plain arguments.
+        var result = await ProcessHelper.ExecuteQuietlyAsync($"dig +short +time=3 +tries=1 {record.Type} {record.Name}");
+        if (!result.Success) return [];
 
-        // dig quotes TXT values and prints CNAME/MX chains one per line; normalize quotes so the
-        // expected value compares directly against any line in the chain.
-        return result
+        // dig prints CNAME chains one per line, and TXT values as quoted strings — a value over 255
+        // characters (a 2048-bit DKIM key) as several quoted chunks on one line ("part1" "part2").
+        // Joining the chunks yields the record value, which compares directly against the expected one.
+        return result.StdOut
             .Split('\n')
-            .Select(line => line.Trim().Trim('"').Trim('"'))
+            .Select(line => TxtChunkSeparator().Replace(line.Trim(), "").Trim('"'))
             .Where(line => line.Length > 0)
             .ToList();
     }
+
+    [GeneratedRegex("\"\\s+\"")]
+    private static partial Regex TxtChunkSeparator();
 
     private static string Truncate(string value)
     {
         return value.Length > 60 ? value[..57] + "..." : value;
     }
 
-    private static async Task<string?> RunCaptureAsync(string command, string? workingDirectory, string operationName)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "/bin/zsh",
-            Arguments = $"-c \"{command}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        if (workingDirectory is not null)
-        {
-            startInfo.WorkingDirectory = workingDirectory;
-        }
-
-        try
-        {
-            using var process = Process.Start(startInfo)!;
-            var stdout = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            return process.ExitCode == 0 ? stdout : null;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            AnsiConsole.MarkupLine($"[red]Could not {operationName}:[/] {exception.Message}");
-            return null;
-        }
-    }
+    private sealed record ExpectedRecord(string Type, string Name, string Value);
 }
