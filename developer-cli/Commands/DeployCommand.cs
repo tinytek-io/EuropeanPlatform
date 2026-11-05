@@ -146,11 +146,9 @@ public sealed partial class DeployCommand : Command
             File.Delete(stale);
         }
 
-        // The cluster kubeconfig is a sensitive Terraform output; it goes to a temp file that only
-        // the deploy process reads and is deleted afterwards.
-        var kubeconfigPath = Path.Combine(Path.GetTempPath(), $"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml");
+        // The cluster kubeconfig is a sensitive Terraform output: held in memory until the cluster
+        // steps need it as a file (see WriteSecretTempFile).
         var kubeconfig = await RunTerraformAsync(environmentModuleFolder, "output -raw kubeconfig", "read the cluster kubeconfig output");
-        await File.WriteAllTextAsync(kubeconfigPath, kubeconfig);
 
         // Per-workload Secret Manager keys are deploy-time parameters of the Aspire pipeline
         // (env-shaped names, read by the AppHost parameter resolution — same shape as the
@@ -199,18 +197,6 @@ public sealed partial class DeployCommand : Command
 
         var domainName = (await RunTerraformAsync(environmentModuleFolder, "output -raw domain_name", "read the domain name output")).Trim();
 
-        // The registry namespace is private: the cluster pulls workload images through a
-        // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
-        // identity (Kapsule nodes have no native registry authentication). Applied idempotently
-        // here — before the release's first pod pulls — so every deploy converges the Secret to
-        // the current pull key.
-        PrintHeader("Applying the cluster's registry pull secret");
-
-        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_endpoint", "read the registry endpoint output")).Trim();
-        var registryHost = registryEndpoint.Split('/')[0];
-        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
-        ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
-
         // The API images compose the SPA bundles straight from the working tree (the csproj
         // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
         // running dev stack can leave a dev-mode index.html (unhashed asset references) on top
@@ -223,13 +209,13 @@ public sealed partial class DeployCommand : Command
             AnsiConsole.MarkupLine("[yellow]Warning: a local Aspire dev stack is running. Its dev servers can rewrite dist/index.html mid-deploy; if the bundle validation below fails, stop it and deploy again.[/]");
         }
 
-        ProcessHelper.Run("npm install --silent", Configuration.ApplicationFolder, "npm install", true);
-        var buildResult = ProcessHelper.ExecuteQuietly("npm run build", Configuration.ApplicationFolder);
+        await ProcessHelper.RunAsync("npm install --silent", Configuration.ApplicationFolder, "npm install", true);
+        var buildResult = await ProcessHelper.ExecuteQuietlyAsync("npm run build", Configuration.ApplicationFolder);
         if (!buildResult.Success)
         {
             AnsiConsole.MarkupLine("[red]The frontend build failed; the deploy is aborted so a broken bundle cannot ship.[/]");
             Console.WriteLine(buildResult.CombinedOutput);
-            return;
+            Environment.Exit(1);
         }
 
         foreach (var system in SelfContainedSystemHelper.GetAvailableSelfContainedSystems())
@@ -237,6 +223,19 @@ public sealed partial class DeployCommand : Command
             ValidateSpaBundle(Configuration.ApplicationFolder, system);
             AnsiConsole.MarkupLine($"  [green]✓[/] {system} SPA bundle consistent");
         }
+
+        // The registry namespace is private: the cluster pulls workload images through a
+        // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
+        // identity (Kapsule nodes have no native registry authentication). Applied idempotently
+        // here — before the release's first pod pulls — so every deploy converges the Secret to
+        // the current pull key.
+        PrintHeader("Applying the cluster's registry pull secret");
+
+        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_endpoint", "read the registry endpoint output")).Trim();
+        var registryHost = registryEndpoint.Split('/')[0];
+        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
+        var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
+        ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
 
         PrintHeader("Running the Aspire deploy pipeline");
 
@@ -481,12 +480,30 @@ public sealed partial class DeployCommand : Command
         }
     }
 
+    // Secret material that a tool needs as a file (the kubeconfig for kubectl and aspire deploy, the
+    // registry pull Secret manifest) is written owner-only to a temp file. It is deleted when the
+    // process exits, including every Environment.Exit path (finally blocks do not run there), and
+    // callers delete it as soon as they are done; a killed run's kubeconfig is swept by the next
+    // deploy.
+    private static string WriteSecretTempFile(string fileName, string content)
+    {
+        var path = Path.Combine(Path.GetTempPath(), fileName);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => File.Delete(path);
+        var ownerOnly = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) ownerOnly.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using var writer = new StreamWriter(path, ownerOnly);
+        writer.Write(content);
+        return path;
+    }
+
+    // Terraform outputs carry secrets (the kubeconfig, IAM keys), so they are captured in memory
+    // only, and a failure reports stderr alone.
     private static async Task<string> RunTerraformAsync(string workingDirectory, string arguments, string failureHint)
     {
-        var result = await ProcessHelper.ExecuteQuietlyAsync($"terraform {arguments}", workingDirectory);
+        var result = await ProcessHelper.ExecuteSensitiveAsync($"terraform {arguments}", workingDirectory);
         if (!result.Success)
         {
-            AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.GetErrorSummary("terraform")));
+            AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.StdErr.Trim()));
             AnsiConsole.MarkupLine($"[dim]{failureHint}[/]");
             Environment.Exit(result.ExitCode);
         }
@@ -495,7 +512,7 @@ public sealed partial class DeployCommand : Command
     }
 
     // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
-    // exists on disk only in the temp manifest, only for the duration of the apply.
+    // exists on disk only in the owner-only temp manifest, only for the duration of the apply.
     private static void ApplyRegistryPullSecret(string kubeconfigPath, string registryHost, string secretKey)
     {
         var dockerConfigJson = JsonSerializer.Serialize(new
@@ -520,24 +537,17 @@ public sealed partial class DeployCommand : Command
                                 .dockerconfigjson: "{Convert.ToBase64String(Encoding.UTF8.GetBytes(dockerConfigJson))}"
                               """;
 
-        var manifestPath = Path.Combine(Path.GetTempPath(), $"pp-registry-pull-secret-{Guid.NewGuid():N}.yaml");
-        File.WriteAllText(manifestPath, secretManifest);
-        try
+        var manifestPath = WriteSecretTempFile($"pp-registry-pull-secret-{Guid.NewGuid():N}.yaml", secretManifest);
+        var result = ProcessHelper.ExecuteQuietly($"kubectl --kubeconfig {kubeconfigPath} apply -f {manifestPath}");
+        File.Delete(manifestPath);
+        if (!result.Success)
         {
-            var result = ProcessHelper.ExecuteQuietly($"kubectl --kubeconfig {kubeconfigPath} apply -f {manifestPath}");
-            if (!result.Success)
-            {
-                AnsiConsole.MarkupLine("[red]Applying the registry pull secret failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
-                AnsiConsole.MarkupLine("[dim]The registry is private, so without the pull secret no pod can pull its image.[/]");
-                Environment.Exit(result.ExitCode);
-            }
+            AnsiConsole.MarkupLine("[red]Applying the registry pull secret failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
+            AnsiConsole.MarkupLine("[dim]The registry is private, so without the pull secret no pod can pull its image.[/]");
+            Environment.Exit(result.ExitCode);
+        }
 
-            AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
-        }
-        finally
-        {
-            File.Delete(manifestPath);
-        }
+        AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
     }
 
     private static void PrintHeader(string title)
