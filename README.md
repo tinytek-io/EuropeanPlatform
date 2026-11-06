@@ -416,11 +416,15 @@ variables on the back-office API — the keys under `BackOffice:Oidc`:
 - `BackOffice:Oidc:ClientId` — the application/client ID registered with the provider
 - `BackOffice:Oidc:ClientSecret` — the client secret (`BackOffice__Oidc__ClientSecret` as a
   Secret Manager entry)
+- `BackOffice:Oidc:StaffGroupId` — the `groups` claim value every staff member carries
+  (required: a sign-in without it is denied, so an account at the provider alone never grants
+  staff access)
 
 Register the redirect URI `https://back-office.<your-domain>/.auth/login/aad/callback` with the
-provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` set to the
-value the provider issues in the `groups` claim for staff administrators — the back-office's own
-admin policy and account's internal-API admin gate both read it. When these keys are
+provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` (in the
+tier's AppHost configuration) set to the value the provider issues in the `groups` claim for staff
+administrators — the back-office's own admin policy and account's internal-API admin gate both
+read it, and deployed environments must set it explicitly. When these keys are
 configured, the mock identity selector is disabled automatically.
 
 #### Test the OIDC flow locally with the Authelia harness

@@ -49,6 +49,12 @@ public static class BackOfficeOidcExtensions
             return services;
         }
 
+        var staffGroupId = options.StaffGroupId;
+        if (string.IsNullOrWhiteSpace(staffGroupId))
+        {
+            throw new InvalidOperationException("BackOffice:Oidc:StaffGroupId is required when a staff identity provider is configured: signing in to the provider alone must not grant staff access.");
+        }
+
         services
             .AddAuthentication()
             .AddCookie(BackOfficeOidcDefaults.CookieScheme, ConfigureBackOfficeOidcSessionCookie)
@@ -65,13 +71,23 @@ public static class BackOfficeOidcExtensions
                     oidc.Scope.Clear();
                     oidc.Scope.Add(OpenIdConnectScope.OpenIdProfile);
                     oidc.Scope.Add(OpenIdConnectScope.Email);
-                    // The admin gate matches the 'groups' claim against BackOffice:AdminsGroupId;
-                    // request the groups scope when that gate is configured (providers that do not
-                    // know the scope ignore it).
-                    if (!string.IsNullOrWhiteSpace(configuration["BackOffice:AdminsGroupId"]))
+                    // The staff gate below and the admin gate match the 'groups' claim (providers
+                    // that do not know the scope ignore it).
+                    oidc.Scope.Add("groups");
+
+                    // Only members of the staff group get a back-office session: anyone else is sent
+                    // to the access-denied page before the session cookie is issued.
+                    oidc.Events.OnTicketReceived = context =>
                     {
-                        oidc.Scope.Add("groups");
-                    }
+                        var isStaff = context.Principal?.Claims.Any(claim => claim.Type == BackOfficeIdentityDefaults.GroupsClaimType && claim.Value == staffGroupId) == true;
+                        if (!isStaff)
+                        {
+                            context.Response.Redirect(BackOfficeIdentityDefaults.AccessDeniedPath);
+                            context.HandleResponse();
+                        }
+
+                        return Task.CompletedTask;
+                    };
 
                     // Dev-only escape hatch for the local Authelia harness, whose certificate is
                     // self-signed: the backchannel (discovery, token, userinfo) then tolerates it.

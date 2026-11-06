@@ -398,6 +398,10 @@ if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<b
         // and token requests) must tolerate it. Dev-harness only; production providers have
         // trusted certificates and leave this unset.
         .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
+        // The harness user's Authelia group (users_database.yml) is both the staff and the admin
+        // group, so the harness exercises the real staff gate and admin capability.
+        .WithEnvironment("BackOffice__Oidc__StaffGroupId", "admins")
+        .WithEnvironment("BackOffice__AdminsGroupId", "admins")
         // The mock login picker would offer a bypass around the real provider's login screen.
         .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
 }
