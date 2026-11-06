@@ -1,7 +1,6 @@
 using BackOffice.Authentication;
 using BackOffice.ExecutionContext;
 using BackOffice.Integrations.Account;
-using BackOffice.Integrations.InternalTls;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
