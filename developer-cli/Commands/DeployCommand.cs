@@ -96,8 +96,28 @@ public sealed partial class DeployCommand : Command
 
         PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
 
+        // Each environment's bootstrap runs on its own local state file (the project resource is keyed
+        // by the environment name, so one shared file would replace one environment's project with
+        // another's), and the environment module's remote state is per environment too. Both are
+        // selected explicitly here, so a deploy can never read or plan against another environment.
+        var bootstrapState = $"terraform.{terraformEnvironment}.tfstate";
+        if (!File.Exists(Path.Combine(bootstrapModuleFolder, bootstrapState)))
+        {
+            AnsiConsole.MarkupLine($"[red]No bootstrap state found at {Markup.Escape(Path.Combine(bootstrapModuleFolder, bootstrapState))}.[/] Apply the bootstrap with -state={bootstrapState} (an existing default terraform.tfstate for this environment can be renamed).");
+            Environment.Exit(1);
+        }
+
+        var backendConfiguration = $"environments/{terraformEnvironment}.backend.hcl";
+        if (!File.Exists(Path.Combine(environmentModuleFolder, backendConfiguration)))
+        {
+            AnsiConsole.MarkupLine($"[red]No backend configuration found at {Markup.Escape(Path.Combine(environmentModuleFolder, backendConfiguration))}.[/] Every environment declares its state bucket there (see environments/stage.backend.hcl).");
+            Environment.Exit(1);
+        }
+
+        await RunTerraformAsync(environmentModuleFolder, $"init -reconfigure -input=false -no-color -backend-config={backendConfiguration}", "initialize the environment module's remote state (are the state-bucket credentials exported as AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY?)");
+
         // The environment module needs the project id from the bootstrap module's (local) state.
-        var projectId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)")).Trim();
+        var projectId = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)")).Trim();
 
         if (!skipPlanCheck)
         {
@@ -232,9 +252,9 @@ public sealed partial class DeployCommand : Command
         // the current pull key.
         PrintHeader("Applying the cluster's registry pull secret");
 
-        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_endpoint", "read the registry endpoint output")).Trim();
+        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_endpoint", "read the registry endpoint output")).Trim();
         var registryHost = registryEndpoint.Split('/')[0];
-        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
+        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
         var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
         ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
 
@@ -308,7 +328,7 @@ public sealed partial class DeployCommand : Command
         // checked here.
         ValidateDeployedChartImages(applicationFolder);
 
-        await PruneRegistryTagsAsync(bootstrapModuleFolder);
+        await PruneRegistryTagsAsync(bootstrapModuleFolder, bootstrapState);
 
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
 
@@ -361,7 +381,7 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
     }
 
-    private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder)
+    private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder, string bootstrapState)
     {
         var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
         if (string.IsNullOrWhiteSpace(secretKey))
@@ -370,7 +390,7 @@ public sealed partial class DeployCommand : Command
             return;
         }
 
-        var namespaceId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)")).Trim();
+        var namespaceId = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)")).Trim();
         if (string.IsNullOrWhiteSpace(namespaceId))
         {
             AnsiConsole.MarkupLine("[yellow]Registry prune skipped:[/] no registry namespace output.");
