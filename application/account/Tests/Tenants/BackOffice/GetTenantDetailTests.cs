@@ -8,7 +8,6 @@ using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -65,11 +64,11 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -106,11 +105,11 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -175,11 +174,11 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
             ]
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -195,11 +194,11 @@ public sealed class GetTenantDetailTests(BackOfficeWebApplicationFactory factory
     {
         // Arrange
         var tenantId = TenantId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/tenants/{tenantId}");
+        var response = await client.GetAsync($"/internal-api/back-office/tenants/{tenantId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);

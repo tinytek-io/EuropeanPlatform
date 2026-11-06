@@ -5,7 +5,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -27,11 +26,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         SeedBillingEvent(tenantB, subscriptionB, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_b1", SubscriptionPlan.Standard, SubscriptionPlan.Premium, 30m);
         SeedBillingEvent(tenantA, subscriptionA, BillingEventType.SubscriptionRenewed, now.AddHours(-2), "evt_a2", toPlan: SubscriptionPlan.Standard);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -58,11 +57,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_a2", SubscriptionPlan.Standard, SubscriptionPlan.Premium);
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionRenewed, now.AddHours(-2), "evt_a3", toPlan: SubscriptionPlan.Standard);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?EventTypes=SubscriptionUpgraded&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?EventTypes=SubscriptionUpgraded&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -84,11 +83,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         SeedBillingEvent(tenantA, subscriptionA, BillingEventType.SubscriptionCreated, now.AddHours(-3), "evt_a1", toPlan: SubscriptionPlan.Standard);
         SeedBillingEvent(tenantB, subscriptionB, BillingEventType.SubscriptionCreated, now.AddHours(-2), "evt_b1", toPlan: SubscriptionPlan.Standard);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?Search=Acme&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?Search=Acme&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -111,12 +110,12 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
             SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionRenewed, now.AddHours(-i - 1), $"evt_{i}", toPlan: SubscriptionPlan.Standard);
         }
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var firstPage = await client.GetFromJsonAsync<BillingEventsResponse>("/api/back-office/billing-events?PageOffset=0&PageSize=2");
-        var secondPage = await client.GetFromJsonAsync<BillingEventsResponse>("/api/back-office/billing-events?PageOffset=1&PageSize=2");
+        var firstPage = await client.GetFromJsonAsync<BillingEventsResponse>("/internal-api/back-office/billing-events?PageOffset=0&PageSize=2");
+        var secondPage = await client.GetFromJsonAsync<BillingEventsResponse>("/internal-api/back-office/billing-events?PageOffset=1&PageSize=2");
 
         // Assert
         firstPage.Should().NotBeNull();
@@ -140,13 +139,13 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionRenewed, now.AddHours(-2), "evt_mid", toPlan: SubscriptionPlan.Standard);
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_new", SubscriptionPlan.Standard, SubscriptionPlan.Premium);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         var occurredFrom = Uri.EscapeDataString(now.AddHours(-2).ToString("O"));
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/billing-events?OccurredFrom={occurredFrom}&PageSize=10");
+        var response = await client.GetAsync($"/internal-api/back-office/billing-events?OccurredFrom={occurredFrom}&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -166,11 +165,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionCreated, now.AddHours(-3), "evt_old", toPlan: SubscriptionPlan.Standard);
         SeedBillingEvent(tenant, subscriptionId, BillingEventType.SubscriptionUpgraded, now.AddHours(-1), "evt_new", SubscriptionPlan.Standard, SubscriptionPlan.Premium);
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?OrderBy=OccurredAt&SortOrder=Ascending&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?OrderBy=OccurredAt&SortOrder=Ascending&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -184,11 +183,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
     public async Task GetBackOfficeBillingEvents_WhenLogIsEmpty_ShouldReturnEmptyResponse()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -202,13 +201,13 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
     public async Task GetBackOfficeBillingEvents_WhenSearchIsTooLong_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         var oversizedSearch = new string('a', 101);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/billing-events?Search={oversizedSearch}");
+        var response = await client.GetAsync($"/internal-api/back-office/billing-events?Search={oversizedSearch}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -218,11 +217,11 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
     public async Task GetBackOfficeBillingEvents_WhenPageSizeExceedsMax_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=101");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=101");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -235,7 +234,7 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.GetAsync("/api/back-office/billing-events?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

@@ -6,7 +6,7 @@ namespace AppGateway.Filters;
 ///     Rewrites the avatar/logo proxy routes to the physical (prefixed) S3 bucket paths. The
 ///     applications address buckets by logical name, and deployed environments prefix every bucket
 ///     (Scaleway's bucket namespace is shared across all customers of a region, unlike its projects).
-///     Local development (MinIO) sets no prefix and the routes forward unchanged.
+///     Local development (SeaweedFS) sets no prefix and the routes forward unchanged.
 /// </summary>
 public class StorageBucketPrefixConfigFilter : IProxyConfigFilter
 {

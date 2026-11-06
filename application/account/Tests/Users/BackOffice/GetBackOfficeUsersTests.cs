@@ -9,8 +9,6 @@ using Account.Features.Users.Domain;
 using Account.Integrations.Stripe;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -27,11 +25,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         var tenantB = SeedTenant("Beta Industries");
         SeedUser(tenantA, "alice.unique@example.com", "Alice", "Anders", UserRole.Owner, true);
         SeedUser(tenantB, "bob.other@example.com", "Bob", "Bear", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=alice.unique");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=alice.unique");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -49,11 +47,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         var tenant = SeedTenant("Acme Corp");
         SeedUser(tenant, "alice@acme.com", "Alice", "Wonderland", UserRole.Owner, true);
         SeedUser(tenant, "bob@acme.com", "Bob", "Builder", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=alice%20wonderland");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=alice%20wonderland");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -72,11 +70,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenantA, "alpha@cynical.com", "Alpha", "One", UserRole.Owner, true);
         SeedUser(tenantA, "beta@cynical.com", "Beta", "Two", UserRole.Member, true);
         SeedUser(tenantB, "gamma@other.com", "Gamma", "Three", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=cynical");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=cynical");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -103,11 +101,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "never@listing.com", "Never", "Seen", UserRole.Member, true,
             createdAt: DateTimeOffset.UtcNow.AddDays(-1)
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users");
+        var response = await client.GetAsync("/internal-api/back-office/users");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -126,11 +124,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "owner1@filterable.com", "Owen", "One", UserRole.Owner, true);
         SeedUser(tenant, "admin1@filterable.com", "Adam", "Admin", UserRole.Admin, true);
         SeedUser(tenant, "member1@filterable.com", "Mike", "Member", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=filterable&roles=Owner&roles=Admin");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=filterable&roles=Owner&roles=Admin");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -149,11 +147,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "recent@activity.com", "Recent", "User", UserRole.Member, true, now.AddHours(-2));
         SeedUser(tenant, "old@activity.com", "Old", "User", UserRole.Member, true, now.AddDays(-3));
         SeedUser(tenant, "never@activity.com", "Never", "Seen", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=activity&activity=ActiveLast24Hours");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=activity&activity=ActiveLast24Hours");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -171,11 +169,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "recent@inactivity.com", "Recent", "User", UserRole.Member, true, now.AddDays(-2));
         SeedUser(tenant, "old@inactivity.com", "Old", "User", UserRole.Member, true, now.AddDays(-60));
         SeedUser(tenant, "never@inactivity.com", "Never", "Seen", UserRole.Member, true);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=inactivity&activity=InactiveOver30Days");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=inactivity&activity=InactiveOver30Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -196,11 +194,11 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
             SeedUser(tenant, $"user{i:D2}@pageable.com", $"User{i:D2}", "Test", UserRole.Member, true);
         }
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=pageable&pageSize=10&pageOffset=2");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=pageable&pageSize=10&pageOffset=2");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -224,12 +222,12 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         // Standard plan tenant has a successful payment, so HasEverSubscribed should be true. Basis-plan tenant has no
         // subscription row at all, mirroring the "free / never paid" case.
         SeedSubscriptionWithSucceededPayment(standardTenant);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var basisResponse = await client.GetAsync("/api/back-office/users?search=basis-user");
-        var standardResponse = await client.GetAsync("/api/back-office/users?search=standard-user");
+        var basisResponse = await client.GetAsync("/internal-api/back-office/users?search=basis-user");
+        var standardResponse = await client.GetAsync("/internal-api/back-office/users?search=standard-user");
 
         // Assert
         var basisPayload = await basisResponse.Content.ReadFromJsonAsync<BackOfficeUsersResponse>();
@@ -255,24 +253,10 @@ public sealed class GetBackOfficeUsersTests(BackOfficeWebApplicationFactory fact
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/users?search=anything");
+        var response = await client.GetAsync("/internal-api/back-office/users?search=anything");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetBackOfficeUsers_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync("/api/back-office/users?search=anything");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name, SubscriptionPlan plan = SubscriptionPlan.Basis)

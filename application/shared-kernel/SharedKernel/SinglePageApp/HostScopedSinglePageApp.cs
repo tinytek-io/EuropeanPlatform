@@ -8,7 +8,7 @@ namespace SharedKernel.SinglePageApp;
 ///     decides how to derive the <see cref="UserInfo" /> embedded in the served HTML.
 ///     One <see cref="HostScopedSinglePageApp" /> per <c>RequireHost</c>-scoped fallback registered by
 ///     <c>UseHostScopedSinglePageAppFallback</c>; the consolidated <c>account-api</c> hosts both
-///     <c>account/WebApp</c> and <c>account/BackOffice</c> through this mechanism.
+///     <c>account/WebApp</c> and the back-office system's <c>WebApp</c> through this mechanism.
 /// </summary>
 public sealed class HostScopedSinglePageApp(
     string host,
@@ -30,7 +30,7 @@ public sealed class HostScopedSinglePageApp(
     /// <summary>
     ///     Returns the <see cref="UserInfo" /> embedded into the HTML for this host. The account host uses
     ///     <c>IExecutionContext.UserInfo</c>; the back-office host derives display name and groups from the
-    ///     <c>BackOfficeIdentity</c> claims (see <c>BackOfficeIdentityDefaults.GroupsClaimType</c>).
+    ///     staff identity claims (see <c>BackOfficeDelegationDefaults.GroupsClaimType</c>).
     /// </summary>
     public Func<HttpContext, UserInfo> UserInfoFactory { get; } = userInfoFactory;
 

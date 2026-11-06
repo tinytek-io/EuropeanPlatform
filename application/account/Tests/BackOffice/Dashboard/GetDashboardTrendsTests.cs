@@ -9,8 +9,6 @@ using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Features.Users.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -28,11 +26,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedTenant("Yesterday Inc", now.AddDays(-1));
         SeedTenant("Three Days Ago Inc", now.AddDays(-3));
         SeedTenant("Outside Period Inc", now.AddDays(-20));
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=NewTenants&period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=NewTenants&period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -62,11 +60,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedUser(tenant, "today@example.com", now);
         SeedUser(tenant, "ten-days-ago@example.com", now.AddDays(-10));
         SeedUser(tenant, "outside@example.com", now.AddDays(-45));
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=NewUsers&period=Last30Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=NewUsers&period=Last30Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -90,11 +88,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         SeedExternalLogin("user4@example.com", ExternalLoginResult.Success, now);
         SeedExternalLogin("user5@example.com", ExternalLoginResult.Success, now.AddDays(-2));
         SeedExternalLogin("user6@example.com", ExternalLoginResult.IdentityProviderError, now);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=LoginActivity&period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=LoginActivity&period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -110,11 +108,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenNoEventsInPeriod_ShouldReturnZeroFilledPoints()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=LoginActivity&period=Last90Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=LoginActivity&period=Last90Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -128,11 +126,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenMetricIsMissing_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -142,11 +140,11 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
     public async Task GetDashboardTrends_WhenPeriodIsMissing_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=NewTenants");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=NewTenants");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -160,24 +158,10 @@ public sealed class GetDashboardTrendsTests(BackOfficeWebApplicationFactory fact
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=NewTenants&period=Last7Days");
+        var response = await client.GetAsync("/internal-api/back-office/dashboard/trends?metric=NewTenants&period=Last7Days");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetDashboardTrends_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync("/api/back-office/dashboard/trends?metric=NewTenants&period=Last7Days");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private TenantId SeedTenant(string name, DateTimeOffset createdAt)

@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -15,8 +14,6 @@ using Microsoft.Extensions.Options;
 using NJsonSchema.Generation;
 using SharedKernel.Antiforgery;
 using SharedKernel.Authentication;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Authentication.TokenSigning;
 using SharedKernel.Endpoints;
 using SharedKernel.ExecutionContext;
@@ -221,7 +218,6 @@ public static class ApiDependencyConfiguration
                 .UseForwardedHeaders()
                 .UseRouting() // Explicit so it runs AFTER UseForwardedHeaders. Without this, ASP.NET Core inserts UseRouting at the start of the pipeline and the SPA-host fallback (UseHostScopedSinglePageAppFallback's RequireHost) sees the unrewritten Host header forwarded by YARP (the destination address), not the public host promoted from X-Forwarded-Host.
                 .UseRequestLocalization(BuildApiRequestLocalizationOptions()) // Must run before endpoint execution so handlers can read the request culture via IExecutionContext.UserInfo.Locale (e.g. anonymous email senders that have no User row to read Locale from). The SPA fallback's UseRequestLocalization at the end of the pipeline only covers HTML fallback requests, not API endpoints.
-                .UseMockEasyAuthInDevelopment() // Local development and explicitly opted-in staging: serve /.auth/login/aad and inject X-MS-CLIENT-PRINCIPAL-* headers from a dev cookie. Must run before authentication.
                 .UseAuthentication() // Must be above TelemetryContextMiddleware to ensure authentication happens first
                 .UseAuthorization()
                 .UseAntiforgery()
@@ -323,6 +319,7 @@ public static class ApiDependencyConfiguration
             // The JWT bearer validation parameters come from ITokenSigningClient, which reads the
             // signing key from configuration (Scaleway Secret Manager in deployed workloads).
             services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+            services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureBackOfficeDelegationJwtOptions>();
 
             // Add Authentication and Authorization services
             services
@@ -334,21 +331,26 @@ public static class ApiDependencyConfiguration
                     }
                 )
                 .AddJwtBearer()
-                .AddScheme<AuthenticationSchemeOptions, BackOfficeIdentityHandler>(BackOfficeIdentityDefaults.AuthenticationScheme, _ => { });
+                // The back-office delegation contract: the internal APIs pin their routes to the
+                // delegation policies, which validate the short-lived tokens the back-office BFF
+                // mints from its signed-in staff member. The staff identity machinery itself (the
+                // identity handler, the mock selector, the OIDC login) lives in the back-office
+                // system and registers its own scheme there.
+                .AddJwtBearer(BackOfficeDelegationDefaults.DelegationScheme, _ => { });
 
             services.AddSingleton<IAuthorizationHandler, BackOfficeAdminAuthorizationHandler>();
 
             return services.AddAuthorization(authOptions =>
                 {
-                    authOptions.AddPolicy(BackOfficeIdentityDefaults.PolicyName, policy =>
+                    authOptions.AddPolicy(BackOfficeDelegationDefaults.DelegationPolicyName, policy =>
                         {
-                            policy.AuthenticationSchemes = [BackOfficeIdentityDefaults.AuthenticationScheme];
+                            policy.AuthenticationSchemes = [BackOfficeDelegationDefaults.DelegationScheme];
                             policy.RequireAuthenticatedUser();
                         }
                     );
-                    authOptions.AddPolicy(BackOfficeIdentityDefaults.AdminPolicyName, policy =>
+                    authOptions.AddPolicy(BackOfficeDelegationDefaults.DelegationAdminPolicyName, policy =>
                         {
-                            policy.AuthenticationSchemes = [BackOfficeIdentityDefaults.AuthenticationScheme];
+                            policy.AuthenticationSchemes = [BackOfficeDelegationDefaults.DelegationScheme];
                             policy.RequireAuthenticatedUser();
                             policy.AddRequirements(new BackOfficeAdminRequirement());
                         }
@@ -410,6 +412,36 @@ public sealed class ConfigureJwtBearerOptions(ITokenSigningClient tokenSigningCl
             validateLifetime: true,
             clockSkew: TimeSpan.FromSeconds(5) // No clock skew needed between workloads in one cluster, but this must be a higher value than the AppGateway
         );
+    }
+
+    public void Configure(JwtBearerOptions options)
+    {
+        Configure(Options.DefaultName, options);
+    }
+}
+
+/// <summary>
+///     Wires the token signing validation parameters into the back-office delegation scheme. The
+///     parameters are the platform's (same HMAC key and issuer as application tokens) except for
+///     the audience: only delegation tokens minted by the back-office BFF carry
+///     BackOfficeDelegationDefaults.DelegationAudience, so application tokens are rejected here.
+///     Registered as IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
+/// </summary>
+public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient tokenSigningClient)
+    : IConfigureNamedOptions<JwtBearerOptions>
+{
+    public void Configure(string? name, JwtBearerOptions options)
+    {
+        if (name != BackOfficeDelegationDefaults.DelegationScheme)
+        {
+            return;
+        }
+
+        options.TokenValidationParameters = tokenSigningClient.GetTokenValidationParameters(
+            validateLifetime: true,
+            clockSkew: TimeSpan.FromSeconds(5)
+        );
+        options.TokenValidationParameters.ValidAudience = BackOfficeDelegationDefaults.DelegationAudience;
     }
 
     public void Configure(JwtBearerOptions options)

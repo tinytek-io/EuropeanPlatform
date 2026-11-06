@@ -1,5 +1,5 @@
 ---
-paths: application/shared-webapp/*/rslib.config.ts,application/*/WebApp/rsbuild.config.ts,application/*/BackOffice/rsbuild.config.ts,application/shared-webapp/build/plugin/*.ts,application/package.json
+paths: application/shared-webapp/*/rslib.config.ts,application/*/WebApp/rsbuild.config.ts,application/shared-webapp/build/plugin/*.ts,application/package.json
 description: How the frontend build system is wired (rslib libraries, rsbuild apps, module federation) and which build-tool upgrades are intentionally deferred
 ---
 
@@ -7,7 +7,7 @@ description: How the frontend build system is wired (rslib libraries, rsbuild ap
 
 The shared libraries under `application/shared-webapp/` (`@repo/ui`, `@repo/infrastructure`, `@repo/utils`,
 `@repo/build`) are built with **rslib** (ESM, bundleless) and consumed from their `dist` output. The three
-SPAs (`main/WebApp`, `account/WebApp`, `account/BackOffice`) are built with **rsbuild**, and **module
+SPAs (`main/WebApp`, `account/WebApp`, `back-office/WebApp`) are built with **rsbuild**, and **module
 federation lives only in the WebApp rsbuild builds** — rslib builds plain libraries, it does not produce
 federation remotes. Understand these constraints before changing any `rslib.config.ts`, an app's
 `rsbuild.config.ts`, or the toolchain versions in `application/package.json`.
