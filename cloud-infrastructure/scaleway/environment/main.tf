@@ -650,6 +650,16 @@ resource "random_bytes" "authentication_token_signing_key" {
   length = 64
 }
 
+# The back-office delegation key pair (ES256): the back-office BFF signs short-lived delegation
+# tokens with the private key, and account's internal API validates them with the public key. A
+# key of its own, instead of the platform's HMAC token key, means a compromised back-office cannot
+# mint application tokens, and account cannot mint delegation tokens. Rotate with
+# terraform apply -replace=tls_private_key.back_office_delegation, then redeploy.
+resource "tls_private_key" "back_office_delegation" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
 # The AES key material protecting the shared Data Protection keyring persisted in Object Storage:
 # the SPA-serving APIs (account-api, main-api) encrypt keyring elements with it before they are
 # written to the data-protection bucket, so bucket access alone yields no usable key material.
@@ -775,6 +785,7 @@ locals {
       # (AddNamedBlobStorages("account-storage")); without it the proxy 500s on first use.
       ConnectionStrings__account-storage = local.blob_storage_connection_string
       Authentication__TokenSigning__Key  = local.signing_key
+      BackOfficeDelegation__PublicKeyPem = tls_private_key.back_office_delegation.public_key_pem
       data-protection-encryption-key     = local.data_protection_encryption_key
       InternalTls__CertificatePem        = tls_locally_signed_cert.workload["account-api"].cert_pem
       InternalTls__KeyPem                = tls_private_key.workload["account-api"].private_key_pem
@@ -817,14 +828,14 @@ locals {
       # Antiforgery tokens minted by the back-office BFF are validated by itself; it consumes the
       # shared Data Protection keyring (main-api owns generation), so it needs the encryption key.
       # The blob client reads that keyring from Object Storage (registered by AddApiServices in
-      # deployed environments) — hence the blob-storage connection string. The token signing key
-      # feeds the shared application JWT scheme that the shared API wiring registers for every
-      # API; the back-office auth cleanup re-evaluates whether this system keeps that scheme.
-      ConnectionStrings__blob-storage   = local.blob_storage_connection_string
-      Authentication__TokenSigning__Key = local.signing_key
-      data-protection-encryption-key    = local.data_protection_encryption_key
-      InternalTls__CertificatePem       = tls_locally_signed_cert.workload["back-office-api"].cert_pem
-      InternalTls__KeyPem               = tls_private_key.workload["back-office-api"].private_key_pem
+      # deployed environments) — hence the blob-storage connection string. It holds the private
+      # delegation key but NOT the platform token signing key: the BFF never receives application
+      # tokens, so a compromised back-office cannot mint them.
+      ConnectionStrings__blob-storage     = local.blob_storage_connection_string
+      BackOfficeDelegation__SigningKeyPem = tls_private_key.back_office_delegation.private_key_pem_pkcs8
+      data-protection-encryption-key      = local.data_protection_encryption_key
+      InternalTls__CertificatePem         = tls_locally_signed_cert.workload["back-office-api"].cert_pem
+      InternalTls__KeyPem                 = tls_private_key.workload["back-office-api"].private_key_pem
       # The internal CA (public material) validates account's in-cluster TLS on the BFF's
       # internal API calls, mirroring the app-gateway's trust configuration.
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem

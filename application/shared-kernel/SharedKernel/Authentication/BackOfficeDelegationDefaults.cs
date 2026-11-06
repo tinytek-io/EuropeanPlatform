@@ -11,10 +11,20 @@ namespace SharedKernel.Authentication;
 public static class BackOfficeDelegationDefaults
 {
     // The JWT bearer scheme validating delegation tokens on internal API routes. A distinct scheme
-    // (rather than the application Bearer scheme) keeps the two token populations from being
-    // interchangeable: application tokens are rejected here (audience mismatch) and delegation
-    // tokens are rejected by the application scheme for the same reason.
+    // with its own key pair, issuer, and audience keeps the two token populations apart: application
+    // tokens (HMAC, platform issuer) are rejected here, and delegation tokens (ES256) are rejected by
+    // the application scheme.
     public const string DelegationScheme = "BackOfficeDelegation";
+
+    // Issuer stamped into delegation tokens and the only issuer the delegation scheme accepts.
+    public const string DelegationIssuer = "back-office";
+
+    // The delegation key pair: only the back-office holds the private key (it signs), the feature
+    // systems hold the public key (they validate). A compromised back-office can therefore mint
+    // delegation tokens but never application tokens, and a feature system cannot mint either.
+    public const string SigningKeyConfigurationKey = "BackOfficeDelegation:SigningKeyPem";
+
+    public const string PublicKeyConfigurationKey = "BackOfficeDelegation:PublicKeyPem";
 
     // Audience stamped into delegation tokens and the only audience the delegation scheme accepts.
     public const string DelegationAudience = "back-office-staff";

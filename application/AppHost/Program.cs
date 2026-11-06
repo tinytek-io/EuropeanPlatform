@@ -140,6 +140,10 @@ if (!isPublishMode)
     SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
 }
 
+var (delegationSigningKeyPem, delegationPublicKeyPem) = isPublishMode
+    ? (string.Empty, string.Empty)
+    : SecretManagerHelper.GetOrCreateBackOfficeDelegationKeyPair("back-office-delegation-signing-key");
+
 var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = ConfigureGoogleOAuthParameters();
 
 var (stripeConfigured, stripePublishableKey, stripeApiKey, stripeWebhookSecret) = ConfigureStripeParameters();
@@ -342,7 +346,11 @@ if (!isPublishMode)
     backOfficeApi
         .WithEnvironment("KESTREL_PORT", ports.BackOfficeSystemApi.ToString())
         // Drives the dev static proxy to the rsbuild dev server.
-        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
+        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString())
+        // The back-office signs delegation tokens; account's internal API validates them (deployed
+        // environments receive both halves through Secret Manager).
+        .WithEnvironment("BackOfficeDelegation__SigningKeyPem", delegationSigningKeyPem);
+    accountApi.WithEnvironment("BackOfficeDelegation__PublicKeyPem", delegationPublicKeyPem);
 }
 
 if (isPublishMode)

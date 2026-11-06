@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using NJsonSchema.Generation;
 using SharedKernel.Antiforgery;
 using SharedKernel.Authentication;
@@ -421,13 +422,13 @@ public sealed class ConfigureJwtBearerOptions(ITokenSigningClient tokenSigningCl
 }
 
 /// <summary>
-///     Wires the token signing validation parameters into the back-office delegation scheme. The
-///     parameters are the platform's (same HMAC key and issuer as application tokens) except for
-///     the audience: only delegation tokens minted by the back-office BFF carry
-///     BackOfficeDelegationDefaults.DelegationAudience, so application tokens are rejected here.
-///     Registered as IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
+///     Validates back-office delegation tokens: ES256 signatures against the delegation public key,
+///     the back-office issuer, and the delegation audience. Application tokens (HMAC, platform issuer
+///     and audience) fail every one of those checks. The public key resolves on the first delegation
+///     token, so systems without internal back-office routes need no key. Registered as
+///     IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
 /// </summary>
-public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient tokenSigningClient)
+public sealed class ConfigureBackOfficeDelegationJwtOptions(IConfiguration configuration)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
     public void Configure(string? name, JwtBearerOptions options)
@@ -437,11 +438,19 @@ public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient 
             return;
         }
 
-        options.TokenValidationParameters = tokenSigningClient.GetTokenValidationParameters(
-            validateLifetime: true,
-            clockSkew: TimeSpan.FromSeconds(5)
-        );
-        options.TokenValidationParameters.ValidAudience = BackOfficeDelegationDefaults.DelegationAudience;
+        var publicKey = new Lazy<SecurityKey>(() => BackOfficeDelegationKeys.LoadPublicKey(configuration));
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = BackOfficeDelegationDefaults.DelegationIssuer,
+            ValidateAudience = true,
+            ValidAudience = BackOfficeDelegationDefaults.DelegationAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeyResolver = (_, _, _, _) => [publicKey.Value],
+            ValidAlgorithms = [BackOfficeDelegationKeys.Algorithm],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(5)
+        };
     }
 
     public void Configure(JwtBearerOptions options)

@@ -52,7 +52,10 @@ public class HmacTokenSigningClient(IConfiguration? configuration = null) : ITok
             ValidateAudience = true,
             ValidAudience = Audience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(GetKey()),
+            // Resolved on the first token instead of when the options are built: a system that never
+            // receives application tokens (the back-office BFF) then needs no platform key at all.
+            IssuerSigningKeyResolver = (_, _, _, _) => [new SymmetricSecurityKey(GetKey())],
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha512],
             ClockSkew = clockSkew,
             ValidateLifetime = validateLifetime
         };

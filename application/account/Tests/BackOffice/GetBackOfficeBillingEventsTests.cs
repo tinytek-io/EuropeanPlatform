@@ -228,6 +228,19 @@ public sealed class GetBackOfficeBillingEventsTests(BackOfficeWebApplicationFact
     }
 
     [Fact]
+    public async Task GetBackOfficeBillingEvents_WhenTokenIsSignedWithThePlatformKey_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        using var client = CreateClientWithPlatformSignedToken(TestStaffIdentities.Admin);
+
+        // Act
+        var response = await client.GetAsync("/internal-api/back-office/billing-events?PageSize=10");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetBackOfficeBillingEvents_WhenCalledWithoutAuthentication_ShouldReturnUnauthorized()
     {
         // Arrange
