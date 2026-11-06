@@ -56,6 +56,29 @@ requests matching the managed OWASP CRS ruleset are rejected at the edge before 
 cluster. Known false positives are excepted with `exclusion_rules` by CRS rule ID in Terraform —
 never by flipping the mode out of band. Revisit together with CrowdSec (production).
 
+## Known risk: direct requests to the gateway Load Balancer bypass the edge
+
+Edge Services connects to the gateway Load Balancer's public flexible IP, and nothing restricts
+that IP to Edge Services: anyone who learns it can connect straight to Envoy
+(`curl --resolve app.<domain>:443:<lb-ip> ...`) and skip the WAF, edge TLS, and caching. Edge
+Services offers no way to authenticate itself to the origin today — no client certificate
+(authenticated origin pulls), no custom origin header — and publishes no egress IP ranges, so
+neither an origin mTLS check nor an LB ACL allowlist can be built on supported features. The
+backend is TCP passthrough, so the LB could only filter on source IP anyway.
+
+What the bypass does NOT skip: Envoy still terminates TLS, every endpoint enforces its own
+authentication and authorization, `/internal-api/*` stays blocked at the app-gateway, and the
+staff identity is never taken from request headers. The loss is the WAF layer of defence in
+depth, not an authentication bypass, and the LB IP is not published in DNS.
+
+Status: accepted for staging. The question is open with Scaleway (is `GET
+/edge-services/v1beta1/nodes` a stable egress list; is Edge → private LB over VPC supported or
+coming — the SDK already carries `private_network_id` on the backend; are authenticated origin
+pulls on the roadmap). Decide before production: a private-network origin if Scaleway ships it,
+otherwise an LB source-IP allowlist (`loadBalancerSourceRanges` on the gateway Service plus a
+`scaleway_lb_acl` on the Terraform-owned back-office frontend) with a scheduled drift check
+against the edge node list.
+
 ## DNS (user action)
 
 ```

@@ -185,3 +185,12 @@ The pinned Terraform provider (scaleway ~> 2.86) has no apiserver access-restric
 so the cluster's API server is publicly reachable with no allow-list. Mitigation: kubeconfig is
 the only credential; revisit on a provider upgrade.
 
+## Known gap: operator access to the database
+
+The managed PostgreSQL instance sits on the private network only (no public endpoint), and the
+network policies allow database egress from the application workloads and migrators alone. There
+is therefore no documented operator path to the database (break-glass queries, manual restores).
+When one is needed, add it deliberately: a short-lived `kubectl run` pod labelled for a dedicated
+policy that allows only the RDB endpoint, or a bastion on the private network — never by widening
+an application workload's policy. The admin credential stays in Terraform state
+(`database_admin_user` / `database_admin_password` outputs).
