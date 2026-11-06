@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.AspNetCore.Http;
 using SharedKernel.Configuration;
 
@@ -8,11 +10,16 @@ namespace SharedKernel.Telemetry;
 //   - server.address / url.* use each service's own Request.Host, with the redundant default :443/:80
 //     stripped. AppGateway shows the public hostname; backend services show their in-cluster service
 //     host, which is the conventional layered view in distributed tracing.
-//   - client.address comes from X-Forwarded-For so the geo lookup resolves to the real browser IP
-//     instead of the edge proxy in the cluster's region. The header is set by the external ingress,
-//     which strips client-supplied values, so spoofing is not possible.
+//   - client.address comes from X-Forwarded-For (the original caller rather than the edge proxy),
+//     truncated to its network (/24 for IPv4, /48 for IPv6): a raw IP in telemetry is PII, and
+//     Cockpit stores attributes verbatim with no ingestion-side anonymization. The leftmost entry is
+//     whatever the first proxy received, so treat it as informational, never as an identity.
 public static class PublicHostTelemetryEnricher
 {
+    private const int Ipv4NetworkBytes = 3;
+
+    private const int Ipv6NetworkBytes = 6;
+
     public static void Enrich(Activity activity, HttpRequest request)
     {
         var parts = ResolvePublicUrlParts(request);
@@ -78,7 +85,17 @@ public static class PublicHostTelemetryEnricher
         // Leftmost entry is the original client; any entries after it are intermediate proxies.
         var separatorIndex = forwardedFor.IndexOf(',');
         var leftmost = (separatorIndex < 0 ? forwardedFor : forwardedFor[..separatorIndex]).Trim();
-        return leftmost.Length == 0 ? null : leftmost;
+        return IPAddress.TryParse(leftmost, out var address) ? TruncateToNetwork(address).ToString() : null;
+    }
+
+    private static IPAddress TruncateToNetwork(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+
+        var bytes = address.GetAddressBytes();
+        var keptBytes = address.AddressFamily == AddressFamily.InterNetwork ? Ipv4NetworkBytes : Ipv6NetworkBytes;
+        Array.Clear(bytes, keptBytes, bytes.Length - keptBytes);
+        return new IPAddress(bytes);
     }
 
     private static string StripDefaultPort(string host, string scheme)
