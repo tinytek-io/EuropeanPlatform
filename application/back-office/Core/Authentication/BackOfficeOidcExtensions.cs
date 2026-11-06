@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -68,6 +69,15 @@ public static class BackOfficeOidcExtensions
                     oidc.CallbackPath = BackOfficeIdentityDefaults.CallbackPath;
                     oidc.SignInScheme = BackOfficeOidcDefaults.CookieScheme;
                     oidc.SaveTokens = false;
+                    // Current providers (Authelia 4.39+, Entra ID for large group sets) deliver
+                    // groups, name, and email through the userinfo endpoint rather than the ID
+                    // token. The claim actions land them under the claim types the staff context
+                    // and the staff/admin gates read; the unique mappings never duplicate a value
+                    // the ID token already carried.
+                    oidc.GetClaimsFromUserInfoEndpoint = true;
+                    oidc.ClaimActions.MapJsonKey(BackOfficeIdentityDefaults.GroupsClaimType, "groups");
+                    oidc.ClaimActions.MapUniqueJsonKey(ClaimTypes.Name, "name");
+                    oidc.ClaimActions.MapUniqueJsonKey(ClaimTypes.Email, "email");
                     oidc.Scope.Clear();
                     oidc.Scope.Add(OpenIdConnectScope.OpenIdProfile);
                     oidc.Scope.Add(OpenIdConnectScope.Email);
