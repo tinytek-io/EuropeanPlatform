@@ -28,3 +28,7 @@ edge_pipeline_name_prefix = "staging"
 # gateway_lb_frontend_id, gateway_lb_backend_id, and operator_user_id are cluster- and
 # operator-specific: they come from TF_VAR_* environment variables and are never committed
 # (see the cluster-ops README for capturing the LB ids).
+
+# The authentik staff identity provider at auth.<domain_name> (staff-identity.tf). Turned on once the
+# in-cluster workload ships; until then staging keeps the mock staff login.
+staff_identity_enabled = false

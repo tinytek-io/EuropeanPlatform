@@ -619,14 +619,23 @@ variable "workload_key_expiry" {
 # plan time instead of silently planning staging's hostnames into another environment.
 
 variable "domain_name" {
-  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the platform serves exactly two edge pipelines); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name>, back-office.<domain_name>, and (with staff_identity_enabled) auth.<domain_name>; staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
   type        = string
+}
+
+variable "staff_identity_enabled" {
+  description = "Run the authentik staff identity provider at auth.<domain_name>: its edge pipeline and origin frontend, database, generated secrets, and SMTP identity. Off until the in-cluster workload ships; the tier file turns it on."
+  type        = bool
+  default     = false
 }
 
 locals {
   # Everything public derives from domain_name: one edge pipeline per hostname, and the TEM
-  # sending domain is the zone itself.
-  edge_hostnames  = { app = "app.${var.domain_name}", back-office = "back-office.${var.domain_name}" }
+  # sending domain is the zone itself. The staff identity provider adds auth.<domain_name>.
+  edge_hostnames = merge(
+    { app = "app.${var.domain_name}", back-office = "back-office.${var.domain_name}" },
+    var.staff_identity_enabled ? { auth = "auth.${var.domain_name}" } : {}
+  )
   tem_domain_name = var.domain_name
 }
 
@@ -843,11 +852,16 @@ locals {
     }
   }
 
+  # The back-office's OIDC client secret for the staff identity provider (staff-identity.tf).
+  staff_identity_workload_secrets = var.staff_identity_enabled ? {
+    back-office-api = { BackOffice__Oidc__ClientSecret = random_password.back_office_oidc_client_secret[0].result }
+  } : {}
+
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
   # Cockpit resource and travels the same Secret Manager path as the workload's other secrets.
   workload_secrets = {
     for workload, secrets in local.base_workload_secrets :
-    workload => merge(secrets, { Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key })
+    workload => merge(secrets, try(local.staff_identity_workload_secrets[workload], {}), { Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key })
   }
 
   secret_entries = merge([
@@ -949,14 +963,25 @@ locals {
   edge_pipelines = { for key, fqdn in local.edge_hostnames : key => { fqdn = fqdn } }
 }
 
-# Dedicated origin frontend for the back-office pipeline (app keeps the CCM-managed 443
-# frontend). TCP passthrough to the same Envoy backend: Envoy terminates TLS and routes by
-# the SNI the edge presents (the backend stage's domain_name).
-resource "scaleway_lb_frontend" "back_office" {
+# Dedicated origin frontends for every pipeline but app (which keeps the CCM-managed 443
+# frontend): the edge keeps one active backend stage per frontend. TCP passthrough to the same
+# Envoy backend: Envoy terminates TLS and routes by the SNI the edge presents (the backend stage's
+# domain_name).
+locals {
+  dedicated_origin_ports = { for key, port in { back-office = 8443, auth = 8444 } : key => port if contains(keys(local.edge_pipelines), key) }
+}
+
+resource "scaleway_lb_frontend" "edge_origin" {
+  for_each     = local.dedicated_origin_ports
   lb_id        = scaleway_lb.gateway.id
-  name         = "${var.prefix}-${var.environment}-back-office-https"
-  inbound_port = 8443
+  name         = "${var.prefix}-${var.environment}-${each.key}-https"
+  inbound_port = each.value
   backend_id   = var.gateway_lb_backend_id
+}
+
+moved {
+  from = scaleway_lb_frontend.back_office
+  to   = scaleway_lb_frontend.edge_origin["back-office"]
 }
 
 resource "scaleway_edge_services_pipeline" "gateway" {
@@ -973,7 +998,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
     lb_config {
       id          = scaleway_lb.gateway.id
       zone        = local.zone
-      frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : var.gateway_lb_frontend_id
+      frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.
       domain_name   = local.edge_pipelines[each.key].fqdn
