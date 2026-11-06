@@ -69,6 +69,8 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
 
     protected MockStripeState StripeState { get; }
 
+    protected IServiceProvider Services => _factory.Services;
+
     public void Dispose()
     {
         Dispose(true);
