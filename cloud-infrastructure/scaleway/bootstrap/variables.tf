@@ -54,7 +54,7 @@ variable "organization_id" {
 }
 
 variable "project_id" {
-  description = "Scaleway Project ID; defaults to SCW_DEFAULT_PROJECT_ID when unset. Required in practice: the deploy pipeline IAM policy is project-scoped and the provider cannot discover the profile's default project, so apply without it fails the policy scope."
+  description = "Scaleway Project ID the provider uses as its default; defaults to SCW_DEFAULT_PROJECT_ID when unset. Every resource here sets its project explicitly (the per-environment project this module creates, which also scopes the deploy pipeline and registry-pull IAM policies), so this only matters for the provider's own default."
   type        = string
   default     = null
 

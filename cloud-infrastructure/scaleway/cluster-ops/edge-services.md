@@ -18,7 +18,7 @@ backend (LB)`. There is one pipeline per public hostname:
 | custom FQDN (head) | app.staging.europeanplatform.net | back-office.staging.europeanplatform.net |
 | CNAME target | `<pipeline-id>.svc.edge.scw.cloud` | `<pipeline-id>.svc.edge.scw.cloud` |
 | origin frontend | LB 443 (CCM-created) | LB 8443 (`scaleway_lb_frontend.back_office`, TF-created) |
-| WAF | log_only, paranoia 1 | log_only, paranoia 1 |
+| WAF | enable (blocking), paranoia 1 | enable (blocking), paranoia 1 |
 | cache | fallback TTL 3600s | fallback TTL 3600s |
 
 Pipeline ids are stable (TF-managed); read them from `terraform state` or
@@ -51,8 +51,10 @@ SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
 
 ## WAF mode
 
-`log_only` at paranoia 1 while staging is young: evaluate what the WAF flags, then flip to
-`enable` (`scw edge-services waf-stage update`). Revisit together with CrowdSec (production).
+Blocking (`mode = "enable"` on `scaleway_edge_services_waf_stage.gateway`) at paranoia 1:
+requests matching the managed OWASP CRS ruleset are rejected at the edge before reaching the
+cluster. Known false positives are excepted with `exclusion_rules` by CRS rule ID in Terraform —
+never by flipping the mode out of band. Revisit together with CrowdSec (production).
 
 ## DNS (user action)
 
@@ -66,9 +68,10 @@ verification steps.
 
 ## Maintenance page (cluster-down fallback)
 
-Bucket `pp-stage-maintenance` (bucket + website config + index.html object) is Terraform-managed
-in `../environment/main.tf` with the page at `../environment/maintenance/index.html`; it serves at
-https://pp-stage-maintenance.s3-website.fr-par.scw.cloud/.
+Bucket `<prefix>-<environment>-maintenance` (bucket + website config + index.html object) is
+Terraform-managed in `../environment/main.tf` with the page at
+`../environment/maintenance/index.html`; it serves at the `maintenance_website_endpoint` output
+(`<bucket>.s3-website.<region>.scw.cloud`).
 
 The LB serves it as `failover_host` when ALL LB backends are down (node health-check failure —
 full cluster outage, not application-level errors). Re-run after cluster churn (node
@@ -78,8 +81,13 @@ replacement, LB adoption changes):
 SCW_SECRET_KEY=<scw profile key> ./set-gateway-lb-failover.sh
 ```
 
-The script (idempotent, derives all IDs live from the Service's `scw-loadbalancer-id`
-annotation) annotates the Service for HTTP backends (the CCM creates TCP by default and the API
+Limitation: the failover host only applies to the HTTP backend behind the LB's :80 frontend. The
+edge pipelines reach the cluster through the TCP passthrough 443/8443 frontends, whose Envoy TCP
+backend cannot carry a failover host, so edge visitors see the edge's origin error during a
+cluster outage — not this page.
+
+The script (idempotent, derives the region and failover host from the environment module's
+outputs and all IDs live from the Service's `scw-loadbalancer-id` annotation) annotates the Service for HTTP backends (the CCM creates TCP by default and the API
 rejects failover_host on TCP), then merges the failover host into a full backend PUT (the API
 validates the request body, so forward_protocol must be present). Not in Terraform: the backend
 is CCM-owned (pool = node IPs, ID derived from the Service UID) and a second owner would fight

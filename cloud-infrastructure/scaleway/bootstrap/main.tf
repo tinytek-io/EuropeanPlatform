@@ -116,9 +116,8 @@ resource "scaleway_iam_application" "deploy_pipeline" {
   description = "Builds and publishes PlatformPlatform to the ${var.environment} environment"
 }
 
-# The policy is project-scoped; the provider cannot resolve the CLI profile's default project into
-# a rule scope, so an apply without project_id set fails here with an explicit error rather than
-# granting a broader organization-wide scope.
+# The policy is scoped to the per-environment project this module creates (never organization-wide),
+# so the pipeline key can reach only that environment's registry and state bucket.
 resource "scaleway_iam_policy" "deploy_pipeline" {
   name           = "${var.prefix}-${var.environment}-deploy-pipeline"
   description    = "Registry push and state bucket access for the deploy pipeline"

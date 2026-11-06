@@ -25,7 +25,7 @@ terraform init && terraform apply -var prefix=pp -var environment=stage \
 > preferred project is the organization default, refreshes of `scaleway_object` resources fail
 > with `GetObjectTagging` 403 until the variable is set.
 
-Connection strings and bucket URLs for the deploy-time secrets come from the environment module's outputs (`terraform output`); the Kapsule kubeconfig is the sensitive `kubeconfig` output.
+The deploy command reads its inputs from the environment module's outputs (`terraform output`): the sensitive `kubeconfig`, the per-workload Secret Manager keys, the Cockpit OTLP endpoints, the internal CA, and the edge hostnames. Database and storage connection strings never leave Terraform as outputs — they reach the workloads through Secret Manager.
 
 ## Naming conventions
 
