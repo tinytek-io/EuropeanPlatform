@@ -91,6 +91,6 @@
   "development": {
     // Prefix for Docker volume names. Keeps each fork's volumes isolated from upstream and from
     // other forks running on the same machine. Conventionally the product name, lowercased.
-    "dockerVolumePrefix": "platformplatform"
+    "dockerVolumePrefix": "europeanplatform"
   }
 }
