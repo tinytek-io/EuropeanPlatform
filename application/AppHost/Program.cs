@@ -149,6 +149,12 @@ var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = Conf
 var (stripeConfigured, stripePublishableKey, stripeApiKey, stripeWebhookSecret) = ConfigureStripeParameters();
 var stripeFullyConfigured = stripeConfigured && builder.Configuration["Parameters:stripe-webhook-secret"] is not null and not "not-configured";
 
+// The billing UI (account's subscription pages and the back-office billing/revenue views). Forced on
+// in local development so newcomers see it without configuring Stripe; deployed environments show
+// it only when Stripe is fully configured, so a tier without Stripe never presents billing it
+// cannot serve.
+var subscriptionUiEnabled = !isPublishMode || stripeFullyConfigured ? "true" : "false";
+
 // Local development runs PostgreSQL as a container. Publish targets a managed database, so both
 // databases become externally supplied connection strings (same pattern as blob-storage below:
 // the values are filled from infrastructure outputs at deploy time).
@@ -270,9 +276,7 @@ var accountApi = builder
     // explicitly (WithStripeConfiguration does the same for the Stripe mock).
     .WithEnvironment("OAuth__AllowMockProvider", isPublishMode ? "false" : "true")
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
-    // Force-on so newcomers see the back-office billing UI without Stripe configured. Set to "false" (or
-    // change back to `stripeFullyConfigured ? "true" : "false"`) to hide all billing/revenue/Stripe data.
-    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
     .WaitFor(accountWorkers);
 
 WithStripeConfiguration(accountApi);
@@ -334,9 +338,7 @@ var backOfficeApi = builder
     .AddProject<BackOffice_Api>("back-office-api")
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
-    // Force-on so staff see the back-office billing UI without Stripe configured — the same
-    // force-on account-api applies: the staff dashboard is where billing/revenue data lives.
-    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
     // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
     // localhost, the gateway hostname in publish mode).
     .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
