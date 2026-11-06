@@ -16,18 +16,19 @@ terraform {
     }
   }
 
-  # Remote state lives in the bucket the bootstrap module created, using Scaleway's S3
-  # conditional-write locking. Credentials come from the deploy pipeline API key:
+  # Remote state lives in the bucket each environment's bootstrap created, using Scaleway's S3
+  # conditional-write locking. The bucket and endpoint are per environment and come from
+  # environments/<environment>.backend.hcl (partial configuration), so the working copy can never
+  # silently plan against another environment's state:
+  #   terraform init -reconfigure -backend-config=environments/<environment>.backend.hcl
+  # (the deploy command runs exactly that before it reads the state). Credentials come from the
+  # deploy pipeline API key:
   #   export AWS_ACCESS_KEY_ID=$(pipeline access key)
   #   export AWS_SECRET_ACCESS_KEY=$(pipeline secret key)
   backend "s3" {
-    bucket       = "pp-stage-fr-par-terraform-state"
     key          = "platformplatform/environment.tfstate"
     region       = "us-east-1"
     use_lockfile = true
-    endpoints = {
-      s3 = "https://s3.fr-par.scw.cloud"
-    }
     # The backend validates against AWS by default (STS, region names, account IDs); none of that
     # exists for a third-party S3-compatible endpoint like Scaleway Object Storage.
     skip_credentials_validation = true

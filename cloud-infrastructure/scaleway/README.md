@@ -4,8 +4,9 @@ This directory is the **bootstrap tier** of the Scaleway migration. It solves a 
 problem: the main Terraform module stores its state in Object Storage and `aspire publish`/`deploy`
 push images to the Container Registry, so both must exist *before* any module can run against them.
 
-The bootstrap itself therefore runs with **local state** (a single `terraform.tfstate` file next to
-this module). That is deliberate and documented here — it is the only tier that does. Keep the
+The bootstrap itself therefore runs with **local state** (one `terraform.<environment>.tfstate` file
+per environment next to this module). That is deliberate and documented here — it is the only tier
+that does. Keep the
 bootstrap file safe or re-run the bootstrap; all it does is create the state bucket, the registry
 namespace, and the deploy pipeline credentials.
 
@@ -54,8 +55,10 @@ Bootstrap runs on **local state**; each environment's bootstrap state is a separ
 (`terraform apply -state=terraform.<environment>.tfstate`), because the project resource is keyed
 by the environment name — applying a second environment into one state file would REPLACE the
 first environment's project. The environment module's remote state bucket is per-environment
-(created by that environment's bootstrap); switching the working copy between environments is
-`terraform init -reconfigure` with the target bucket.
+(created by that environment's bootstrap) and declared in `environment/environments/<environment>.backend.hcl`;
+switching the working copy between environments is
+`terraform init -reconfigure -backend-config=environments/<environment>.backend.hcl`, which the deploy
+command runs before it reads any state.
 
 Known provider gap (terraform-provider-scaleway ~> 2.86): `scaleway_k8s_cluster` has no
 apiserver access-restriction attributes, so the Kubernetes API server stays publicly reachable
@@ -80,16 +83,17 @@ see the cluster-ops README).
 ```bash
 cd cloud-infrastructure/scaleway/bootstrap
 terraform init
-terraform apply -var prefix=<your-unique-prefix> -var environment=stage
-terraform output   # registry endpoint + pipeline API key (secret is sensitive)
+terraform apply -state=terraform.stage.tfstate -var prefix=<your-unique-prefix> -var environment=stage
+terraform output -state=terraform.stage.tfstate   # registry endpoint + pipeline API key (secret is sensitive)
 ```
 
 ## Handover to the main module
 
 The environment module stores its state in the bucket created here, using S3 conditional-write
-locking (Terraform >= 1.10). Its backend block (`environment/main.tf`) has this shape — the bucket
-name is the bootstrap's `<prefix>-<environment>-<region>-terraform-state`, and the pipeline API
-key is the S3 credential:
+locking (Terraform >= 1.10). The backend block in `environment/main.tf` holds the shared settings;
+each environment's `environments/<environment>.backend.hcl` supplies its bucket (the bootstrap's
+`<prefix>-<environment>-<region>-terraform-state`) and endpoint, and the pipeline API key is the S3
+credential. Together they amount to:
 
 ```hcl
 terraform {
