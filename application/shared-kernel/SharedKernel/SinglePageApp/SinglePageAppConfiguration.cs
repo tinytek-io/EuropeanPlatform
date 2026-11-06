@@ -23,9 +23,9 @@ public class SinglePageAppConfiguration
 
     // Source directory for SPA static assets that rsbuild copies into BuildRootPath at build time.
     // Used by UseSinglePageAppFallback to layer public/ assets over the bundle in local dev where
-    // rsbuild's dev server holds them. Null in Azure: published images only contain ./dist/, so the
-    // upward walk for the public/ marker would terminate at the filesystem root and throw.
-    public static readonly string? PublicRootPath = SharedInfrastructureConfiguration.IsRunningInAzure
+    // rsbuild's dev server holds them. Null when deployed: published images only contain ./dist/,
+    // so the upward walk for the public/ marker would terminate at the filesystem root and throw.
+    public static readonly string? PublicRootPath = SharedInfrastructureConfiguration.IsRunningInCloud
         ? null
         : GetWebAppDistRoot(DefaultWebAppProjectName, "public");
 
@@ -58,7 +58,7 @@ public class SinglePageAppConfiguration
         string webAppProjectName,
         string? publicUrlOverride,
         string? cdnUrlOverride,
-        bool? isRunningInAzure
+        bool? isDeployed
     )
     {
         // Per-host overrides win over the process-wide env vars so a single process can host multiple SPAs
@@ -96,8 +96,9 @@ public class SinglePageAppConfiguration
 
         _isDevelopment = isDevelopment;
         BundleDirectory = webAppProjectName == DefaultWebAppProjectName ? BuildRootPath : GetWebAppDistRoot(webAppProjectName, "dist");
-        // Null in Azure: published images only ship ./dist/, so the upward walk would throw.
-        PublicDirectory = isRunningInAzure ?? SharedInfrastructureConfiguration.IsRunningInAzure
+        // Null when deployed: published images only ship ./dist/, so the upward walk would throw.
+        var isDeployedEnvironment = isDeployed ?? SharedInfrastructureConfiguration.IsRunningInCloud;
+        PublicDirectory = isDeployedEnvironment
             ? null
             : GetWebAppDistRoot(webAppProjectName, "public");
         _htmlTemplatePath = Path.Combine(BundleDirectory, "index.html");

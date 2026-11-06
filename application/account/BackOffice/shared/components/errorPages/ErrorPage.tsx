@@ -2,9 +2,9 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { applicationInsights } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { isAccessDeniedError, isNotFoundError } from "@repo/infrastructure/auth/routeGuards";
 import { productName } from "@repo/infrastructure/branding";
+import { trackException } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { Button } from "@repo/ui/components/Button";
 import { Link } from "@repo/ui/components/Link";
 import { Logo } from "@repo/ui/components/Logo";
@@ -43,15 +43,12 @@ function GeneralErrorPage({ error }: Readonly<ErrorComponentProps>) {
   useEffect(() => {
     const exception = error instanceof Error ? error : new Error(String(error));
 
-    applicationInsights.trackException({
-      exception,
-      properties: {
-        component: "ErrorPage",
-        url: globalThis.location.href,
-        pathname: globalThis.location.pathname,
-        errorName: exception.name,
-        errorMessage: exception.message
-      }
+    trackException(exception, {
+      component: "ErrorPage",
+      url: globalThis.location.href,
+      pathname: globalThis.location.pathname,
+      errorName: exception.name,
+      errorMessage: exception.message
     });
 
     console.error(error);

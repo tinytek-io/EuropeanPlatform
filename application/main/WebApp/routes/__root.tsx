@@ -1,9 +1,9 @@
-import { PageTracker } from "@repo/infrastructure/applicationInsights/PageTracker";
 import { AuthenticationProvider } from "@repo/infrastructure/auth/AuthenticationProvider";
 import { AuthSyncModal } from "@repo/infrastructure/auth/AuthSyncModal";
 import { productName, showAddToHomescreen, themeColor } from "@repo/infrastructure/branding";
 import { useErrorTrigger } from "@repo/infrastructure/development/useErrorTrigger";
 import { OnboardingGuard } from "@repo/infrastructure/onboarding/OnboardingGuard";
+import { PageTracker } from "@repo/infrastructure/telemetry/PageTracker";
 import { useInitializeLocale } from "@repo/infrastructure/translations/useInitializeLocale";
 import { AddToHomescreen } from "@repo/ui/components/AddToHomescreen";
 import { BannerContainer } from "@repo/ui/components/BannerContainer";

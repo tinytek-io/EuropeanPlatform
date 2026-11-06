@@ -17,7 +17,7 @@ public class OpenTelemetryEnricher(IExecutionContext executionContext)
             Activity.Current.SetTag("enduser.id", executionContext.UserInfo.Id);
         }
 
-        // Set custom properties, ensure any changes here are also added to ApplicationInsightsTelemetryInitializer
+        // Set custom properties; these travel as activity tags through the OTLP exporter
         Activity.Current.SetTag("tenant.id", executionContext.TenantId?.Value);
         Activity.Current.SetTag("tenant.subscription_plan", executionContext.UserInfo.SubscriptionPlan);
         Activity.Current.SetTag("user.id", executionContext.UserInfo.Id);

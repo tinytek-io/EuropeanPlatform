@@ -49,18 +49,10 @@ public static class SinglePageAppFallbackExtensions
         // ASP.NET Core antiforgery system uses a cryptographic double-submit pattern with two tokens:
         // - A secret cookie token that only the server can read (session-based)
         // - A public request token that the SPA sends as a header for state-changing requests like POST/PUT/DELETE
-
+        // GetAndStoreTokens writes the cookie itself (configured in AddApiServices with the Secure
+        // policy the __Host- prefix requires); it only generates a new cookie token when the request
+        // does not carry one, as the cookie must remain constant across browser tabs.
         var antiforgeryTokenSet = antiforgery.GetAndStoreTokens(context);
-
-        if (antiforgeryTokenSet.CookieToken is not null)
-        {
-            // A new antiforgery cookie is only generated once, as it must remain constant across browser tabs to avoid validation failures
-            context.Response.Cookies.Append(
-                AuthenticationTokenHttpKeys.AntiforgeryTokenCookieName,
-                antiforgeryTokenSet.CookieToken!,
-                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, Path = "/" }
-            );
-        }
 
         return antiforgeryTokenSet.RequestToken!;
     }
@@ -127,7 +119,7 @@ public static class SinglePageAppFallbackExtensions
     private static IFileProvider BuildSpaFileProvider(SinglePageAppConfiguration configuration)
     {
         var bundleProvider = new PhysicalFileProvider(configuration.BundleDirectory);
-        if (SharedInfrastructureConfiguration.IsRunningInAzure
+        if (SharedInfrastructureConfiguration.IsRunningInCloud
             || configuration.PublicDirectory is null
             || !Directory.Exists(configuration.PublicDirectory))
         {
@@ -283,7 +275,7 @@ public static class SinglePageAppFallbackExtensions
             Directory.CreateDirectory(SinglePageAppConfiguration.BuildRootPath);
 
             var bundleProvider = new PhysicalFileProvider(SinglePageAppConfiguration.BuildRootPath);
-            var fileProvider = !SharedInfrastructureConfiguration.IsRunningInAzure
+            var fileProvider = !SharedInfrastructureConfiguration.IsRunningInCloud
                                && SinglePageAppConfiguration.PublicRootPath is not null
                                && Directory.Exists(SinglePageAppConfiguration.PublicRootPath)
                 ? (IFileProvider)new CompositeFileProvider(bundleProvider, new PhysicalFileProvider(SinglePageAppConfiguration.PublicRootPath))

@@ -115,7 +115,7 @@ public sealed class SwitchTenantHandler(
             var avatarData = await blobStorageClient.DownloadAsync("avatars", sourceBlobPath, cancellationToken);
             if (avatarData is not null)
             {
-                // Copy to MemoryStream since Azure's RetriableStream doesn't support seeking (Position reset)
+                // Copy to MemoryStream since the blob download stream doesn't support seeking (Position reset)
                 await using var avatarStream = avatarData.Value.Stream;
                 using var memoryStream = new MemoryStream();
                 await avatarStream.CopyToAsync(memoryStream, cancellationToken);

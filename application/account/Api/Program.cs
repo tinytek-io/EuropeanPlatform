@@ -23,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder
     .AddApiInfrastructure()
     .AddDevelopmentPort()
+    .AddInternalTls()
     .AddAccountInfrastructure();
 
 // Configure dependency injection services like Repositories, MediatR, Pipelines, FluentValidation validators, etc.
@@ -30,6 +31,12 @@ builder.Services
     .AddApiServices([Assembly.GetExecutingAssembly(), Configuration.Assembly], ApiDocumentLayout.AccountAndBackOffice)
     .AddAccountServices()
     .AddBackOfficeDevStaticProxy();
+
+// Back-office staff identity: a configured OIDC provider (BackOffice:Oidc) takes precedence;
+// the mock identity selector applies only when no provider exists (local development and
+// environments that explicitly opt in through MockEasyAuth:Enabled). Registered before Build.
+var backOfficeOidcConfigured = builder.Configuration.IsBackOfficeOidcConfigured();
+builder.Services.AddBackOfficeOidcIdentity(builder.Configuration);
 
 var app = builder.Build();
 
@@ -52,21 +59,34 @@ var backOfficePublicUrl =
     ?? (appPublicUrl is null ? null : ReplaceHost(appPublicUrl, appHostname, backOfficeHostname));
 var backOfficeCdnUrl = Environment.GetEnvironmentVariable("BACK_OFFICE_CDN_URL") ?? backOfficePublicUrl;
 
+// The /login picker belongs to the MockEasyAuth identity selector: available during local
+// development and on staging where MockEasyAuth:Enabled explicitly opts in, blocked everywhere
+// else (removed from the auth-gate exemption list and short-circuited to 401 below to reject
+// even authenticated requests). Superseded whenever an OIDC provider is configured above.
+var mockEasyAuthEnabled = !backOfficeOidcConfigured
+                          && (app.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>()
+                              || SharedInfrastructureConfiguration.IsRunningInCloud is false);
+
 // Runtime feature flags injected into the SPA HTML so the React shell can branch on capability without
 // a separate config endpoint. Both flags must be wired into BOTH host-scoped SPAs because each one renders
 // its own HTML from its own StaticRuntimeEnvironment; omitting them on a host renders the gate as "disabled".
+// PUBLIC_MOCK_EASY_AUTH_ENABLED drives the SPA-side availability of the /login route: a production build of the
+// back-office renders it only on hosts where the server actually offers the mock identity selector.
 var runtimeEnvironment = new Dictionary<string, string>
 {
     ["PUBLIC_GOOGLE_OAUTH_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_GOOGLE_OAUTH_ENABLED") ?? "false",
-    ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false"
+    ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false",
+    ["PUBLIC_MOCK_EASY_AUTH_ENABLED"] = mockEasyAuthEnabled ? "true" : "false"
 };
 
-// The /login picker is the dev-only MockEasyAuth identity selector. In Azure-deployed instances the
-// path must not be reachable: it is removed from the auth-gate exemption list (so the back-office
-// authorize policy applies) and short-circuited to 401 below to reject even authenticated requests.
-string[] backOfficeUnauthenticatedPaths = SharedInfrastructureConfiguration.IsRunningInAzure ? [] : ["/login"];
+string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled ? ["/login"] : [];
 
-if (SharedInfrastructureConfiguration.IsRunningInAzure)
+if (backOfficeOidcConfigured)
+{
+    app.MapBackOfficeOidcEndpoints();
+}
+
+if (!mockEasyAuthEnabled)
 {
     app.MapGet("/login", Results.Unauthorized).RequireHost(backOfficeHostname);
 }
@@ -82,84 +102,41 @@ app.UseApiServices(); // Add common configuration for all APIs like Swagger, HST
 // that AppGateway proxies on the user-facing host must be served here directly from blob storage.
 app.MapBackOfficeBlobProxy(backOfficeHostname);
 
-if (SharedInfrastructureConfiguration.IsRunningInAzure)
-{
-    // Production: same image runs in two ACA container apps. The back-office one carries an explicit
-    // env var; account-api does not. Each registers only the SPA it serves, so endpoint matching does
-    // not depend on Request.Host being correctly rewritten from X-Forwarded-Host through the ACA mesh.
-    var isBackOfficeContainer = app.Configuration.GetValue("BackOffice:IsBackOfficeContainer", false);
+// One process serves both SPAs, host-scoped. This matches the deployed topology (a single
+// account-api workload behind the cluster gateway, two hostnames routed to it) and local dev
+// (dual Kestrel listeners): host-scoped fallback disambiguates because the gateway really delivers
+// requests with the right Host header. Email static files are host-scoped the same way: the
+// back-office host serves the *.preview.* artifacts (consumed by the back-office-only email
+// preview page), the user-facing host does not.
+app.UseWhen(
+    context => context.Request.Host.Host.Equals(backOfficeHostname, StringComparison.OrdinalIgnoreCase),
+    branch => branch.UseEmailStaticFiles("WebApp", true, appPublicUrl)
+);
+app.UseWhen(
+    context => context.Request.Host.Host.Equals(appHostname, StringComparison.OrdinalIgnoreCase),
+    branch => branch.UseEmailStaticFiles("WebApp", false)
+);
 
-    // Email *.preview.* artifacts are reachable only on the back-office container -- the email
-    // preview page that consumes them is back-office-only and Easy Auth gates the whole host.
-    // `appPublicUrl` resolves {{PublicUrl}} in served previews so their assets load from the
-    // public app host.
-    app.UseEmailStaticFiles("WebApp", isBackOfficeContainer, appPublicUrl);
-
-    if (isBackOfficeContainer)
-    {
-        app.UseSingleSpaFallback(
-            new HostScopedSinglePageApp(
-                backOfficeHostname,
-                "BackOffice",
-                BuildBackOfficeUserInfo,
-                backOfficePublicUrl,
-                backOfficeCdnUrl,
-                BackOfficeIdentityDefaults.PolicyName,
-                runtimeEnvironment,
-                backOfficeUnauthenticatedPaths
-            )
-        );
-    }
-    else
-    {
-        app.UseSingleSpaFallback(
-            new HostScopedSinglePageApp(
-                appHostname,
-                "WebApp",
-                context => context.RequestServices.GetRequiredService<IExecutionContext>().UserInfo,
-                appPublicUrl,
-                appCdnUrl,
-                environmentVariables: runtimeEnvironment
-            )
-        );
-    }
-}
-else
-{
-    // Local dev (Aspire): one process serves both SPAs via dual Kestrel listeners; host-scoped
-    // fallback disambiguates because Aspire really delivers requests with the right Host header.
-    // Email static files are host-scoped the same way: the back-office host serves the *.preview.*
-    // artifacts (consumed by the back-office-only email preview page), the user-facing host does not.
-    app.UseWhen(
-        context => context.Request.Host.Host.Equals(backOfficeHostname, StringComparison.OrdinalIgnoreCase),
-        branch => branch.UseEmailStaticFiles("WebApp", true, appPublicUrl)
-    );
-    app.UseWhen(
-        context => context.Request.Host.Host.Equals(appHostname, StringComparison.OrdinalIgnoreCase),
-        branch => branch.UseEmailStaticFiles("WebApp", false)
-    );
-
-    app.UseHostScopedSinglePageAppFallback(
-        new HostScopedSinglePageApp(
-            appHostname,
-            "WebApp",
-            context => context.RequestServices.GetRequiredService<IExecutionContext>().UserInfo,
-            appPublicUrl,
-            appCdnUrl,
-            environmentVariables: runtimeEnvironment
-        ),
-        new HostScopedSinglePageApp(
-            backOfficeHostname,
-            "BackOffice",
-            BuildBackOfficeUserInfo,
-            backOfficePublicUrl,
-            backOfficeCdnUrl,
-            BackOfficeIdentityDefaults.PolicyName,
-            runtimeEnvironment,
-            backOfficeUnauthenticatedPaths
-        )
-    );
-}
+app.UseHostScopedSinglePageAppFallback(
+    new HostScopedSinglePageApp(
+        appHostname,
+        "WebApp",
+        context => context.RequestServices.GetRequiredService<IExecutionContext>().UserInfo,
+        appPublicUrl,
+        appCdnUrl,
+        environmentVariables: runtimeEnvironment
+    ),
+    new HostScopedSinglePageApp(
+        backOfficeHostname,
+        "BackOffice",
+        BuildBackOfficeUserInfo,
+        backOfficePublicUrl,
+        backOfficeCdnUrl,
+        BackOfficeIdentityDefaults.PolicyName,
+        runtimeEnvironment,
+        backOfficeUnauthenticatedPaths
+    )
+);
 
 await app.RunAsync();
 return;

@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Scaleway.Sdk</AssemblyName>
+        <RootNamespace>Scaleway.Sdk</RootNamespace>
+        <!-- Declared rather than left to .NET's implicit 1.0.0, because the version is now consumer-visible: it is
+             what `ScalewayUserAgent` sends on every request, and a default-by-accident version that can never move
+             would look like information without being any. The package has never been released, so this is its
+             first. The rest of the NuGet metadata (PackageId, Description, license, README) is #36 W11's. -->
+        <Version>0.1.0-preview</Version>
+        <!-- The package ships its XML docs, and CS1591 makes the documentation standard the compiler's job rather
+             than review's: a new public member without a doc comment fails the build. Every member the SDK has today
+             states a fact its declaration does not — the schema's own description, the component or operation it came
+             from, or the wire value — so the gate is satisfied without filler. Note the compiler only checks that a
+             comment exists; `inspectcode` is what checks that a method documents all its parameters or none. -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Scaleway.Sdk</PackageId>
+        <Authors>tinytek-io</Authors>
+        <Description>A typed .NET client for the Scaleway API, generated from Scaleway's published OpenAPI schemas. No Aspire dependency: the same surface serves a workload, a deploy bootstrap, and the Aspire.Hosting.Scaleway package.</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/tinytek-io/ScalewayPlatform</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+    </PropertyGroup>
+
+    <!-- Update rather than Include: the SDK's default None glob already picks the README up, and adding a second
+         item for the same file is what NETSDK1022 is about. -->
+    <ItemGroup>
+        <None Update="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <!-- shared-kernel's Directory.Build.props adds implicit usings for the application stack. The SDK is a
+         standalone package with no Aspire, MediatR or logging dependency, so it opts out of those three rather
+         than taking package references it does not use.
+
+         The three BCL namespaces it does use are declared here rather than inherited, because the project has to
+         compile with no Directory.Build.props above it at all — that is what ScalewaySdkStandaloneBuildTests
+         builds, and an inherited implicit using is invisible until someone lifts the folder out. Remove before
+         Include so the list holds one entry whether or not a parent already contributed it. -->
+    <ItemGroup>
+        <Using Remove="JetBrains.Annotations"/>
+        <Using Remove="MediatR"/>
+        <Using Remove="Microsoft.Extensions.Logging"/>
+        <Using Remove="System.Diagnostics"/>
+        <Using Include="System.Diagnostics"/>
+        <Using Remove="System.Reflection"/>
+        <Using Include="System.Reflection"/>
+        <Using Remove="System.Text.Json.Serialization"/>
+        <Using Include="System.Text.Json.Serialization"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Scaleway.Sdk.Tests"/>
+        <InternalsVisibleTo Include="Aspire.Hosting.Scaleway"/>
+        <InternalsVisibleTo Include="Aspire.Hosting.Scaleway.Tests"/>
+        <InternalsVisibleTo Include="Aspire.Hosting.Scaleway.MockServer"/>
+    </ItemGroup>
+
+</Project>

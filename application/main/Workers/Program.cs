@@ -25,13 +25,17 @@ var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
 using var scope = host.Services.CreateScope();
 
-// Apply migrations to the database only when running locally
-if (!SharedInfrastructureConfiguration.IsRunningInAzure)
+// Schema migrations at startup are for local development only: in deployed environments the
+// dedicated migrator Job owns the schema (the runtime user is a readwrite role that cannot
+// create schema objects — least privilege).
+if (SharedInfrastructureConfiguration.IsRunningInCloud is false)
 {
     var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<MainDbContext>>();
     migrationService.ApplyMigrations();
 }
 
+// Data migrations run here as an idempotent no-op after the migrator Job has applied them, and as
+// the resilient fallback if they were not: tracked in __data_migrations_history.
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<MainDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(lifetime.ApplicationStopping);
 
