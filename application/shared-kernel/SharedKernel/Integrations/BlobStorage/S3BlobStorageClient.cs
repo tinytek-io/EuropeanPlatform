@@ -3,26 +3,27 @@ using System.Net;
 using System.Text.Json;
 using Amazon.S3;
 using Amazon.S3.Model;
+using SharedKernel.Configuration;
 
 namespace SharedKernel.Integrations.BlobStorage;
 
 /// <summary>
 ///     S3-compatible implementation of <see cref="IBlobStorageClient" />, used against Scaleway
-///     Object Storage in production and SeaweedFS in local development. Buckets are created lazily with
-///     a public-read policy when requested, so avatars/logos can be served unsigned through AppGateway
-///     exactly like the public containers they replace.
+///     Object Storage in deployed environments and SeaweedFS in local development. Deployed buckets
+///     and their bucket policies are owned by Terraform, so the client never creates or re-policies
+///     them. Local buckets are created on first upload: public-read like the deployed avatars/logos
+///     buckets (served unsigned through AppGateway), except the private keyring bucket.
 /// </summary>
-public sealed class S3BlobStorageClient(
-    IAmazonS3 s3Client,
-    S3BlobStorageOptions options,
-    TimeProvider timeProvider
-) : IBlobStorageClient
+public sealed class S3BlobStorageClient(IAmazonS3 s3Client, S3BlobStorageOptions options) : IBlobStorageClient
 {
     private readonly ConcurrentDictionary<string, byte> _ensuredBuckets = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task UploadAsync(string bucketName, string blobName, string contentType, Stream stream, CancellationToken cancellationToken)
     {
-        await CreateBucketIfNotExistsAsync(bucketName, true, cancellationToken);
+        if (!SharedInfrastructureConfiguration.IsRunningInCloud)
+        {
+            await CreateLocalBucketIfNotExistsAsync(bucketName, cancellationToken);
+        }
 
         var request = new PutObjectRequest
         {
@@ -53,7 +54,7 @@ public sealed class S3BlobStorageClient(
         try
         {
             var response = await s3Client.GetObjectAsync(options.ResolveBucketName(bucketName), blobName, cancellationToken);
-            return (response.ResponseStream, response.Metadata["Content-Type"]);
+            return (response.ResponseStream, response.Headers.ContentType);
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
@@ -85,20 +86,7 @@ public sealed class S3BlobStorageClient(
         }
     }
 
-    public Uri GetPresignedUri(string bucketName, string blobName, TimeSpan expiresIn)
-    {
-        var request = new GetPreSignedUrlRequest
-        {
-            BucketName = options.ResolveBucketName(bucketName),
-            Key = blobName,
-            Verb = HttpVerb.GET,
-            Expires = timeProvider.GetUtcNow().Add(expiresIn).DateTime
-        };
-
-        return new Uri(s3Client.GetPreSignedURL(request));
-    }
-
-    public async Task CreateBucketIfNotExistsAsync(string bucketName, bool publicRead, CancellationToken cancellationToken)
+    private async Task CreateLocalBucketIfNotExistsAsync(string bucketName, CancellationToken cancellationToken)
     {
         var physicalBucketName = options.ResolveBucketName(bucketName);
         if (_ensuredBuckets.ContainsKey(physicalBucketName))
@@ -106,21 +94,14 @@ public sealed class S3BlobStorageClient(
             return;
         }
 
-        var bucketExists = true;
         try
         {
             await s3Client.HeadBucketAsync(new HeadBucketRequest { BucketName = physicalBucketName }, cancellationToken);
         }
-        catch (AmazonS3Exception)
-        {
-            bucketExists = false;
-        }
-
-        if (!bucketExists)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             await s3Client.PutBucketAsync(new PutBucketRequest { BucketName = physicalBucketName }, cancellationToken);
-
-            if (publicRead)
+            if (bucketName != BlobStorageDataProtectionRepository.BucketName)
             {
                 await ApplyPublicReadPolicyAsync(physicalBucketName, cancellationToken);
             }

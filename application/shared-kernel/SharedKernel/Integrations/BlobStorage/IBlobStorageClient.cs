@@ -11,8 +11,4 @@ public interface IBlobStorageClient
     string GetBlobUrl(string bucketName, string blobName);
 
     Task<bool> DeleteIfExistsAsync(string bucketName, string blobName, CancellationToken cancellationToken);
-
-    Uri GetPresignedUri(string bucketName, string blobName, TimeSpan expiresIn);
-
-    Task CreateBucketIfNotExistsAsync(string bucketName, bool publicRead, CancellationToken cancellationToken);
 }
