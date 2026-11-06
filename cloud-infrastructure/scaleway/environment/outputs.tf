@@ -1,3 +1,8 @@
+output "region" {
+  description = "Scaleway region of every regional resource; cluster-ops substitutes it for the <region> placeholder in network-policies.yaml and set-gateway-lb-failover.sh derives the LB API region from it"
+  value       = var.region
+}
+
 output "database_endpoint_ip" {
   description = "Managed PostgreSQL endpoint IP (private network)"
   value       = scaleway_rdb_instance.main.private_network[0].ip
@@ -19,36 +24,14 @@ output "database_admin_password" {
   sensitive   = true
 }
 
-output "account_database_connection_string" {
-  description = "Connection string for the account system database (sensitive)"
-  value       = "Host=${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port};Database=account;Username=${var.database_admin_user};Password=${random_password.database.result};SSL Mode=Require"
-  sensitive   = true
+output "object_storage_endpoint" {
+  description = "Object Storage endpoint the app-gateway proxies avatars and logos from (the deploy passes it as Storage:Endpoint)"
+  value       = "https://s3.${var.region}.scw.cloud"
 }
 
-output "main_database_connection_string" {
-  description = "Connection string for the main system database (sensitive)"
-  value       = "Host=${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port};Database=main;Username=${var.database_admin_user};Password=${random_password.database.result};SSL Mode=Require"
-  sensitive   = true
-}
-
-output "avatars_bucket_url" {
-  description = "Path-style public URL of the avatars bucket (also the gateway's ACCOUNT_STORAGE_URL base)"
-  value       = "https://s3.${var.region}.scw.cloud/${scaleway_object_bucket.avatars.name}"
-}
-
-output "logos_bucket_url" {
-  description = "Path-style public URL of the logos bucket (also the gateway's MAIN_STORAGE_URL base)"
-  value       = "https://s3.${var.region}.scw.cloud/${scaleway_object_bucket.logos.name}"
-}
-
-output "cluster_id" {
-  description = "Kapsule cluster ID"
-  value       = scaleway_k8s_cluster.kapsule.id
-}
-
-output "cluster_api_endpoint" {
-  description = "Kapsule API server URL"
-  value       = scaleway_k8s_cluster.kapsule.apiserver_url
+output "bucket_prefix" {
+  description = "Prefix of every environment bucket name; the applications keep logical bucket names (avatars, logos, data-protection) and the deploy passes this as Storage:BucketPrefix"
+  value       = "${var.prefix}-${var.environment}-"
 }
 
 output "kubeconfig" {
@@ -68,9 +51,9 @@ output "gateway_lb_ref" {
   value       = scaleway_lb.gateway.id
 }
 
-output "gateway_lb_ip" {
-  description = "Flexible IP of the gateway Load Balancer (stable across LB recreation)"
-  value       = scaleway_lb_ip.gateway.ip_address
+output "maintenance_website_endpoint" {
+  description = "Website endpoint of the maintenance bucket — the LB failover host that set-gateway-lb-failover.sh wires onto the gateway's HTTP backend"
+  value       = scaleway_object_bucket_website_configuration.maintenance.website_endpoint
 }
 
 output "cockpit_operator_query_token" {

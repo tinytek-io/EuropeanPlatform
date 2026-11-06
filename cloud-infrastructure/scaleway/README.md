@@ -31,7 +31,9 @@ One bootstrap module and one environment module serve every tier. An environment
 **tier file** (`environment/environments/<terraform-environment>.tfvars`) plus a bootstrap
 apply — never a module change. The deploy command refuses to plan an environment without its
 tier file, and every environment-specific value lives in that file (the domain, sizing,
-durability, the CCM-captured LB ids) with module defaults reproducing staging exactly.
+durability, the CCM-captured LB ids). Sizing and durability defaults reproduce staging; the
+public identity (`domain_name`, `edge_pipeline_name_prefix`) has no default, so a tier file that
+omits it fails at plan time.
 
 | Knob | preview (future) | staging (`stage.tfvars`) | production (future) |
 |---|---|---|---|
@@ -84,18 +86,25 @@ terraform output   # registry endpoint + pipeline API key (secret is sensitive)
 
 ## Handover to the main module
 
-The main module (staging/prod topology) stores its state in the bucket created here, using S3
-conditional-write locking (Terraform >= 1.10). Fill in the bucket name and use the pipeline API key
-as the S3 credentials:
+The environment module stores its state in the bucket created here, using S3 conditional-write
+locking (Terraform >= 1.10). Its backend block (`environment/main.tf`) has this shape — the bucket
+name is the bootstrap's `<prefix>-<environment>-<region>-terraform-state`, and the pipeline API
+key is the S3 credential:
 
 ```hcl
 terraform {
   backend "s3" {
     bucket       = "<prefix>-<environment>-<region>-terraform-state"
-    key          = "platformplatform/terraform.tfstate"
-    region       = "fr-par"
-    endpoint     = "https://s3.fr-par.scw.cloud"
+    key          = "platformplatform/environment.tfstate"
+    region       = "us-east-1" # any value: requests go to the endpoint below
     use_lockfile = true
+    endpoints = {
+      s3 = "https://s3.<region>.scw.cloud"
+    }
+    skip_credentials_validation = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
   }
 }
 ```

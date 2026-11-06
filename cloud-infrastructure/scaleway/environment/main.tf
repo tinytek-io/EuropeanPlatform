@@ -39,7 +39,7 @@ terraform {
 
 provider "scaleway" {
   region = var.region
-  zone   = "${var.region}-1"
+  zone   = local.zone
 }
 
 variable "prefix" {
@@ -118,6 +118,9 @@ variable "database_admin_user" {
 }
 
 locals {
+  # Zonal resources (NAT gateway, LB, node pool) all live in the region's first zone.
+  zone = "${var.region}-1"
+
   # Most resources take tags as a string list; object buckets take a string map.
   tags = ["environment:${var.environment}", "managed-by:terraform"]
   bucket_tags = {
@@ -126,8 +129,11 @@ locals {
   }
 }
 
-# All workloads and the database share one private network; the database is reachable from the
-# cluster, the public endpoint stays for operator access.
+# All workloads and the database share one private network. The database has ONLY a private
+# endpoint (scaleway_rdb_instance.main declares no load_balancer block, and the provider adds the
+# public endpoint only when no private network is set), so it is reachable from the cluster and
+# nowhere else; operator access needs a path into the private network (the default-deny network
+# policies in cluster-ops admit database egress only from the application workloads).
 resource "scaleway_vpc_private_network" "vpc" {
   name       = "${var.prefix}-${var.environment}"
   project_id = var.project_id
@@ -139,13 +145,13 @@ resource "scaleway_vpc_private_network" "vpc" {
 # advertises the default route. The gateway masquerades outbound traffic (image pulls, telemetry,
 # third-party APIs); nothing can reach the nodes inbound through it.
 resource "scaleway_vpc_public_gateway_ip" "nat" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_vpc_public_gateway" "nat" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-nat"
   type       = "VPC-GW-S"
@@ -154,7 +160,7 @@ resource "scaleway_vpc_public_gateway" "nat" {
 }
 
 resource "scaleway_vpc_gateway_network" "nat" {
-  zone               = "${var.region}-1"
+  zone               = local.zone
   gateway_id         = scaleway_vpc_public_gateway.nat.id
   private_network_id = scaleway_vpc_private_network.vpc.id
   enable_masquerade  = true
@@ -169,13 +175,13 @@ resource "scaleway_vpc_gateway_network" "nat" {
 # (scw-loadbalancer-id + scw-loadbalancer-externally-managed) — see cluster-ops. The name MUST
 # NOT start with the cluster id: the CCM refuses to manage such LBs in externally-managed mode.
 resource "scaleway_lb_ip" "gateway" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_lb" "gateway" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-gateway"
   type       = "lb-s"
@@ -185,7 +191,8 @@ resource "scaleway_lb" "gateway" {
 
 # Managed PostgreSQL: one instance, one database per self-contained system. The databases are
 # isolated from each other (no shared schema), which keeps the system boundaries hard and makes
-# per-system pg_dump restores trivial. Connection string outputs feed the deploy-time secrets.
+# per-system pg_dump restores trivial. The connection strings reach the workloads through
+# Secret Manager (see local.base_workload_secrets), never through Terraform outputs.
 resource "scaleway_rdb_instance" "main" {
   name          = "${var.prefix}-${var.environment}-database"
   project_id    = var.project_id
@@ -489,11 +496,6 @@ resource "scaleway_object" "maintenance_index" {
   depends_on = [scaleway_object_bucket_website_configuration.maintenance]
 }
 
-# The public-read bucket policies are applied by the application's S3 client when it creates the
-# buckets on first use: Scaleway's S3 API always acts through the API key's preferred project, so
-# policy writes must come from a key whose preferred project is this environment's project rather
-# than from whoever runs Terraform.
-
 # Observability: Cockpit receives the workloads' OTLP telemetry (metrics, logs, traces) and the
 # Edge Services WAF logs for this project. The Cockpit itself is implicit (every project has
 # one), so this module owns its three data sources and the push token explicitly. The OTLP
@@ -584,7 +586,7 @@ resource "scaleway_k8s_pool" "default" {
   # Nodes keep outbound access for image pulls and telemetry through the private network.
   public_ip_disabled  = true
   autoscaling         = false
-  zone                = "${var.region}-1"
+  zone                = local.zone
   wait_for_pool_ready = true
   tags                = local.tags
   # The Kapsule API only accepts public_ip_disabled when the NAT gateway is attached and
@@ -611,13 +613,13 @@ variable "workload_key_expiry" {
 # Tier configuration: every environment-specific value lives here or in a sibling tfvars file
 # (environments/<environment>.tfvars, selected by the deploy command). One module serves
 # preview/staging/production; a new environment is a new tier file plus a bootstrap apply, never
-# a module change. The defaults reproduce staging exactly, so an unconfigured plan is staging's
-# plan; production's tier file overrides these.
+# a module change. Sizing and durability defaults reproduce staging; the public identity
+# (domain_name, edge_pipeline_name_prefix) has NO default, so a tier file that forgets it fails at
+# plan time instead of silently planning staging's hostnames into another environment.
 
 variable "domain_name" {
   description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the platform serves exactly two edge pipelines); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
   type        = string
-  default     = "staging.europeanplatform.net"
 }
 
 locals {
@@ -630,7 +632,6 @@ locals {
 variable "edge_pipeline_name_prefix" {
   description = "Edge pipeline names are \"<prefix>-<hostname key>\". Staging keeps its historical \"staging-\" prefix; other environments use their tier name."
   type        = string
-  default     = "staging"
 }
 
 variable "gateway_lb_frontend_id" {
@@ -959,7 +960,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
   lb_backend_config {
     lb_config {
       id          = scaleway_lb.gateway.id
-      zone        = "${var.region}-1"
+      zone        = local.zone
       frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.

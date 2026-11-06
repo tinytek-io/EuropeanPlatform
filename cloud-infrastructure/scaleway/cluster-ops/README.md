@@ -74,14 +74,15 @@ back-office 8443 frontend targets the CCM's Envoy TCP backend — so capture the
 cluster, after the first deploy has created the annotated gateway Service:
 
 ```bash
-cd ../environment
-LB_ID=$(terraform output -raw gateway_lb_ref)   # zone/lb-id; the scw CLI wants the bare id
-LB_ID=${LB_ID##*/}
+LB_REF=$(terraform -chdir=../environment output -raw gateway_lb_ref)   # zone/lb-id
+LB_ZONE=${LB_REF%%/*}
+LB_ID=${LB_REF##*/}                                                   # the scw CLI wants the bare id
 
-scw lb frontend list "lb-id=${LB_ID}" -o json \
-  | jq -r '.[] | select(.inbound_port == 443) | .id'                      # -> gateway_lb_frontend_id
-scw lb backend list "lb-id=${LB_ID}" -o json \
-  | jq -r '.[] | select(.forward_protocol == "tcp") | "fr-par-1/\(.id)"'  # -> gateway_lb_backend_id
+scw lb frontend list "lb-id=${LB_ID}" "zone=${LB_ZONE}" -o json \
+  | jq -r '.[] | select(.inbound_port == 443) | .id'                  # -> gateway_lb_frontend_id
+scw lb backend list "lb-id=${LB_ID}" "zone=${LB_ZONE}" -o json \
+  | jq -r --arg zone "${LB_ZONE}" \
+      '.[] | select(.forward_protocol == "tcp") | "\($zone)/\(.id)"'  # -> gateway_lb_backend_id
 ```
 
 Export both as `TF_VAR_gateway_lb_frontend_id` and `TF_VAR_gateway_lb_backend_id` (they are
@@ -131,32 +132,41 @@ first deploy with the secret, verify pulls authenticate:
 
 ```bash
 kubectl get secret scaleway-registry-pull -n default
-kubectl run pull-test --rm -it --image=rg.fr-par.scw.cloud/<namespace>/<image>:<tag> --restart=Never -- command -v true
+kubectl run pull-test --rm -it --image=rg.<region>.scw.cloud/<namespace>/<image>:<tag> --restart=Never -- command -v true
 ```
 
 ## 7. East-west network policies (default-deny + derived allows)
 
-`network-policies.yaml` enforces zero-trust east-west: default-deny in and out for every
-workload in `default`, with only the traffic the AppHost wiring declares (see the file's header
-for the per-workload map). The RDB placeholders are resolved from Terraform outputs first:
+`network-policies.yaml` enforces zero-trust east-west: a namespace-wide baseline
+(`default-namespace-default-deny`) puts every pod in `default` into default-deny in and out —
+only kubelet probes and DNS are admitted — so a pod without its own policy (a debug pod, a new
+system) is isolated rather than allow-all. The per-workload policies add exactly the traffic the
+AppHost wiring declares on top (Cilium allows are additive; see the file's header for the
+per-workload map). Envoy reaches the serving workloads as the reserved `ingress` entity, on 8443
+only. The RDB and region placeholders are resolved from Terraform outputs first:
 
 ```bash
-cd ../environment
-RDB_IP=$(terraform output -raw database_endpoint_ip)
-RDB_PORT=$(terraform output -raw database_endpoint_port)
-cd ../cluster-ops
-sed -e "s/<rdb-ip>/$RDB_IP/" -e "s/<rdb-port>/$RDB_PORT/" network-policies.yaml | kubectl apply -f -
+RDB_IP=$(terraform -chdir=../environment output -raw database_endpoint_ip)
+RDB_PORT=$(terraform -chdir=../environment output -raw database_endpoint_port)
+REGION=$(terraform -chdir=../environment output -raw region)
+sed -e "s/<rdb-ip>/$RDB_IP/g" -e "s/<rdb-port>/$RDB_PORT/g" -e "s/<region>/$REGION/g" \
+  network-policies.yaml | kubectl apply -f -
 ```
 
 Verify (in this order — the site must stay green throughout):
 
 ```bash
 kubectl get cnp -n default                                    # all policies present
-curl -sI https://app.staging.europeanplatform.net | head -1   # public path unchanged
+curl -sI "https://$(terraform -chdir=../environment output -json edge_hostnames | jq -r .app)" | head -1   # public path unchanged
+# Envoy -> workload traffic must show as the `ingress` identity and be FORWARDED, not DROPPED
+# (the file's "verify on first apply" caveat; fallback is the kube-system selector on 8443).
+kubectl -n kube-system exec ds/cilium -- hubble observe --identity ingress --last 20
 kubectl logs -n default deploy/account-api --tail=20          # no secret-manager/DB errors
 kubectl rollout status deploy/account-api -n default
 # Prove the deny actually denies: a pod that is NOT in an allow path cannot reach an API.
 kubectl run deny-test --rm -it --image=busybox --restart=Never -- wget -qO- --timeout=5 https://account-api-service:8443 || echo "denied (correct)"
+# Prove the namespace baseline: a pod no policy names has no egress beyond DNS.
+kubectl run egress-test --rm -it --image=busybox --restart=Never -- wget -qO- --timeout=5 https://api.scaleway.com || echo "denied (correct)"
 ```
 
 The `toFQDNs` rules depend on Cilium's DNS proxy. If Cockpit/Secret Manager lookups fail under
