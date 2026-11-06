@@ -26,11 +26,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting.EntityFrameworkCore"/>
         <PackageReference Include="Aspire.Hosting.JavaScript"/>
         <PackageReference Include="Aspire.Hosting.Kubernetes"/>
         <PackageReference Include="Aspire.Hosting.PostgreSQL"/>
-        <PackageReference Include="YamlDotNet"/>
         <PackageReference Include="Microsoft.Extensions.Configuration"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets"/>
     </ItemGroup>
