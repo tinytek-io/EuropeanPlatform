@@ -167,8 +167,8 @@ public static class SharedDependencyConfiguration
             {
                 services.AddHttpClient<IEmailClient, ScalewayTransactionalEmailClient>(client =>
                     {
-                        var region = Environment.GetEnvironmentVariable("SCW_DEFAULT_REGION") ?? "fr-par";
-                        client.BaseAddress = new Uri($"https://api.scaleway.com/transactional-email/v1alpha1/regions/{region}/");
+                        // The SDK builds absolute API paths (region included) on top of the API host.
+                        client.BaseAddress = new Uri("https://api.scaleway.com/");
                         client.DefaultRequestHeaders.Add("X-Auth-Token", Environment.GetEnvironmentVariable("SCW_SECRET_KEY"));
                         client.Timeout = TimeSpan.FromSeconds(30);
                     }

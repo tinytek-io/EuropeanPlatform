@@ -1,9 +1,7 @@
-using System.Globalization;
-using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Scaleway.Sdk;
+using ScwSecret = Scaleway.Sdk.Secret.V1Beta1;
 
 namespace SharedKernel.Configuration;
 
@@ -15,25 +13,27 @@ namespace SharedKernel.Configuration;
 /// </summary>
 public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationProvider, IDisposable
 {
-    private const string ApiUrl = "https://api.scaleway.com/secret-manager/v1beta1/regions/{0}";
-    private const int PageSize = 100;
-    private readonly string _apiUrl;
     private readonly HttpClient _httpClient;
     private readonly string _path;
     private readonly string _projectId;
+    private readonly string _region;
     private readonly TimeSpan? _reloadInterval;
+    private readonly ScwSecret.SecretApi _secretApi;
     private int _refreshInProgress;
     private Timer? _refreshTimer;
 
     public ScalewaySecretManagerConfigurationProvider(string secretKey, string projectId, string region, string path, TimeSpan? reloadInterval)
     {
         _projectId = projectId;
-        _apiUrl = string.Format(CultureInfo.InvariantCulture, ApiUrl, region);
+        _region = region;
         _path = path;
         _reloadInterval = reloadInterval;
-        _httpClient = new HttpClient();
+        // The SDK owns pagination and error classification; the provider only maps secrets to
+        // configuration keys. A workload holds just its secret key (no access key or organization),
+        // so the SDK runs over a client that carries the key, like the Transactional Email client.
+        _httpClient = new HttpClient { BaseAddress = new Uri("https://api.scaleway.com/") };
         _httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _secretApi = new ScwSecret.SecretApi(new ScalewayApiClient(_httpClient));
     }
 
     public void Dispose()
@@ -106,57 +106,27 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
         return data;
     }
 
-    private async Task<List<SecretSummary>> ListSecretsAsync()
+    private async Task<IEnumerable<SecretSummary>> ListSecretsAsync()
     {
-        var secrets = new List<SecretSummary>();
-        for (var page = 1;; page++)
-        {
-            using var response = await HttpGetJson($"{_apiUrl}/secrets?project_id={_projectId}&path={Uri.EscapeDataString(_path)}&page_size={PageSize}&page={page}");
-            var items = response.RootElement.GetProperty("secrets");
-            foreach (var item in items.EnumerateArray())
-            {
-                secrets.Add(new SecretSummary(item.GetProperty("id").GetString()!, item.GetProperty("name").GetString()!));
-            }
-
-            if (items.GetArrayLength() < PageSize)
-            {
-                return secrets;
-            }
-        }
+        var secrets = await _secretApi.ListSecretsAsync(new ScwSecret.ListSecretsRequest { ProjectId = _projectId, Path = _path }, _region);
+        return secrets.Select(secret => new SecretSummary(secret.Id!, secret.Name!));
     }
 
+    // A secret without an enabled version (deliberately disabled) answers 404, which the SDK
+    // returns as null: the value is left out. Any other failure propagates.
     private async Task<string?> AccessSecretValueAsync(SecretSummary secret)
     {
+        var response = await _secretApi.AccessSecretVersionAsync(secret.Id, "latest_enabled", _region);
+        if (response?.Data is not { } base64) return null;
+
         try
         {
-            using var response = await HttpGetJson($"{_apiUrl}/secrets/{secret.Id}/versions/{Uri.EscapeDataString("latest_enabled")}/access");
-            return response.RootElement.TryGetProperty("data", out var data) && data.GetString() is { } base64
-                ? Encoding.UTF8.GetString(Convert.FromBase64String(base64))
-                : null;
-        }
-        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-        catch (HttpRequestException exception)
-        {
-            throw new InvalidOperationException($"Accessing secret '{secret.Name}' failed with {exception.Message} (403 means the key lacks the SecretManagerReadOnly permission set or its path condition).", exception);
+            return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
         }
         catch (FormatException exception)
         {
             throw new InvalidOperationException($"Secret '{secret.Name}' holds a value that is not valid base64.", exception);
         }
-    }
-
-    private async Task<JsonDocument> HttpGetJson(string requestUri)
-    {
-        using var response = await _httpClient.GetAsync(requestUri);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"HTTP {(int)response.StatusCode} from {requestUri}", null, response.StatusCode);
-        }
-
-        return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
     }
 
     private sealed record SecretSummary(string Id, string Name);
