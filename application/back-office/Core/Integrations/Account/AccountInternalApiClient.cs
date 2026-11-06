@@ -416,8 +416,10 @@ public sealed class AccountInternalApiClient(HttpClient httpClient)
             // Fall through to the loud failure below.
         }
 
+        // The raw body is not included: it can carry user and tenant data, and the exception
+        // message reaches logs and telemetry.
         throw new HttpRequestException(
-            $"Account's internal API responded {(int)response.StatusCode} for {method} {path}: {body}",
+            $"Account's internal API responded {(int)response.StatusCode} for {method} {path} with a body that is not problem details ({body.Length} characters).",
             null,
             response.StatusCode
         );

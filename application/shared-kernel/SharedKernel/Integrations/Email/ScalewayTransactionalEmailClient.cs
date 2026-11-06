@@ -38,7 +38,8 @@ public sealed class ScalewayTransactionalEmailClient(HttpClient httpClient, ILog
             AdditionalHeaders = message.Headers?.Select(header => new ScwTem.Header { Key = header.Key, Value = header.Value }).ToList()
         };
 
-        logger.LogInformation("Sending email to {Recipient} with subject {Subject}", message.Recipient, message.Subject);
+        // The recipient address is PII and logs are exported to Cockpit, so only its domain is logged.
+        logger.LogInformation("Sending email to a recipient at {RecipientDomain} with subject {Subject}", message.Recipient[(message.Recipient.LastIndexOf('@') + 1)..], message.Subject);
 
         // The SDK raises ScalewayApiException carrying Scaleway's own reason (unverified domain, quota
         // exhausted, blocklisted recipient), which is the only actionable part of a failed send.
