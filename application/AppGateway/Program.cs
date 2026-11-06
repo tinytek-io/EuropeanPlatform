@@ -38,7 +38,7 @@ builder.Services.AddSingleton(SharedInfrastructureConfiguration.IsRunningInCloud
 // In-cluster TLS: serve HTTPS only (Terraform-managed certificate from Secret Manager), and
 // validate the APIs' internal-CA certificates when proxying or aggregating.
 builder.AddInternalTls();
-builder.Services.AddInternalCaTrust(builder.Configuration);
+builder.Services.AddInternalCaTrust(builder.Configuration).AddInternalCaForwarder();
 
 var reverseProxyBuilder = builder.Services
     .AddReverseProxy()
