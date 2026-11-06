@@ -223,7 +223,7 @@ public static class SharedInfrastructureConfiguration
                 }
             );
 
-            return new S3BlobStorageClient(s3Client, options, serviceProvider.GetRequiredService<TimeProvider>());
+            return new S3BlobStorageClient(s3Client, options);
         }
 
         private IHostApplicationBuilder AddConfigureOpenTelemetry()
