@@ -37,8 +37,6 @@ public sealed partial class DeployCommand : Command
     /// </summary>
     private const int RegistryTagsToKeep = 3;
 
-    private const string RegistryApiBaseUrl = "https://api.scaleway.com/registry/v1/regions/fr-par";
-
     // Aspire environment name -> Terraform environment variable value (cloud-infrastructure/scaleway).
     // Production is added here when that environment is provisioned.
     private static readonly Dictionary<string, string> TerraformEnvironmentNames = new(StringComparer.OrdinalIgnoreCase)
@@ -196,6 +194,9 @@ public sealed partial class DeployCommand : Command
         }
 
         var domainName = (await RunTerraformAsync(environmentModuleFolder, "output -raw domain_name", "read the domain name output")).Trim();
+        var region = (await RunTerraformAsync(environmentModuleFolder, "output -raw region", "read the region output")).Trim();
+        var storageEndpoint = (await RunTerraformAsync(environmentModuleFolder, "output -raw object_storage_endpoint", "read the Object Storage endpoint output")).Trim();
+        var bucketPrefix = (await RunTerraformAsync(environmentModuleFolder, "output -raw bucket_prefix", "read the bucket prefix output")).Trim();
 
         // The API images compose the SPA bundles straight from the working tree (the csproj
         // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
@@ -255,7 +256,14 @@ public sealed partial class DeployCommand : Command
             ("KUBECONFIG", kubeconfigPath),
             ("SKIP_OPENAPI_DOCUMENTS", "true"),
             ("DOCKER_DEFAULT_PLATFORM", "linux/amd64"),
-            ("SCW_DEFAULT_PROJECT_ID", projectId)
+            // Terraform-owned values the AppHost needs at publish time, never hand-copied into
+            // appsettings.<environment>.json.
+            ("Scaleway__ProjectId", projectId),
+            ("Scaleway__Region", region),
+            ("Registry__Endpoint", registryHost),
+            ("Registry__Repository", registryEndpoint[(registryHost.Length + 1)..]),
+            ("Storage__Endpoint", storageEndpoint),
+            ("Storage__BucketPrefix", bucketPrefix)
         };
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
@@ -295,8 +303,10 @@ public sealed partial class DeployCommand : Command
             Environment.Exit(exitCode);
         }
 
+        // The rollout, migration-job, and internal TLS patches assert themselves inside the AppHost
+        // before Helm runs; the image references are only final after the push, so they are
+        // checked here.
         ValidateDeployedChartImages(applicationFolder);
-        ValidateChartRolloutStrategy(applicationFolder);
 
         await PruneRegistryTagsAsync(bootstrapModuleFolder);
 
@@ -351,48 +361,6 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
     }
 
-    /// <summary>
-    ///     Guards the AppHost's rollout patch (see Program.cs): every deployment in the deployed
-    ///     chart must roll out with maxUnavailable 0, otherwise a single-replica workload drops its
-    ///     last ready pod before the replacement is ready — deploys surface as edge 504 windows.
-    /// </summary>
-    private static void ValidateChartRolloutStrategy(string applicationFolder)
-    {
-        var templatesFolder = Path.Combine(applicationFolder, "AppHost", "aspire-output", "templates");
-        var deployments = Directory.Exists(templatesFolder)
-            ? Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories)
-            : [];
-
-        if (deployments.Length == 0)
-        {
-            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] no deployment.yaml found under {Markup.Escape(templatesFolder)} — the generated chart layout changed, update the deploy command.");
-            Environment.Exit(1);
-        }
-
-        var unpatched = deployments.Where(deployment => !File.ReadAllText(deployment).Contains("maxUnavailable: 0")).ToList();
-        if (unpatched.Count > 0)
-        {
-            foreach (var deployment in unpatched)
-            {
-                AnsiConsole.MarkupLine($"  [red]✗[/] {Markup.Escape(Path.GetDirectoryName(deployment) ?? "unknown")} rolls out with unavailable pods");
-            }
-
-            AnsiConsole.MarkupLine("[red]Chart validation failed:[/] the AppHost rollout patch did not reach every deployment — deploys would cause 504 windows.");
-            Environment.Exit(1);
-        }
-
-        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {deployments.Length} deployments roll out with zero unavailable pods.");
-
-        var migrationJobs = Directory.GetFiles(templatesFolder, "job.yaml", SearchOption.AllDirectories);
-        if (migrationJobs.Length != 2)
-        {
-            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] expected 2 migration job templates (one per self-contained system), found {migrationJobs.Length} — the AppHost migration patch did not reach the chart.");
-            Environment.Exit(1);
-        }
-
-        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {migrationJobs.Length} pre-upgrade migration jobs.");
-    }
-
     private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder)
     {
         var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
@@ -409,7 +377,9 @@ public sealed partial class DeployCommand : Command
             return;
         }
 
-        // Registry namespace IDs are region-qualified (fr-par/<uuid>); the API takes the bare uuid.
+        // Registry namespace IDs are region-qualified (<region>/<uuid>): the region selects the API,
+        // which takes the bare uuid.
+        var registryApiBaseUrl = $"https://api.scaleway.com/registry/v1/regions/{namespaceId.Split('/')[0]}";
         namespaceId = namespaceId.Split('/').Last();
 
         try
@@ -418,15 +388,15 @@ public sealed partial class DeployCommand : Command
             httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
             httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
+            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"{registryApiBaseUrl}/images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
             var kept = 0;
             var deleted = 0;
             foreach (var image in images)
             {
-                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
+                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"{registryApiBaseUrl}/images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
                 foreach (var tag in tags.Skip(RegistryTagsToKeep))
                 {
-                    var response = await httpClient.DeleteAsync($"{RegistryApiBaseUrl}/tags/{tag.Id}");
+                    var response = await httpClient.DeleteAsync($"{registryApiBaseUrl}/tags/{tag.Id}");
                     if (response.IsSuccessStatusCode)
                     {
                         deleted++;
@@ -445,9 +415,9 @@ public sealed partial class DeployCommand : Command
         }
     }
 
-    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string relativeUrl)
+    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string url)
     {
-        var response = await httpClient.GetAsync($"{RegistryApiBaseUrl}/{relativeUrl}");
+        var response = await httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>();
     }

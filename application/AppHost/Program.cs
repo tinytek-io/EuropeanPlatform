@@ -49,14 +49,14 @@ if (isPublishMode)
         );
 
     // Images publish to the Scaleway Container Registry created by the bootstrap Terraform module
-    // (cloud-infrastructure/scaleway/bootstrap). Non-secret environment values are resolved from
-    // AppHost configuration at publish time, e.g. appsettings.staging.json via
-    // `aspire publish --environment staging`. Secrets (connection strings, API keys) stay deploy-time
-    // inputs in the chart's values.yaml.
+    // (cloud-infrastructure/scaleway/bootstrap). Values Terraform owns (registry, project, region,
+    // storage, hostnames) are passed by the deploy command from the Terraform outputs; per-tier
+    // choices live in appsettings.<environment>.json. Secrets (connection strings, API keys) stay
+    // deploy-time inputs in the chart's values.yaml.
     var registryEndpoint = builder.Configuration["Registry:Endpoint"]
-                           ?? throw new InvalidOperationException("Publish mode requires Registry:Endpoint (e.g. rg.fr-par.scw.cloud) in AppHost configuration.");
+                           ?? throw new InvalidOperationException("Publish mode requires Registry:Endpoint (the deploy passes the bootstrap module's registry_endpoint host).");
     var registryRepository = builder.Configuration["Registry:Repository"]
-                             ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the Scaleway registry namespace) in AppHost configuration.");
+                             ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the deploy passes the bootstrap module's registry namespace).");
     builder.AddContainerRegistry("scaleway-registry", registryEndpoint, registryRepository);
 }
 
@@ -65,7 +65,11 @@ if (isPublishMode)
 // per-workload keys come from the environment module's workload_secret_manager_keys outputs.
 var secretManagerProjectId = isPublishMode
     ? builder.Configuration["Scaleway:ProjectId"]
-      ?? throw new InvalidOperationException("Publish mode requires Scaleway:ProjectId in AppHost configuration.")
+      ?? throw new InvalidOperationException("Publish mode requires Scaleway:ProjectId (the deploy passes the bootstrap module's environment_project_id).")
+    : string.Empty;
+var scalewayRegion = isPublishMode
+    ? builder.Configuration["Scaleway:Region"]
+      ?? throw new InvalidOperationException("Publish mode requires Scaleway:Region (the deploy passes the environment module's region).")
     : string.Empty;
 
 // Transactional Email is sent through its HTTP API (see ScalewayTransactionalEmailClient), which
@@ -115,19 +119,26 @@ var acmeEmail = isPublishMode
       ?? throw new InvalidOperationException("Publish mode requires Acme:Email (the ACME account contact) in AppHost configuration.")
     : string.Empty;
 
-// Object storage URLs that AppGateway proxies avatars/logos through (publish mode only).
-var accountStorageUrl = isPublishMode
-    ? builder.Configuration["Storage:AccountUrl"]
-      ?? throw new InvalidOperationException("Publish mode requires Storage:AccountUrl in AppHost configuration.")
+// The Object Storage endpoint AppGateway proxies avatars/logos from, and the environment's bucket
+// name prefix (publish mode only; both from the environment module's outputs).
+var storageEndpoint = isPublishMode
+    ? builder.Configuration["Storage:Endpoint"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:Endpoint (the deploy passes the environment module's object_storage_endpoint).")
     : string.Empty;
-var mainStorageUrl = isPublishMode
-    ? builder.Configuration["Storage:MainUrl"]
-      ?? throw new InvalidOperationException("Publish mode requires Storage:MainUrl in AppHost configuration.")
+var storageBucketPrefix = isPublishMode
+    ? builder.Configuration["Storage:BucketPrefix"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:BucketPrefix (the deploy passes the environment module's bucket_prefix).")
     : string.Empty;
 
-var certificatePassword = await builder.CreateSslCertificateIfNotExists();
+// Development-machine material only: the dev HTTPS certificate (consumed by the build-only frontend
+// container, which never reaches the manifest) and the user-secrets token signing key. Deployed
+// workloads read their signing key and TLS material from Secret Manager.
+var certificatePassword = isPublishMode ? string.Empty : await builder.CreateSslCertificateIfNotExists();
 
-SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
+if (!isPublishMode)
+{
+    SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
+}
 
 var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = ConfigureGoogleOAuthParameters();
 
@@ -220,16 +231,12 @@ var accountWorkers = builder
     .AddProject<Account_Workers>("account-workers")
     .WithReference(accountDatabase)
     .WithReference(blobStorage)
-    // The BillingDriftWorker resolves StripeClientFactory which reads these. Without them the worker
-    // process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and every
-    // stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every worker start.
-    .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
-    .WithEnvironment("Stripe__ApiKey", stripeApiKey)
-    .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
-    .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    // Mock Stripe is a developer-machine convenience and throws when enabled in deployed environments.
-    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WaitFor(accountDatabase);
+
+// The BillingDriftWorker resolves StripeClientFactory which reads the Stripe settings. Without them the
+// worker process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and
+// every stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every start.
+WithStripeConfiguration(accountWorkers);
 
 // KESTREL_PORT is a development-only listener: AddDevelopmentPort binds it in Development only,
 // so in containers the image default (8080) applies and workers need no inbound listener at all.
@@ -255,19 +262,16 @@ var accountApi = builder
     .WithReference(blobStorage)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
     .WithEnvironment("OAuth__Google__ClientSecret", googleOAuthClientSecret)
-    // The mock OAuth/Stripe providers are developer-machine conveniences; the Stripe mock throws
-    // when enabled in deployed environments, so publish mode pins both off explicitly.
+    // The mock OAuth provider is a developer-machine convenience, so publish mode pins it off
+    // explicitly (WithStripeConfiguration does the same for the Stripe mock).
     .WithEnvironment("OAuth__AllowMockProvider", isPublishMode ? "false" : "true")
-    .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
-    .WithEnvironment("Stripe__ApiKey", stripeApiKey)
-    .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
-    .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
     // Force-on so newcomers see the back-office billing UI without Stripe configured. Set to "false" (or
     // change back to `stripeFullyConfigured ? "true" : "false"`) to hide all billing/revenue/Stripe data.
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
     .WaitFor(accountWorkers);
+
+WithStripeConfiguration(accountApi);
 
 // KESTREL_PORT is a development-only listener (bound by AddDevelopmentPort), so it stays out of
 // published charts; in containers the image default (8080) applies.
@@ -451,9 +455,9 @@ if (isPublishMode)
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"))
         .WithEnvironment("BACK_OFFICE_API_URL", backOfficeApi.GetEndpoint("https"))
         .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("https"))
-        .WithEnvironment("ACCOUNT_STORAGE_URL", accountStorageUrl)
-        .WithEnvironment("MAIN_STORAGE_URL", mainStorageUrl)
-        .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", builder.Configuration["Storage:BucketPrefix"] ?? string.Empty)
+        .WithEnvironment("ACCOUNT_STORAGE_URL", storageEndpoint)
+        .WithEnvironment("MAIN_STORAGE_URL", storageEndpoint)
+        .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", storageBucketPrefix)
         .WithKubernetesProbes("/openapi", "/openapi");
 }
 
@@ -498,7 +502,7 @@ if (isPublishMode)
             .WithEnvironment("SCW_SECRET_KEY", secretManagerKey)
             .WithEnvironment("SecretManager__Path", $"/{name}")
             .WithEnvironment("SCW_DEFAULT_PROJECT_ID", secretManagerProjectId)
-            .WithEnvironment("SCW_DEFAULT_REGION", "fr-par")
+            .WithEnvironment("SCW_DEFAULT_REGION", scalewayRegion)
             .WithEnvironment("SENDER_EMAIL_ADDRESS", senderEmailAddress);
 
         // Cockpit telemetry endpoints (per signal) arrive as plain environment values from the
@@ -604,6 +608,9 @@ const string jobTemplate = """
                                "helm.sh/hook-weight": "-1"
                            spec:
                              backoffLimit: 2
+                             # A hung migration fails the Job (and the upgrade, with the old version
+                             # still serving) after 15 minutes instead of blocking until Helm's own timeout.
+                             activeDeadlineSeconds: 900
                              template:
                                metadata:
                                  labels:
@@ -663,6 +670,18 @@ async Task PatchGeneratedChart(PipelineStepContext context)
 // workloads through Secret Manager, and the CA — public material — reaches this publish pipeline
 // as the InternalTls:CaPem configuration value. The chart needs it in two places: the ConfigMap
 // Envoy validates against, and (referenced by name) the BackendTLSPolicies.
+// The Stripe settings every Stripe-consuming workload needs. The mock provider is a
+// developer-machine convenience and throws when enabled in deployed environments.
+void WithStripeConfiguration(IResourceBuilder<ProjectResource> workload)
+{
+    workload
+        .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
+        .WithEnvironment("Stripe__ApiKey", stripeApiKey)
+        .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
+        .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
+        .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true");
+}
+
 void AddInternalTlsManifests(string templatesFolder)
 {
     var caPem = builder.Configuration["InternalTls:CaPem"];
@@ -715,8 +734,8 @@ void AddInternalTlsManifests(string templatesFolder)
 }
 
 // The publisher generates probes and port declarations from the publish-mode endpoint, but the
-// generated deployment still carries the plain-HTTP contract (scheme HTTP, port 8080) and no
-// certificate mounts — this patch completes the HTTPS-only conversion per workload.
+// generated deployment still carries the plain-HTTP contract (scheme HTTP, port 8080) — this patch
+// completes the HTTPS-only conversion per workload.
 void PatchWorkloadsForInternalTls(string templatesFolder)
 {
     foreach (var workload in internalTlsWorkloads)
@@ -731,8 +750,15 @@ void PatchWorkloadsForInternalTls(string templatesFolder)
             "- name: \"https\"\n              protocol: \"TCP\"\n              containerPort: 8443"
         );
 
+        // Fails the publish before helm-deploy-kubernetes runs when the generated layout no longer
+        // matches the replacements above (the workload would fail its probes or serve on 8080).
+        if (yaml.Contains("scheme: \"HTTP\"") || !yaml.Contains("containerPort: 8443"))
+        {
+            throw new InvalidOperationException($"Internal TLS patch did not convert {workload} to HTTPS on 8443 — the generated chart layout changed, update the patch.");
+        }
+
         File.WriteAllText(deploymentPath, yaml);
-        Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes, ports, certificate mount).");
+        Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes and ports; the certificate comes from Secret Manager).");
     }
 }
 
@@ -871,6 +897,14 @@ async Task PatchRolloutStrategyAsync(string templatesFolder)
 
         await File.WriteAllTextAsync(deployment, yaml.Replace("maxUnavailable: 1", "maxUnavailable: 0"));
         patched++;
+    }
+
+    // Fails the publish before helm-deploy-kubernetes runs: a deployment that still rolls out with
+    // unavailable pods would cause 504 windows on every deploy.
+    var unpatched = deployments.Where(deployment => !File.ReadAllText(deployment).Contains("maxUnavailable: 0")).ToArray();
+    if (unpatched.Length > 0)
+    {
+        throw new InvalidOperationException($"Rollout patch did not reach {string.Join(", ", unpatched.Select(Path.GetDirectoryName))} — the generated chart layout changed, update the rollout patch.");
     }
 
     Console.WriteLine($"Rollout patch: {patched} of {deployments.Length} deployments pinned to maxUnavailable: 0.");
