@@ -11,10 +11,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
+using SharedKernel.Authentication;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Authentication;
 
 namespace Account.Tests.BackOffice;
 
@@ -81,7 +83,9 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                     ["BackOffice:AdminsGroupId"] = TestStaffIdentities.AdminsGroupId,
                     // The user-facing SPA shell is scoped to Hostnames:App via UseHostScopedSinglePageAppFallback.
                     // Tests that target the user-facing host use app.test.localhost.
-                    ["Hostnames:App"] = "app.test.localhost"
+                    ["Hostnames:App"] = "app.test.localhost",
+                    // The internal API validates delegation tokens against the back-office's public key.
+                    [BackOfficeDelegationDefaults.PublicKeyConfigurationKey] = TestBackOfficeDelegationKeys.PublicKeyPem
                 };
 
                 configuration.AddInMemoryCollection(backOfficeSettings);

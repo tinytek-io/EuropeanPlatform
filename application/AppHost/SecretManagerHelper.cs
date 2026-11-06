@@ -23,6 +23,26 @@ public static class SecretManagerHelper
         }
     }
 
+    // The development back-office delegation key pair (ES256). The private key persists in user
+    // secrets (base64 PKCS#8 — a PEM's line breaks and spaces do not survive the user-secrets command
+    // line) so tokens stay valid across restarts; the public key derives from it. Deployed
+    // environments get their pair from Terraform through Secret Manager.
+    public static (string SigningKeyPem, string PublicKeyPem) GetOrCreateBackOfficeDelegationKeyPair(string secretName)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var storedKey = ConfigurationRoot[secretName];
+        if (string.IsNullOrEmpty(storedKey))
+        {
+            SaveSecrectToDotNetUserSecrets(secretName, Convert.ToBase64String(key.ExportPkcs8PrivateKey()));
+        }
+        else
+        {
+            key.ImportPkcs8PrivateKey(Convert.FromBase64String(storedKey), out _);
+        }
+
+        return (key.ExportPkcs8PrivateKeyPem(), key.ExportSubjectPublicKeyInfoPem());
+    }
+
     private static void SaveSecrectToDotNetUserSecrets(string key, string value)
     {
         var args = $"user-secrets set {key} {value} --id {UserSecretsId}";

@@ -150,10 +150,10 @@ It deliberately owns no database: reads and writes are served over the feature s
 
 ### The delegation contract
 
-The seam between the back-office and the feature systems is a short-lived, platform-signed delegation JWT, defined once in the shared kernel so every feature system can validate tokens without depending on the back-office system:
+The seam between the back-office and the feature systems is a short-lived delegation JWT signed with its own ES256 key pair, defined once in the shared kernel so every feature system can validate tokens without depending on the back-office system:
 
-- `SharedKernel.Authentication.BackOfficeDelegationDefaults` — the scheme, audience, policies, and shared claim types (`groups`, `name`).
-- `SharedKernel.Authentication.BackOfficeDelegationTokenGenerator` — mints the token (signed with the shared platform token-signing key).
+- `SharedKernel.Authentication.BackOfficeDelegationDefaults` — the scheme, issuer, audience, policies, key configuration names, and shared claim types (`groups`, `name`).
+- `SharedKernel.Authentication.BackOfficeDelegationTokenGenerator` — mints the token, signed with the delegation private key (`BackOfficeDelegation:SigningKeyPem`), which only the back-office holds; the feature systems validate with the public key (`BackOfficeDelegation:PublicKeyPem`). Terraform generates the pair for deployed environments; the AppHost generates a development pair.
 - `SharedKernel.Authentication.BackOfficeAdminRequirement` — the admin gate: the delegation token must carry a `groups` claim matching `BackOffice:AdminsGroupId`.
 
 ```mermaid
@@ -166,7 +166,7 @@ sequenceDiagram
     BO->>BO: Resolve staff principal (OIDC session or mock selector)
     BO->>BO: Mint short-lived delegation JWT from the staff principal
     BO->>API: GET /internal-api/back-office/dashboard/kpis (Bearer delegation JWT, in-cluster TLS)
-    API->>API: Validate scheme + audience + policy (BackOfficeDelegation / DelegationAdmin)
+    API->>API: Validate ES256 signature + issuer + audience + policy (BackOfficeDelegation / DelegationAdmin)
     API-->>BO: Result (data, or ProblemDetails on failure)
     BO-->>SPA: 200 (re-emits account's status and errors verbatim)
 ```
@@ -175,7 +175,7 @@ The contract rules, all enforced by the system tests on both sides:
 
 - **Bearer, not cookies**: internal API calls authenticate with the delegation token, so those routes disable antiforgery and are never reachable from a browser hostname.
 - **Least privilege per route**: reads require the delegation policy; mutations additionally require the admin group. A rejected staff member never reaches the internal API — the back-office's own policies forbid it first.
-- **Distinct token populations**: the delegation scheme is separate from the application's JWT scheme, and each rejects the other's tokens (audience mismatch) — a stolen app token cannot call internal APIs, and a delegation token cannot act as a user.
+- **Distinct token populations and keys**: the delegation scheme is separate from the application's JWT scheme and has its own key, issuer, and audience, so each rejects the other's tokens — a stolen app token cannot call internal APIs, a delegation token cannot act as a user, and the back-office holds no key that could mint application tokens.
 - **Verbatim error propagation**: the feature system's ProblemDetails (status, message, validation errors) are re-emitted as-is, so a domain 400 never masquerades as a 500.
 - **In-cluster TLS**: the internal API is served over TLS trusted through the Terraform-managed internal CA.
 

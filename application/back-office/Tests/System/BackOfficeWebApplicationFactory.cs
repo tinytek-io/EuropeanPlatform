@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using SharedKernel.Authentication;
 using SharedKernel.SinglePageApp;
+using SharedKernel.Tests.Authentication;
 
 namespace BackOffice.Tests.System;
 
@@ -42,7 +44,9 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                         // Match the AppHost wiring: the mock admin identity carries this group id,
                         // so the BackOfficeAdmin policy and MeResponse.IsAdmin resolve admin status
                         // the same way they do in development.
-                        ["BackOffice:AdminsGroupId"] = MockEasyAuthIdentities.MockAdminsGroupId
+                        ["BackOffice:AdminsGroupId"] = MockEasyAuthIdentities.MockAdminsGroupId,
+                        // The delegation handler signs every forwarded request with the back-office key.
+                        [BackOfficeDelegationDefaults.SigningKeyConfigurationKey] = TestBackOfficeDelegationKeys.SigningKeyPem
                     }
                 );
             }

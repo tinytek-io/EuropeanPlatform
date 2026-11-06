@@ -41,7 +41,7 @@ public static class Configuration
 
         private IHostApplicationBuilder AddAccountInternalApiClient()
         {
-            builder.Services.AddTransient<BackOfficeDelegationTokenGenerator>();
+            builder.Services.AddSingleton<BackOfficeDelegationTokenGenerator>();
             builder.Services.AddTransient<BackOfficeDelegationHandler>();
 
             // Same address contract as the app-gateway's account client: the deploy passes

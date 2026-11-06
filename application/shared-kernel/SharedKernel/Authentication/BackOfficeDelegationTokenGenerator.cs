@@ -1,21 +1,26 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using SharedKernel.Authentication.TokenSigning;
 
 namespace SharedKernel.Authentication;
 
 /// <summary>
 ///     Mints the short-lived delegation token the back-office BFF presents to the feature systems'
 ///     internal APIs: the staff principal (established by the BackOfficeIdentity scheme — the mock
-///     identity selector or a staff OIDC provider) is re-signed as a platform JWT carrying the staff claims.
-///     The internal endpoints validate it with the BackOfficeDelegation scheme, so in-cluster
-///     callers cannot forge a staff identity without the platform signing key.
+///     identity selector or a staff OIDC provider) is re-signed as an ES256 JWT carrying the staff
+///     claims, with the back-office's private delegation key. The internal endpoints validate it with
+///     the BackOfficeDelegation scheme against the public key, so in-cluster callers cannot forge a
+///     staff identity, and the back-office holds no key that could mint application tokens.
 /// </summary>
-public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient tokenSigningClient, TimeProvider timeProvider)
+public sealed class BackOfficeDelegationTokenGenerator(IConfiguration configuration, TimeProvider timeProvider)
 {
     // One request → one token: the lifetime only has to cover clock skew and the in-flight call.
     private const int ValidForMinutes = 2;
+
+    private readonly Lazy<SigningCredentials> _signingCredentials = new(() =>
+        new SigningCredentials(BackOfficeDelegationKeys.LoadSigningKey(configuration), BackOfficeDelegationKeys.Algorithm)
+    );
 
     public string Generate(ClaimsPrincipal principal)
     {
@@ -51,9 +56,9 @@ public sealed class BackOfficeDelegationTokenGenerator(ITokenSigningClient token
             NotBefore = now.UtcDateTime,
             IssuedAt = now.UtcDateTime,
             Expires = now.AddMinutes(ValidForMinutes).UtcDateTime,
-            Issuer = tokenSigningClient.Issuer,
+            Issuer = BackOfficeDelegationDefaults.DelegationIssuer,
             Audience = BackOfficeDelegationDefaults.DelegationAudience,
-            SigningCredentials = tokenSigningClient.GetSigningCredentials()
+            SigningCredentials = _signingCredentials.Value
         };
 
         return new JsonWebTokenHandler().CreateToken(tokenDescriptor);
