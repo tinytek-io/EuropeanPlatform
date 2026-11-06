@@ -427,31 +427,36 @@ administrators — the back-office's own admin policy and account's internal-API
 read it, and deployed environments must set it explicitly. When these keys are
 configured, the mock identity selector is disabled automatically.
 
-#### Test the OIDC flow locally with the Authelia harness
+#### Test the staff sign-in locally with the authentik harness
 
-The local dev stack can run [Authelia](https://www.authelia.com) — a small open-source OIDC
-provider — as a stand-in for a production identity provider, exercising the exact same flow:
-discovery, the authorization redirect, code + PKCE, the callback, and the `groups` claim that
-gates admin features.
+Staff sign in through [authentik](https://goauthentik.io) (MIT core), the staff identity provider
+of the deployed environments. The local dev stack can run it from the same blueprints
+(`cloud-infrastructure/authentik/blueprints/`), exercising the production flow end to end:
+discovery, the authorization redirect, the passwordless sign-in (email one-time code, or a passkey
+the user added), code + PKCE, the callback, and the `groups` claim that gates staff and admin
+features. Nobody has a password: staff are listed with their email address and groups in a staff
+blueprint, and passkeys live only in authentik's database.
 
-1. Start the dev stack with the harness enabled: `AUTHELIA__ENABLED=true dotnet run --project
-   AppHost` (or export `Authelia__Enabled=true`). This adds `authelia` + `authelia-redis`
-   containers at `https://authelia.dev.localhost:9091`, wires the back-office to them, and hides
-   the mock login picker.
-2. Run the harness spec against it:
+1. Start the dev stack with the harness enabled: `AUTHENTIK__ENABLED=true` on the AppHost. This
+   adds `authentik-server` + `authentik-worker` containers at `https://auth.dev.localhost:9091`
+   (an `authentik` database on the dev Postgres, codes delivered to Mailpit), wires the
+   back-office to them, and hides the mock login picker.
+2. Sign in as `dev-admin@dev.localhost` (groups `staff` + `admins`) or `dev-staff@dev.localhost`
+   (`staff` only) — see `application/AppHost/Authentik/dev-staff.yaml` — and read the code in
+   Mailpit.
+3. Run the harness spec against it:
 
    ```bash
    dotnet run --project developer-cli -- e2e back-office-oidc --no-wait-for-aspire
    ```
 
    with `BACK_OFFICE_OIDC_ENABLED=true` in the environment (the spec skips itself otherwise, so
-   it stays out of the default suite). It signs in as `oidcadmin` / `OIDCTest123!` — a static
-   dev user in the `admins` group (see `application/AppHost/Authelia/`) — and asserts the
-   dashboard renders.
+   it stays out of the default suite). It signs in as `dev-admin`, reads the code from Mailpit's
+   API, and asserts the dashboard and the admin-only accounts list render.
 
-The harness certificate is self-signed (`authelia-tls.pem`), so the OIDC backchannel runs with
-the dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
-providers.
+The harness serves authentik's self-signed certificate, so the OIDC backchannel runs with the
+dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
+deployments.
 
 ### (Optional) Configure Stripe for staging and production
 

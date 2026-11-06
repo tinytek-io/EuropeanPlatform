@@ -160,6 +160,11 @@ var subscriptionUiEnabled = !isPublishMode || stripeFullyConfigured ? "true" : "
 // the values are filled from infrastructure outputs at deploy time).
 IResourceBuilder<IResourceWithConnectionString> accountDatabase;
 IResourceBuilder<IResourceWithConnectionString> mainDatabase;
+// The development Postgres server (null in publish mode, where RDB is external); the authentik
+// staff identity harness adds its own database to it.
+IResourceBuilder<PostgresServerResource>? developmentPostgres = null;
+IResourceBuilder<ParameterResource>? developmentPostgresPassword = null;
+IResourceBuilder<ContainerResource>? mailServer = null;
 
 if (isPublishMode)
 {
@@ -169,6 +174,7 @@ if (isPublishMode)
 else
 {
     var postgresPassword = builder.CreateStablePassword("postgres-password");
+    developmentPostgresPassword = postgresPassword;
     var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: ports.Postgres)
         .WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-postgres-data")
         .WithLifetime(ContainerLifetime.Persistent)
@@ -176,6 +182,7 @@ else
 
     accountDatabase = postgres.AddDatabase("account-database", "account");
     mainDatabase = postgres.AddDatabase("main-database", "main");
+    developmentPostgres = postgres;
 }
 
 // Object storage is S3 (Scaleway Object Storage when published, SeaweedFS in local development).
@@ -216,10 +223,10 @@ else
 // service, so there is nothing to deploy.
 if (!isPublishMode)
 {
-    builder
+    mailServer = builder
         .AddContainer("mail-server", "axllent/mailpit")
         .WithHttpEndpoint(ports.MailpitHttp, 8025)
-        .WithEndpoint(ports.MailpitSmtp, 1025)
+        .WithEndpoint(ports.MailpitSmtp, 1025, name: "smtp")
         .WithLifetime(ContainerLifetime.Persistent)
         .WithUrlForEndpoint("http", u => u.DisplayText = "Read mail here");
 }
@@ -368,56 +375,82 @@ if (isPublishMode)
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));
 }
 
-// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
-// provider — and points the back-office staff sign-in at it. This exercises the same generic
-// flow a production provider will use: discovery, authorization code + PKCE, the callback at
-// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
-// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
-// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
-if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
+// Back-office staff identity harness (development only): runs authentik — the staff identity
+// provider of the deployed environments — from the same blueprints
+// (cloud-infrastructure/authentik/blueprints) plus development staff (Authentik/dev-staff.yaml),
+// and points the back-office staff sign-in at it. This exercises the production flow end-to-end:
+// discovery, authorization code + PKCE, the passwordless email-code sign-in (codes land in
+// Mailpit), the callback at /.auth/login/aad/callback, and the groups claim for the staff and
+// admin gates. Gated behind Authentik:Enabled so the default dev stack keeps the MockEasyAuth
+// login picker; enable with AUTHENTIK__ENABLED=true and run the back-office-oidc e2e spec
+// (BACK_OFFICE_OIDC_ENABLED=true).
+if (!isPublishMode && builder.Configuration.GetSection("Authentik:Enabled").Get<bool>())
 {
-    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
+    // >= 2026.8.2: earlier releases let the email-device setup redirect the sign-in code to an
+    // attacker-chosen address (GHSA-qgqp-xh8r-v73r) — exactly the flow the blueprints use.
+    const string authentikImage = "goauthentik/server";
+    const string authentikTag = "2026.8.5";
+    const string authentikUrl = "https://auth.dev.localhost:9091";
+    const string backOfficeClientSecret = "dev-only-back-office-client-secret";
 
-    // Authelia's client registration needs the back-office callback URL, whose port comes from
-    // .workspace/port.txt — generate the effective configuration (from the template checked in
-    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
-    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
-    Directory.CreateDirectory(autheliaConfigFolder);
-    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
-    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
-    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
-    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemApi}/.auth/login/aad/callback";
-    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
-        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
-        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
-    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
-    foreach (var autheliaFile in new[] { "users_database.yml" })
+    var authentikPostgres = developmentPostgres!;
+    var authentikDatabase = authentikPostgres.AddDatabase("authentik-database", "authentik");
+    var authentikSecretKey = builder.CreateStablePassword("authentik-secret-key");
+    var blueprintsFolder = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "cloud-infrastructure", "authentik", "blueprints"));
+    var developmentStaffBlueprint = Path.Combine(builder.AppHostDirectory, "Authentik", "dev-staff.yaml");
+    var postgresEndpoint = authentikPostgres.Resource.PrimaryEndpoint;
+    var smtpEndpoint = mailServer!.GetEndpoint("smtp");
+
+    // Server and worker share one configuration; the worker applies the blueprints (it resolves
+    // their !Env tags), the server answers the browser and the back-office backchannel.
+    IResourceBuilder<ContainerResource> AddAuthentik(string name, string command)
     {
-        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
+        return builder
+            .AddContainer(name, authentikImage, authentikTag)
+            .WithImageRegistry("ghcr.io")
+            .WithArgs(command)
+            .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", postgresEndpoint.Property(EndpointProperty.Host))
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", postgresEndpoint.Property(EndpointProperty.TargetPort))
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentik")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", "postgres")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", developmentPostgresPassword!)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__SSLMODE", "disable")
+            .WithEnvironment("AUTHENTIK_EMAIL__HOST", smtpEndpoint.Property(EndpointProperty.Host))
+            .WithEnvironment("AUTHENTIK_EMAIL__PORT", smtpEndpoint.Property(EndpointProperty.TargetPort))
+            .WithEnvironment("AUTHENTIK_EMAIL__USE_TLS", "false")
+            .WithEnvironment("AUTHENTIK_EMAIL__USE_SSL", "false")
+            .WithEnvironment("AUTHENTIK_EMAIL__FROM", "staff-sign-in@dev.localhost")
+            .WithEnvironment("AUTHENTIK_WEB__BASE_URL", authentikUrl)
+            .WithEnvironment("AUTHENTIK_ERROR_REPORTING__ENABLED", "false")
+            .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
+            .WithEnvironment("EP_BACK_OFFICE_REDIRECT_URI", backOfficeBaseUrl + "/.auth/login/aad/callback")
+            .WithEnvironment("BACK_OFFICE_OIDC_CLIENT_SECRET", backOfficeClientSecret)
+            .WithBindMount(blueprintsFolder, "/blueprints/custom", true)
+            .WithBindMount(developmentStaffBlueprint, "/blueprints/staff/dev-staff.yaml", true)
+            .WaitFor(authentikDatabase);
     }
 
-    builder
-        .AddContainer("authelia", "authelia/authelia:4.38")
-        .WithHttpEndpoint(9091, 9091, "https")
-        .WithBindMount(autheliaConfigFolder, "/config")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
-        .WaitFor(autheliaRedis);
+    AddAuthentik("authentik-worker", "worker");
+    // authentik serves HTTPS on 9443 with its own self-signed certificate.
+    var authentikServer = AddAuthentik("authentik-server", "server")
+        .WithHttpsEndpoint(9091, 9443, "https")
+        .WithUrlForEndpoint("https", url => url.DisplayText = "Staff identity (authentik)");
 
     backOfficeApi
-        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
+        .WithEnvironment("BackOffice__Oidc__Authority", $"{authentikUrl}/application/o/back-office/")
         .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
-        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
+        .WithEnvironment("BackOffice__Oidc__ClientSecret", backOfficeClientSecret)
         // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
         // and token requests) must tolerate it. Dev-harness only; production providers have
         // trusted certificates and leave this unset.
         .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
-        // The harness user's Authelia group (users_database.yml) is both the staff and the admin
-        // group, so the harness exercises the real staff gate and admin capability.
-        .WithEnvironment("BackOffice__Oidc__StaffGroupId", "admins")
+        // The groups the staff blueprint assigns (dev-admin is in both, dev-staff only in staff).
+        .WithEnvironment("BackOffice__Oidc__StaffGroupId", "staff")
         .WithEnvironment("BackOffice__AdminsGroupId", "admins")
         // The mock login picker would offer a bypass around the real provider's login screen.
-        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
+        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false")
+        .WaitFor(authentikServer);
 }
 
 var appGateway = builder
