@@ -63,9 +63,9 @@ anyone who learns that IP could connect straight to Envoy (`curl --resolve app.<
 ...`) and skip the WAF, edge TLS, and caching. Envoy routes by SNI, not by frontend, so one open
 frontend would serve every hostname.
 
-`scaleway_lb_acl.edge_only` (`../environment/main.tf`) closes that: every frontend an edge pipeline
-targets (the CCM's 443 frontend for app, the Terraform-owned 8443/8444 frontends for back-office and
-auth) carries an ACL at index 0 that denies every source except Scaleway Edge Services
+`scaleway_lb_acl.edge_only` (`../environment/main.tf`) closes that: every frontend on the LB (the
+CCM's 443 frontend for app and its plain-HTTP 80 frontend, the Terraform-owned 8443/8444 frontends
+for back-office and auth) carries an ACL at index 0 that denies every source except Scaleway Edge Services
 (`ips_edge_services`, inverted). The backend is TCP passthrough, so source IP is all an ACL can
 match. LB health checks run on the backend side and are not affected.
 
@@ -74,10 +74,12 @@ Rules that keep it closed:
 - **Never set `loadBalancerSourceRanges` on the gateway Service.** The CCM only replaces the ACLs
   it generates itself (named `<frontend-id>-lb-source-range-*`), which is why the Terraform ACL on
   its 443 frontend survives. With source ranges set, the CCM replaces ALL ACLs on the frontend.
-- If the CCM recreates the 443 frontend (new id), recapture `gateway_lb_frontend_id` (§5b of the
-  cluster-ops README) and apply; until then the new frontend is open.
-- The ACL covers the frontends the edge uses. Any other frontend on the LB (the CCM's :80 one for
-  the failover page) is not covered, and the security check below reports it until it is.
+- The CCM's frontends are found by port (443, 80) through the `scaleway_lb_frontends` data source,
+  so no id is captured for the ACLs. If the CCM recreates one, the next plan replaces its ACL and
+  the deploy's convergence check stops until that is applied; until then the new frontend is open.
+  (The app pipeline's backend stage still targets the captured `gateway_lb_frontend_id`, §5b of the
+  cluster-ops README.)
+- A frontend on any other port is not covered; the security check below reports it.
 
 ## Continuous security check (back-office worker)
 
@@ -141,7 +143,9 @@ SCW_SECRET_KEY=<scw profile key> ./set-gateway-lb-failover.sh
 Limitation: the failover host only applies to the HTTP backend behind the LB's :80 frontend. The
 edge pipelines reach the cluster through the TCP passthrough 443/8443 frontends, whose Envoy TCP
 backend cannot carry a failover host, so edge visitors see the edge's origin error during a
-cluster outage — not this page.
+cluster outage — not this page. And since the origin lockdown also closes :80 to everything but
+Edge Services (which never uses it), the page is unreachable today; a maintenance page for edge
+visitors needs the edge itself to serve it.
 
 The script (idempotent, derives the region and failover host from the environment module's
 outputs and all IDs live from the Service's `scw-loadbalancer-id` annotation) annotates the Service for HTTP backends (the CCM creates TCP by default and the API

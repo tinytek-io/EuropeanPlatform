@@ -998,22 +998,37 @@ moved {
 # SNI, not by frontend, so every edge frontend needs it: a single open frontend would serve every
 # hostname. The backend is TCP passthrough, so the source IP is the only thing an ACL can match.
 #
-# The app pipeline's 443 frontend is the CCM's. The CCM only replaces the ACLs it generates itself
-# (named "<frontend-id>-lb-source-range-*", from the Service's loadBalancerSourceRanges), so this
-# Terraform-owned ACL survives its reconciliation. But setting loadBalancerSourceRanges on the
-# gateway Service makes the CCM replace ALL ACLs on that frontend, this one included. Never set it.
+# The Gateway's listeners (443 for the app pipeline, and the plain-HTTP 80 that serves only direct
+# hits on the LB IP) are frontends the CCM creates, so their ids are read from the LB rather than
+# captured by hand: a frontend the CCM recreates gets a new id, the plan then replaces its ACL, and
+# the deploy's convergence check stops until that is applied. The ports are fixed, not discovered,
+# so the plan stays computable while the LB itself has pending changes; any other frontend that
+# appears on the LB fails the back-office worker's security check (gateway-frontends-edge-only).
+#
+# The CCM only replaces the ACLs it generates itself (named "<frontend-id>-lb-source-range-*",
+# from the Service's loadBalancerSourceRanges), so these Terraform-owned ACLs survive its
+# reconciliation. But setting loadBalancerSourceRanges on the gateway Service makes the CCM replace
+# ALL ACLs on that frontend, these included. Never set it.
+data "scaleway_lb_frontends" "gateway" {
+  lb_id = scaleway_lb.gateway.id
+  zone  = local.zone # the API call's zone comes from this argument, not from the zoned lb_id
+}
+
 locals {
-  edge_origin_frontend_ids = {
-    for key in keys(local.edge_pipelines) : key => (
-      contains(keys(scaleway_lb_frontend.edge_origin), key)
-      ? scaleway_lb_frontend.edge_origin[key].id
-      : "${local.zone}/${var.gateway_lb_frontend_id}"
-    )
-  }
+  gateway_listener_ports = { https = 443, http = 80 }
+
+  edge_only_frontend_ids = merge(
+    { for key, frontend in scaleway_lb_frontend.edge_origin : key => frontend.id },
+    {
+      for listener, port in local.gateway_listener_ports : "gateway-${listener}" => one([
+        for frontend in data.scaleway_lb_frontends.gateway.frontends : frontend.id if frontend.inbound_port == port
+      ])
+    }
+  )
 }
 
 resource "scaleway_lb_acl" "edge_only" {
-  for_each    = local.edge_origin_frontend_ids
+  for_each    = local.edge_only_frontend_ids
   frontend_id = each.value
   name        = "${var.prefix}-${var.environment}-${each.key}-edge-only"
   description = "Only Scaleway Edge Services may connect; everything else is refused before it reaches Envoy"
