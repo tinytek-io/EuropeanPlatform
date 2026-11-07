@@ -14,8 +14,8 @@ namespace DeveloperCli.Commands;
 /// <summary>
 ///     Deploys an environment to Scaleway through the Aspire publish/deploy pipeline. Everything the
 ///     pipeline needs is derived, never hand-copied: the cluster kubeconfig and the per-workload
-///     Secret Manager keys come from Terraform outputs, and a convergence check refuses to deploy over
-///     infrastructure drift (the chart and the cloud must agree before containers roll out).
+///     Secret Manager keys come from Terraform outputs, and pending infrastructure changes are applied
+///     (after confirmation) before containers roll out, so the chart and the cloud always agree.
 /// </summary>
 /// <remarks>
 ///     Prerequisites beyond the CLI tools: the bootstrap and environment Terraform modules must be
@@ -46,7 +46,7 @@ public sealed partial class DeployCommand : Command
 
     public DeployCommand() : base(
         "deploy",
-        "Deploy an environment to Scaleway: verifies Terraform convergence, resolves deploy-time secrets from Terraform outputs, and runs the Aspire build/publish/deploy pipeline"
+        "Deploy an environment to Scaleway: applies pending Terraform changes, resolves deploy-time secrets from Terraform outputs, and runs the Aspire build/publish/deploy pipeline"
     )
     {
         var environmentOption = new Option<string>("--environment", "-e")
@@ -61,7 +61,12 @@ public sealed partial class DeployCommand : Command
         };
         var skipPlanCheckOption = new Option<bool>("--skip-plan-check")
         {
-            Description = "Deploy even when `terraform plan` reports infrastructure drift"
+            Description = "Deploy without planning or applying Terraform changes"
+        };
+
+        var autoApproveOption = new Option<bool>("--auto-approve")
+        {
+            Description = "Apply pending Terraform changes without asking (required when there is no terminal, as in CI)"
         };
 
         var skipDnsCheckOption = new Option<bool>("--skip-dns-check")
@@ -72,12 +77,14 @@ public sealed partial class DeployCommand : Command
         Options.Add(environmentOption);
         Options.Add(prefixOption);
         Options.Add(skipPlanCheckOption);
+        Options.Add(autoApproveOption);
         Options.Add(skipDnsCheckOption);
 
         SetAction(parseResult => Execute(
                 parseResult.GetValue(environmentOption)!,
                 parseResult.GetValue(prefixOption)!,
                 parseResult.GetValue(skipPlanCheckOption),
+                parseResult.GetValue(autoApproveOption),
                 parseResult.GetValue(skipDnsCheckOption)
             ).GetAwaiter().GetResult()
         );
@@ -86,7 +93,12 @@ public sealed partial class DeployCommand : Command
     [GeneratedRegex("^(?:\\s*)(\\w+_image):\\s*\"([^\"]+)\"")]
     private static partial Regex ChartImagePattern { get; }
 
-    private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck, bool skipDnsCheck)
+    // A resource line of `terraform plan` output: "  # <address> will be created", "must be replaced",
+    // "has moved to <address>", and so on.
+    [GeneratedRegex(@"^\s*# (.+?) (will be|must be|has moved to) (.+)$")]
+    private static partial Regex PlanChangePattern { get; }
+
+    private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck, bool autoApprove, bool skipDnsCheck)
     {
         Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
 
@@ -128,38 +140,8 @@ public sealed partial class DeployCommand : Command
 
         if (!skipPlanCheck)
         {
-            PrintHeader("Checking Terraform convergence");
-
-            // The tier file is the environment's configuration contract (the domain, sizing,
-            // durability); a missing one means the environment is not configured, not that
-            // defaults are fine.
-            var tierFile = Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.tfvars");
-            if (!File.Exists(tierFile))
-            {
-                AnsiConsole.MarkupLine($"[red]No tier configuration found at {tierFile}.[/] Every environment must declare its tier file (see environments/stage.tfvars).");
-                Environment.Exit(1);
-            }
-
-            var plan = await ProcessHelper.ExecuteQuietlyAsync(
-                $"terraform plan -detailed-exitcode -input=false -no-color -var-file=environments/{terraformEnvironment}.tfvars -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
-                environmentModuleFolder,
-                ("SCW_DEFAULT_PROJECT_ID", projectId)
-            );
-            // -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes present.
-            if (plan.ExitCode == 2)
-            {
-                AnsiConsole.MarkupLine("[red]terraform plan reports pending changes.[/] The deployment chart and the cloud infrastructure must agree before deploying — run `terraform apply` first, or pass --skip-plan-check to deploy anyway.");
-                AnsiConsole.MarkupLine($"[dim]Plan output: {Markup.Escape(plan.TempFilePathWithSize)}[/]");
-                Environment.Exit(1);
-            }
-
-            if (plan.ExitCode != 0)
-            {
-                AnsiConsole.MarkupLine("[red]terraform plan failed:[/] " + Markup.Escape(plan.GetErrorSummary("plan")));
-                Environment.Exit(plan.ExitCode);
-            }
-
-            AnsiConsole.MarkupLine("[green]Infrastructure matches the configuration.[/]");
+            PrintHeader("Applying pending infrastructure changes");
+            await ApplyInfrastructureChangesAsync(environmentModuleFolder, terraformEnvironment, prefix, projectId, autoApprove, "Deploy cancelled before anything rolled out.");
         }
 
         // DNS drift is invisible to Terraform (the public zone lives at an external provider), and a
@@ -358,6 +340,15 @@ public sealed partial class DeployCommand : Command
 
         await PruneRegistryTagsAsync(bootstrapModuleFolder, bootstrapState);
 
+        // The rollout can change what Terraform reads from the cluster: the Kapsule controller creates
+        // (or recreates) the gateway Load Balancer's 443 and 80 frontends, and the edge-only ACLs on
+        // them are found by port. A second pass closes any frontend the rollout opened.
+        if (!skipPlanCheck)
+        {
+            PrintHeader("Applying infrastructure changes the rollout caused");
+            await ApplyInfrastructureChangesAsync(environmentModuleFolder, terraformEnvironment, prefix, projectId, autoApprove, "The rollout succeeded, but these changes are not applied; a gateway frontend the rollout created stays open until they are.");
+        }
+
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
     }
 
@@ -506,6 +497,92 @@ public sealed partial class DeployCommand : Command
         using var writer = new StreamWriter(path, ownerOnly);
         writer.Write(content);
         return path;
+    }
+
+    /// <summary>
+    ///     Plans the environment module and, when the plan has changes, lists them and applies exactly
+    ///     that plan after confirmation (or right away with --auto-approve). Without a terminal and
+    ///     without --auto-approve, pending changes stop the deploy.
+    /// </summary>
+    private static async Task ApplyInfrastructureChangesAsync(string environmentModuleFolder, string terraformEnvironment, string prefix, string projectId, bool autoApprove, string declinedMessage)
+    {
+        // The tier file is the environment's configuration contract (the domain, sizing,
+        // durability); a missing one means the environment is not configured, not that defaults are
+        // fine.
+        var tierFile = Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.tfvars");
+        if (!File.Exists(tierFile))
+        {
+            AnsiConsole.MarkupLine($"[red]No tier configuration found at {tierFile}.[/] Every environment must declare its tier file (see environments/stage.tfvars).");
+            Environment.Exit(1);
+        }
+
+        // A saved plan holds every sensitive value in plain text, so it lives in an owner-only
+        // folder that is removed even when the deploy exits early.
+        var planFolder = Directory.CreateTempSubdirectory($"pp-{terraformEnvironment}-plan-");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => DeleteFolder(planFolder);
+        var planFile = Path.Combine(planFolder.FullName, "environment.tfplan");
+
+        var plan = await ProcessHelper.ExecuteQuietlyAsync(
+            $"terraform plan -detailed-exitcode -input=false -no-color -out={planFile} -var-file=environments/{terraformEnvironment}.tfvars -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
+            environmentModuleFolder,
+            ("SCW_DEFAULT_PROJECT_ID", projectId)
+        );
+
+        // -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes present.
+        if (plan.ExitCode == 0)
+        {
+            DeleteFolder(planFolder);
+            AnsiConsole.MarkupLine("[green]Infrastructure matches the configuration.[/]");
+            return;
+        }
+
+        if (plan.ExitCode != 2)
+        {
+            AnsiConsole.MarkupLine("[red]terraform plan failed:[/] " + Markup.Escape(plan.GetErrorSummary("plan")));
+            Environment.Exit(plan.ExitCode);
+        }
+
+        PrintPlanChanges(plan);
+
+        if (!autoApprove)
+        {
+            if (Console.IsInputRedirected)
+            {
+                AnsiConsole.MarkupLine("[red]terraform plan reports pending changes and there is no terminal to confirm them.[/] Pass --auto-approve to apply them, or --skip-plan-check to deploy without them.");
+                Environment.Exit(1);
+            }
+
+            if (!await AnsiConsole.ConfirmAsync("Apply these changes?", false))
+            {
+                AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(declinedMessage)}[/] Run the deploy again to apply them, or pass --skip-plan-check to deploy without them.");
+                Environment.Exit(1);
+            }
+        }
+
+        // Applying the saved plan applies exactly what was listed; if the infrastructure changed
+        // since, Terraform refuses the stale plan instead of applying something else.
+        ProcessHelper.StartProcess($"terraform apply -input=false {planFile}", environmentModuleFolder, environmentVariables: ("SCW_DEFAULT_PROJECT_ID", projectId));
+        DeleteFolder(planFolder);
+        AnsiConsole.MarkupLine("[green]Infrastructure changes applied.[/]");
+    }
+
+    private static void PrintPlanChanges(ProcessResult plan)
+    {
+        var lines = plan.StdOut.Split('\n');
+        foreach (var match in lines.Select(line => PlanChangePattern.Match(line)).Where(match => match.Success))
+        {
+            var change = $"{match.Groups[2].Value} {match.Groups[3].Value}";
+            var color = change.Contains("destroyed") || change.Contains("replaced") ? "red" : "yellow";
+            AnsiConsole.MarkupLine($"  [{color}]{Markup.Escape(change)}[/]  {Markup.Escape(match.Groups[1].Value)}");
+        }
+
+        var summary = lines.FirstOrDefault(line => line.StartsWith("Plan: ")) ?? "Only output values change.";
+        AnsiConsole.MarkupLine($"[bold]{Markup.Escape(summary.Trim())}[/] [dim]Full plan: {Markup.Escape(plan.TempFilePathWithSize)}[/]");
+    }
+
+    private static void DeleteFolder(DirectoryInfo folder)
+    {
+        if (Directory.Exists(folder.FullName)) folder.Delete(true);
     }
 
     // Terraform outputs carry secrets (the kubeconfig, IAM keys), so they are captured in memory

@@ -75,8 +75,9 @@ Rules that keep it closed:
   it generates itself (named `<frontend-id>-lb-source-range-*`), which is why the Terraform ACL on
   its 443 frontend survives. With source ranges set, the CCM replaces ALL ACLs on the frontend.
 - The CCM's frontends are found by port (443, 80) through the `scaleway_lb_frontends` data source,
-  so no id is captured for the ACLs. If the CCM recreates one, the next plan replaces its ACL and
-  the deploy's convergence check stops until that is applied; until then the new frontend is open.
+  so no id is captured for the ACLs. If the CCM recreates one, the next plan replaces its ACL; the
+  deploy applies pending changes before the rollout and again after it, so a frontend the rollout
+  recreated is closed in the same run (after confirmation, or `--auto-approve`).
   (The app pipeline's backend stage still targets the captured `gateway_lb_frontend_id`, §5b of the
   cluster-ops README.)
 - A frontend on any other port is not covered; the security check below reports it.

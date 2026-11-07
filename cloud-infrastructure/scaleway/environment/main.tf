@@ -1001,7 +1001,7 @@ moved {
 # The Gateway's listeners (443 for the app pipeline, and the plain-HTTP 80 that serves only direct
 # hits on the LB IP) are frontends the CCM creates, so their ids are read from the LB rather than
 # captured by hand: a frontend the CCM recreates gets a new id, the plan then replaces its ACL, and
-# the deploy's convergence check stops until that is applied. The ports are fixed, not discovered,
+# the deploy applies that (after confirmation) in the same run. The ports are fixed, not discovered,
 # so the plan stays computable while the LB itself has pending changes; any other frontend that
 # appears on the LB fails the back-office worker's security check (gateway-frontends-edge-only).
 #
