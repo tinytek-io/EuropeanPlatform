@@ -12,6 +12,7 @@
         <Project Path="back-office\Core\BackOffice.csproj"/>
         <Project Path="back-office\Tests\BackOffice.Tests.csproj"/>
         <Project Path="back-office\WebApp\BackOffice.WebApp.esproj"/>
+        <Project Path="back-office\Workers\BackOffice.Workers.csproj"/>
     </Folder>
     <Folder Name="/main/">
         <Project Path="main\Api\Main.Api.csproj"/>

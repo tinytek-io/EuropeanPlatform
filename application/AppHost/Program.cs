@@ -332,6 +332,15 @@ if (isPublishMode)
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
 }
 
+// The back-office system's background work. It owns no database, so it waits on nothing and
+// needs no references; in containers it has no inbound listener beyond the image default.
+var backOfficeWorkers = builder.AddProject<BackOffice_Workers>("back-office-workers");
+
+if (!isPublishMode)
+{
+    backOfficeWorkers.WithEnvironment("KESTREL_PORT", ports.BackOfficeWorkers.ToString());
+}
+
 // The standalone back-office system: a BFF over the feature systems' internal APIs, owning the
 // staff identity outright; the gateway routes the back-office hostname here.
 var backOfficeApi = builder
@@ -495,6 +504,7 @@ if (isPublishMode)
         ("main-api", mainApi),
         ("app-gateway", appGateway),
         ("back-office-api", backOfficeApi),
+        ("back-office-workers", backOfficeWorkers),
         ("account-migrator", accountMigrator),
         ("main-migrator", mainMigrator)
     };

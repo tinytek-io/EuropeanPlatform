@@ -362,6 +362,43 @@ spec:
             - port: "443"
               protocol: TCP
 ---
+# back-office-workers: no inbound callers, and unlike the feature systems' workers no database or
+# storage (the back-office owns neither) — only Secret Manager and telemetry.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: back-office-workers-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: default
+      k8s:app.kubernetes.io/component: back-office-workers
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
 # Migrator Jobs (pods exist only during deploys): database structure ownership, resolved from
 # Secret Manager, on the migrator role.
 apiVersion: cilium.io/v2

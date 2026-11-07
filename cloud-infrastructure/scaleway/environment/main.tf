@@ -846,6 +846,9 @@ locals {
       # internal API calls, mirroring the app-gateway's trust configuration.
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
+    # The back-office's background work owns no database and no storage; its Secret Manager path
+    # exists for the telemetry token every workload receives (merged in below).
+    back-office-workers = {}
   }
 
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
