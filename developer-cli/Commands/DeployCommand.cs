@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
@@ -35,8 +36,6 @@ public sealed partial class DeployCommand : Command
     ///     prune, so it runs as the last step of every deploy.
     /// </summary>
     private const int RegistryTagsToKeep = 3;
-
-    private const string RegistryApiBaseUrl = "https://api.scaleway.com/registry/v1/regions/fr-par";
 
     // Aspire environment name -> Terraform environment variable value (cloud-infrastructure/scaleway).
     // Production is added here when that environment is provisioned.
@@ -82,7 +81,7 @@ public sealed partial class DeployCommand : Command
 
     private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck)
     {
-        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform);
+        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
 
         if (!TerraformEnvironmentNames.TryGetValue(aspireEnvironment, out var terraformEnvironment))
         {
@@ -97,14 +96,45 @@ public sealed partial class DeployCommand : Command
 
         PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
 
+        // Each environment's bootstrap runs on its own local state file (the project resource is keyed
+        // by the environment name, so one shared file would replace one environment's project with
+        // another's), and the environment module's remote state is per environment too. Both are
+        // selected explicitly here, so a deploy can never read or plan against another environment.
+        var bootstrapState = $"terraform.{terraformEnvironment}.tfstate";
+        if (!File.Exists(Path.Combine(bootstrapModuleFolder, bootstrapState)))
+        {
+            AnsiConsole.MarkupLine($"[red]No bootstrap state found at {Markup.Escape(Path.Combine(bootstrapModuleFolder, bootstrapState))}.[/] Apply the bootstrap with -state={bootstrapState} (an existing default terraform.tfstate for this environment can be renamed).");
+            Environment.Exit(1);
+        }
+
+        var backendConfiguration = $"environments/{terraformEnvironment}.backend.hcl";
+        if (!File.Exists(Path.Combine(environmentModuleFolder, backendConfiguration)))
+        {
+            AnsiConsole.MarkupLine($"[red]No backend configuration found at {Markup.Escape(Path.Combine(environmentModuleFolder, backendConfiguration))}.[/] Every environment declares its state bucket there (see environments/stage.backend.hcl).");
+            Environment.Exit(1);
+        }
+
+        await RunTerraformAsync(environmentModuleFolder, $"init -reconfigure -input=false -no-color -backend-config={backendConfiguration}", "initialize the environment module's remote state (are the state-bucket credentials exported as AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY?)");
+
         // The environment module needs the project id from the bootstrap module's (local) state.
-        var projectId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)")).Trim();
+        var projectId = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw environment_project_id", "read the bootstrap outputs (has the bootstrap module been applied?)")).Trim();
 
         if (!skipPlanCheck)
         {
             PrintHeader("Checking Terraform convergence");
+
+            // The tier file is the environment's configuration contract (the domain, sizing,
+            // durability); a missing one means the environment is not configured, not that
+            // defaults are fine.
+            var tierFile = Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.tfvars");
+            if (!File.Exists(tierFile))
+            {
+                AnsiConsole.MarkupLine($"[red]No tier configuration found at {tierFile}.[/] Every environment must declare its tier file (see environments/stage.tfvars).");
+                Environment.Exit(1);
+            }
+
             var plan = await ProcessHelper.ExecuteQuietlyAsync(
-                $"terraform plan -detailed-exitcode -input=false -no-color -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
+                $"terraform plan -detailed-exitcode -input=false -no-color -var-file=environments/{terraformEnvironment}.tfvars -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
                 environmentModuleFolder,
                 ("SCW_DEFAULT_PROJECT_ID", projectId)
             );
@@ -134,11 +164,9 @@ public sealed partial class DeployCommand : Command
             File.Delete(stale);
         }
 
-        // The cluster kubeconfig is a sensitive Terraform output; it goes to a temp file that only
-        // the deploy process reads and is deleted afterwards.
-        var kubeconfigPath = Path.Combine(Path.GetTempPath(), $"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml");
+        // The cluster kubeconfig is a sensitive Terraform output: held in memory until the cluster
+        // steps need it as a file (see WriteSecretTempFile).
         var kubeconfig = await RunTerraformAsync(environmentModuleFolder, "output -raw kubeconfig", "read the cluster kubeconfig output");
-        await File.WriteAllTextAsync(kubeconfigPath, kubeconfig);
 
         // Per-workload Secret Manager keys are deploy-time parameters of the Aspire pipeline
         // (env-shaped names, read by the AppHost parameter resolution — same shape as the
@@ -165,6 +193,71 @@ public sealed partial class DeployCommand : Command
         // plain environment value.
         var internalCaPem = (await RunTerraformAsync(environmentModuleFolder, "output -raw internal_ca_pem", "read the internal CA certificate")).Trim();
 
+        // The environment's domain and the hostnames derived from it: the AppHost's Hostnames
+        // and the transactional email sender must match the edge pipelines' custom FQDNs and
+        // the TEM sending domain, so they resolve from the same Terraform outputs instead of
+        // being duplicated in AppHost configuration.
+        var edgeHostnamesJson = await RunTerraformAsync(environmentModuleFolder, "output -json edge_hostnames", "read the edge hostnames output");
+        var edgeHostnames = JsonSerializer.Deserialize<Dictionary<string, string>>(edgeHostnamesJson)
+                            ?? throw new InvalidOperationException("Could not parse edge_hostnames output.");
+        // The platform serves exactly two edge pipelines; both hostnames must be present.
+        if (!edgeHostnames.TryGetValue("app", out var appHostname))
+        {
+            AnsiConsole.MarkupLine("[red]The edge_hostnames output is missing the 'app' hostname.[/] The platform serves exactly two edge pipelines; check the environment module.");
+            Environment.Exit(1);
+        }
+
+        if (!edgeHostnames.TryGetValue("back-office", out var backOfficeHostname))
+        {
+            AnsiConsole.MarkupLine("[red]The edge_hostnames output is missing the 'back-office' hostname.[/] The platform serves exactly two edge pipelines; check the environment module.");
+            Environment.Exit(1);
+        }
+
+        var domainName = (await RunTerraformAsync(environmentModuleFolder, "output -raw domain_name", "read the domain name output")).Trim();
+        var region = (await RunTerraformAsync(environmentModuleFolder, "output -raw region", "read the region output")).Trim();
+        var storageEndpoint = (await RunTerraformAsync(environmentModuleFolder, "output -raw object_storage_endpoint", "read the Object Storage endpoint output")).Trim();
+        var bucketPrefix = (await RunTerraformAsync(environmentModuleFolder, "output -raw bucket_prefix", "read the bucket prefix output")).Trim();
+
+        // The API images compose the SPA bundles straight from the working tree (the csproj
+        // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
+        // running dev stack can leave a dev-mode index.html (unhashed asset references) on top
+        // of production artifacts — deploying that state serves a white screen. Build fresh
+        // and verify every referenced asset exists before handing over to the pipeline.
+        PrintHeader("Building and validating the SPA bundles");
+
+        if (RunCommand.IsAspireRunning())
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning: a local Aspire dev stack is running. Its dev servers can rewrite dist/index.html mid-deploy; if the bundle validation below fails, stop it and deploy again.[/]");
+        }
+
+        await ProcessHelper.RunAsync("npm install --silent", Configuration.ApplicationFolder, "npm install", true);
+        var buildResult = await ProcessHelper.ExecuteQuietlyAsync("npm run build", Configuration.ApplicationFolder);
+        if (!buildResult.Success)
+        {
+            AnsiConsole.MarkupLine("[red]The frontend build failed; the deploy is aborted so a broken bundle cannot ship.[/]");
+            Console.WriteLine(buildResult.CombinedOutput);
+            Environment.Exit(1);
+        }
+
+        foreach (var system in SelfContainedSystemHelper.GetAvailableSelfContainedSystems())
+        {
+            ValidateSpaBundle(Configuration.ApplicationFolder, system);
+            AnsiConsole.MarkupLine($"  [green]✓[/] {system} SPA bundle consistent");
+        }
+
+        // The registry namespace is private: the cluster pulls workload images through a
+        // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
+        // identity (Kapsule nodes have no native registry authentication). Applied idempotently
+        // here — before the release's first pod pulls — so every deploy converges the Secret to
+        // the current pull key.
+        PrintHeader("Applying the cluster's registry pull secret");
+
+        var registryEndpoint = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_endpoint", "read the registry endpoint output")).Trim();
+        var registryHost = registryEndpoint.Split('/')[0];
+        var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
+        var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
+        ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
+
         PrintHeader("Running the Aspire deploy pipeline");
 
         // The Aspire chart is regenerated on every deploy; a stale chart folder confuses
@@ -183,11 +276,21 @@ public sealed partial class DeployCommand : Command
             ("KUBECONFIG", kubeconfigPath),
             ("SKIP_OPENAPI_DOCUMENTS", "true"),
             ("DOCKER_DEFAULT_PLATFORM", "linux/amd64"),
-            ("SCW_DEFAULT_PROJECT_ID", projectId)
+            // Terraform-owned values the AppHost needs at publish time, never hand-copied into
+            // appsettings.<environment>.json.
+            ("Scaleway__ProjectId", projectId),
+            ("Scaleway__Region", region),
+            ("Registry__Endpoint", registryHost),
+            ("Registry__Repository", registryEndpoint[(registryHost.Length + 1)..]),
+            ("Storage__Endpoint", storageEndpoint),
+            ("Storage__BucketPrefix", bucketPrefix)
         };
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
         environmentVariables.Add(("InternalTls__CaPem", internalCaPem));
+        environmentVariables.Add(("Hostnames__App", appHostname));
+        environmentVariables.Add(("Hostnames__BackOffice", backOfficeHostname));
+        environmentVariables.Add(("Email__Sender", $"noreply@{domainName}"));
 
         int exitCode;
         try
@@ -220,12 +323,20 @@ public sealed partial class DeployCommand : Command
             Environment.Exit(exitCode);
         }
 
+        // The rollout, migration-job, and internal TLS patches assert themselves inside the AppHost
+        // before Helm runs; the image references are only final after the push, so they are
+        // checked here.
         ValidateDeployedChartImages(applicationFolder);
-        ValidateChartRolloutStrategy(applicationFolder);
 
-        await PruneRegistryTagsAsync(bootstrapModuleFolder);
+        await PruneRegistryTagsAsync(bootstrapModuleFolder, bootstrapState);
 
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
+
+        // DNS drift is invisible to Terraform (the public zone lives at an external provider), so
+        // every deploy ends by printing the expected records and their live resolution —
+        // informational here, never failing the deploy; the standalone dns-check exits non-zero.
+        PrintHeader("Verifying the DNS records");
+        await DnsCheckCommand.PrintDnsReportAsync();
     }
 
     /// <summary>
@@ -270,49 +381,7 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
     }
 
-    /// <summary>
-    ///     Guards the AppHost's rollout patch (see Program.cs): every deployment in the deployed
-    ///     chart must roll out with maxUnavailable 0, otherwise a single-replica workload drops its
-    ///     last ready pod before the replacement is ready — deploys surface as edge 504 windows.
-    /// </summary>
-    private static void ValidateChartRolloutStrategy(string applicationFolder)
-    {
-        var templatesFolder = Path.Combine(applicationFolder, "AppHost", "aspire-output", "templates");
-        var deployments = Directory.Exists(templatesFolder)
-            ? Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories)
-            : [];
-
-        if (deployments.Length == 0)
-        {
-            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] no deployment.yaml found under {Markup.Escape(templatesFolder)} — the generated chart layout changed, update the deploy command.");
-            Environment.Exit(1);
-        }
-
-        var unpatched = deployments.Where(deployment => !File.ReadAllText(deployment).Contains("maxUnavailable: 0")).ToList();
-        if (unpatched.Count > 0)
-        {
-            foreach (var deployment in unpatched)
-            {
-                AnsiConsole.MarkupLine($"  [red]✗[/] {Markup.Escape(Path.GetDirectoryName(deployment) ?? "unknown")} rolls out with unavailable pods");
-            }
-
-            AnsiConsole.MarkupLine("[red]Chart validation failed:[/] the AppHost rollout patch did not reach every deployment — deploys would cause 504 windows.");
-            Environment.Exit(1);
-        }
-
-        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {deployments.Length} deployments roll out with zero unavailable pods.");
-
-        var migrationJobs = Directory.GetFiles(templatesFolder, "job.yaml", SearchOption.AllDirectories);
-        if (migrationJobs.Length != 2)
-        {
-            AnsiConsole.MarkupLine($"[red]Chart validation failed:[/] expected 2 migration job templates (one per self-contained system), found {migrationJobs.Length} — the AppHost migration patch did not reach the chart.");
-            Environment.Exit(1);
-        }
-
-        AnsiConsole.MarkupLine($"[green]Chart validated:[/] {migrationJobs.Length} pre-upgrade migration jobs.");
-    }
-
-    private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder)
+    private static async Task PruneRegistryTagsAsync(string bootstrapModuleFolder, string bootstrapState)
     {
         var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
         if (string.IsNullOrWhiteSpace(secretKey))
@@ -321,14 +390,16 @@ public sealed partial class DeployCommand : Command
             return;
         }
 
-        var namespaceId = (await RunTerraformAsync(bootstrapModuleFolder, "output -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)")).Trim();
+        var namespaceId = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_namespace_id", "read the registry namespace output (has the bootstrap module output been added and applied?)")).Trim();
         if (string.IsNullOrWhiteSpace(namespaceId))
         {
             AnsiConsole.MarkupLine("[yellow]Registry prune skipped:[/] no registry namespace output.");
             return;
         }
 
-        // Registry namespace IDs are region-qualified (fr-par/<uuid>); the API takes the bare uuid.
+        // Registry namespace IDs are region-qualified (<region>/<uuid>): the region selects the API,
+        // which takes the bare uuid.
+        var registryApiBaseUrl = $"https://api.scaleway.com/registry/v1/regions/{namespaceId.Split('/')[0]}";
         namespaceId = namespaceId.Split('/').Last();
 
         try
@@ -337,15 +408,15 @@ public sealed partial class DeployCommand : Command
             httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
             httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
+            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"{registryApiBaseUrl}/images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
             var kept = 0;
             var deleted = 0;
             foreach (var image in images)
             {
-                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
+                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"{registryApiBaseUrl}/images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
                 foreach (var tag in tags.Skip(RegistryTagsToKeep))
                 {
-                    var response = await httpClient.DeleteAsync($"{RegistryApiBaseUrl}/tags/{tag.Id}");
+                    var response = await httpClient.DeleteAsync($"{registryApiBaseUrl}/tags/{tag.Id}");
                     if (response.IsSuccessStatusCode)
                     {
                         deleted++;
@@ -364,24 +435,109 @@ public sealed partial class DeployCommand : Command
         }
     }
 
-    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string relativeUrl)
+    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string url)
     {
-        var response = await httpClient.GetAsync($"{RegistryApiBaseUrl}/{relativeUrl}");
+        var response = await httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>();
     }
 
+    // Fails loud when a SPA's index.html references an asset that is not in the dist — the
+    // signature of a dev-polluted or stale dist (dev servers write unhashed references over
+    // hashed production bundles), which would deploy a white screen.
+    private static void ValidateSpaBundle(string applicationFolder, string system)
+    {
+        var distFolder = Path.Combine(applicationFolder, system, "WebApp", "dist");
+        var indexPath = Path.Combine(distFolder, "index.html");
+        if (!File.Exists(indexPath))
+        {
+            throw new InvalidOperationException($"Missing {indexPath}. The frontend build should have produced it; investigate before deploying.");
+        }
+
+        var html = File.ReadAllText(indexPath);
+        foreach (Match match in Regex.Matches(html, "(?:src|href)=\"([^\"]+)\""))
+        {
+            var reference = match.Groups[1].Value;
+            if (reference.StartsWith("http", StringComparison.Ordinal) || reference.StartsWith("data:", StringComparison.Ordinal)) continue;
+
+            var relativePath = reference.Replace("%CDN_URL%/", "", StringComparison.Ordinal).TrimStart('/');
+            if (!File.Exists(Path.Combine(distFolder, relativePath)))
+            {
+                throw new InvalidOperationException(
+                    $"{indexPath} references '{reference}', which does not exist in the dist. The dist is stale or was overwritten by a running dev stack. Stop the dev stack, rerun the frontend build, and deploy again."
+                );
+            }
+        }
+    }
+
+    // Secret material that a tool needs as a file (the kubeconfig for kubectl and aspire deploy, the
+    // registry pull Secret manifest) is written owner-only to a temp file. It is deleted when the
+    // process exits, including every Environment.Exit path (finally blocks do not run there), and
+    // callers delete it as soon as they are done; a killed run's kubeconfig is swept by the next
+    // deploy.
+    private static string WriteSecretTempFile(string fileName, string content)
+    {
+        var path = Path.Combine(Path.GetTempPath(), fileName);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => File.Delete(path);
+        var ownerOnly = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) ownerOnly.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using var writer = new StreamWriter(path, ownerOnly);
+        writer.Write(content);
+        return path;
+    }
+
+    // Terraform outputs carry secrets (the kubeconfig, IAM keys), so they are captured in memory
+    // only, and a failure reports stderr alone.
     private static async Task<string> RunTerraformAsync(string workingDirectory, string arguments, string failureHint)
     {
-        var result = await ProcessHelper.ExecuteQuietlyAsync($"terraform {arguments}", workingDirectory);
+        var result = await ProcessHelper.ExecuteSensitiveAsync($"terraform {arguments}", workingDirectory);
         if (!result.Success)
         {
-            AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.GetErrorSummary("terraform")));
+            AnsiConsole.MarkupLine($"[red]terraform {arguments} failed:[/] " + Markup.Escape(result.StdErr.Trim()));
             AnsiConsole.MarkupLine($"[dim]{failureHint}[/]");
             Environment.Exit(result.ExitCode);
         }
 
         return result.StdOut;
+    }
+
+    // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
+    // exists on disk only in the owner-only temp manifest, only for the duration of the apply.
+    private static void ApplyRegistryPullSecret(string kubeconfigPath, string registryHost, string secretKey)
+    {
+        var dockerConfigJson = JsonSerializer.Serialize(new
+            {
+                auths = new Dictionary<string, object>
+                {
+                    // Scaleway registry auth: the username is a fixed placeholder, the secret key
+                    // authenticates.
+                    [registryHost] = new { username = "nologin", password = secretKey }
+                }
+            }
+        );
+        var secretManifest = $"""
+                              ---
+                              apiVersion: "v1"
+                              kind: "Secret"
+                              metadata:
+                                name: "scaleway-registry-pull"
+                                namespace: "default"
+                              type: "kubernetes.io/dockerconfigjson"
+                              data:
+                                .dockerconfigjson: "{Convert.ToBase64String(Encoding.UTF8.GetBytes(dockerConfigJson))}"
+                              """;
+
+        var manifestPath = WriteSecretTempFile($"pp-registry-pull-secret-{Guid.NewGuid():N}.yaml", secretManifest);
+        var result = ProcessHelper.ExecuteQuietly($"kubectl --kubeconfig {kubeconfigPath} apply -f {manifestPath}");
+        File.Delete(manifestPath);
+        if (!result.Success)
+        {
+            AnsiConsole.MarkupLine("[red]Applying the registry pull secret failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
+            AnsiConsole.MarkupLine("[dim]The registry is private, so without the pull secret no pod can pull its image.[/]");
+            Environment.Exit(result.ExitCode);
+        }
+
+        AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
     }
 
     private static void PrintHeader(string title)

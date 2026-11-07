@@ -5,8 +5,10 @@ namespace BackOffice.Features.Shared;
 
 // Mirrored contract types of account's internal API: the back-office owns the staff-facing
 // contract, account owns the data, and these types keep the two sides' wire format identical.
-// Every type here MUST stay in sync with account's equivalent (name, members, and serialization)
-// — the shared string-enum converter is what carries enum values across the boundary.
+// Every response type must match account's equivalent on the wire (names, members, enum values):
+// the InternalApiContractTests on both sides compare against account's committed contract file
+// (shared-kernel/Tests/Contracts), so a drift fails a test. The shared string-enum converter is
+// what carries enum values across the boundary.
 // Strongly-typed IDs derive the same SharedKernel bases account's do, so they serialize
 // identically and render as plain strings in the OpenAPI document the SPA client generates from.
 

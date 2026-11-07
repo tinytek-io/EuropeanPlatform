@@ -28,3 +28,14 @@ output "environment_project_id" {
   description = "The per-environment Scaleway Project ID (feed this to the environment module's project_id)"
   value       = scaleway_account_project.environment.id
 }
+
+output "registry_pull_access_key" {
+  description = "Access key of the cluster's read-only registry-pull identity (dockerconfigjson username-adjacent; the secret key authenticates)"
+  value       = scaleway_iam_api_key.registry_pull.access_key
+}
+
+output "registry_pull_secret_key" {
+  description = "Secret key of the cluster's read-only registry-pull identity — the deploy command writes it into the cluster's dockerconfigjson pull Secret (sensitive)"
+  value       = scaleway_iam_api_key.registry_pull.secret_key
+  sensitive   = true
+}

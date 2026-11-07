@@ -1,10 +1,7 @@
-using System.Collections.Concurrent;
-using System.Globalization;
-using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
+using Scaleway.Sdk;
+using ScwSecret = Scaleway.Sdk.Secret.V1Beta1;
 
 namespace SharedKernel.Configuration;
 
@@ -16,28 +13,27 @@ namespace SharedKernel.Configuration;
 /// </summary>
 public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationProvider, IDisposable
 {
-    private const string ApiUrl = "https://api.scaleway.com/secret-manager/v1beta1/regions/{0}";
-    private const int PageSize = 100;
-    private readonly string _apiUrl;
-
     private readonly HttpClient _httpClient;
-    private readonly ILogger _logger;
     private readonly string _path;
     private readonly string _projectId;
+    private readonly string _region;
     private readonly TimeSpan? _reloadInterval;
+    private readonly ScwSecret.SecretApi _secretApi;
     private int _refreshInProgress;
     private Timer? _refreshTimer;
 
-    public ScalewaySecretManagerConfigurationProvider(string secretKey, string projectId, string region, string path, TimeSpan? reloadInterval, ILogger? logger = null)
+    public ScalewaySecretManagerConfigurationProvider(string secretKey, string projectId, string region, string path, TimeSpan? reloadInterval)
     {
         _projectId = projectId;
-        _apiUrl = string.Format(CultureInfo.InvariantCulture, ApiUrl, region);
+        _region = region;
         _path = path;
         _reloadInterval = reloadInterval;
-        _logger = logger ?? NullLogger.Instance;
-        _httpClient = new HttpClient();
+        // The SDK owns pagination and error classification; the provider only maps secrets to
+        // configuration keys. A workload holds just its secret key (no access key or organization),
+        // so the SDK runs over a client that carries the key, like the Transactional Email client.
+        _httpClient = new HttpClient { BaseAddress = new Uri("https://api.scaleway.com/") };
         _httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _secretApi = new ScwSecret.SecretApi(new ScalewayApiClient(_httpClient));
     }
 
     public void Dispose()
@@ -46,9 +42,12 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
         _httpClient.Dispose();
     }
 
+    // The startup load fails loud: a workload that cannot read its secrets (a wrong key, a missing
+    // SecretManagerReadOnly permission or path condition, an API outage) must crash-loop visibly
+    // rather than start on placeholder values and fail per request later.
     public override void Load()
     {
-        LoadAsync().GetAwaiter().GetResult();
+        Data = ReadSecretsAsync().GetAwaiter().GetResult();
 
         if (_reloadInterval is { } interval)
         {
@@ -57,8 +56,8 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
     }
 
     // The timer fires on its interval regardless of how long the previous refresh took, and an
-    // exception on a timer thread is an unobserved task failure. Overlapping refreshes are skipped
-    // and a failed refresh keeps the previous snapshot.
+    // exception on a timer thread is an unobserved task failure. Overlapping refreshes are skipped,
+    // a failed refresh keeps the previous snapshot, and listeners are only notified of real changes.
     private async Task RefreshAsync()
     {
         if (Interlocked.CompareExchange(ref _refreshInProgress, 1, 0) == 1)
@@ -68,11 +67,18 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
 
         try
         {
-            await LoadAsync();
+            var data = await ReadSecretsAsync();
+            if (data.Count == Data.Count && data.All(entry => Data.TryGetValue(entry.Key, out var value) && value == entry.Value))
+            {
+                return;
+            }
+
+            Data = data;
+            OnReload();
         }
         catch (Exception exception)
         {
-            Log($"refresh failed with {exception.Message} — keeping the previously loaded configuration");
+            await Console.Error.WriteLineAsync($"Scaleway Secret Manager: refresh failed with {exception.Message} — keeping the previously loaded configuration");
         }
         finally
         {
@@ -80,120 +86,47 @@ public sealed class ScalewaySecretManagerConfigurationProvider : ConfigurationPr
         }
     }
 
-    private async Task LoadAsync()
+    private async Task<Dictionary<string, string?>> ReadSecretsAsync()
     {
-        var secrets = await ListSecretsAsync();
-        if (secrets is null)
-        {
-            return;
-        }
-
-        var previousData = Data;
-        var data = new ConcurrentDictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var secret in secrets)
+        var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var secret in await ListSecretsAsync())
         {
             // Secret names follow the environment-variable convention (ConnectionStrings__account-database).
             // Configuration keys are ':'-separated like the environment-variables provider produces,
             // so '__' must be translated or the values would coexist with (not override) the
-            // appsettings placeholders.
-            var configurationKey = secret.Name.Replace("__", ":");
-            var (value, failed) = await AccessSecretValueAsync(secret.Id, secret.Name);
+            // appsettings placeholders. A secret without an enabled version (deliberately disabled)
+            // is left out.
+            var value = await AccessSecretValueAsync(secret);
             if (value is not null)
             {
-                data[configurationKey] = value;
-            }
-            else if (failed && previousData.TryGetValue(configurationKey, out var previousValue))
-            {
-                // A failed access must not drop a value the process already holds. A secret whose
-                // enabled version was deliberately removed answers with no value and no failure,
-                // and does get dropped.
-                data[configurationKey] = previousValue;
+                data[secret.Name.Replace("__", ":")] = value;
             }
         }
 
-        Data = new Dictionary<string, string?>(data, StringComparer.OrdinalIgnoreCase);
-        OnReload();
+        return data;
     }
 
-    // Both calls below degrade rather than throw: configuration loads at startup, so a permissions
-    // problem or a transient API failure must not take the process down — it logs and starts with
-    // whatever it could read.
-    private async Task<List<SecretSummary>?> ListSecretsAsync()
+    private async Task<IEnumerable<SecretSummary>> ListSecretsAsync()
     {
-        var secrets = new List<SecretSummary>();
+        var secrets = await _secretApi.ListSecretsAsync(new ScwSecret.ListSecretsRequest { ProjectId = _projectId, Path = _path }, _region);
+        return secrets.Select(secret => new SecretSummary(secret.Id!, secret.Name!));
+    }
+
+    // A secret without an enabled version (deliberately disabled) answers 404, which the SDK
+    // returns as null: the value is left out. Any other failure propagates.
+    private async Task<string?> AccessSecretValueAsync(SecretSummary secret)
+    {
+        var response = await _secretApi.AccessSecretVersionAsync(secret.Id, "latest_enabled", _region);
+        if (response?.Data is not { } base64) return null;
+
         try
         {
-            for (var page = 1;; page++)
-            {
-                var response = await HttpGetJson($"{_apiUrl}/secrets?project_id={_projectId}&path={Uri.EscapeDataString(_path)}&page_size={PageSize}&page={page}");
-                if (response is null)
-                {
-                    return null;
-                }
-
-                var items = response.RootElement.GetProperty("secrets");
-                foreach (var item in items.EnumerateArray())
-                {
-                    secrets.Add(new SecretSummary(item.GetProperty("id").GetString()!, item.GetProperty("name").GetString()!));
-                }
-
-                if (items.GetArrayLength() < PageSize)
-                {
-                    return secrets;
-                }
-            }
+            return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
         }
-        catch (Exception exception)
+        catch (FormatException exception)
         {
-            Log($"listing secrets failed with {exception.Message} — keeping the previously loaded configuration values (none at startup)");
-            return null;
+            throw new InvalidOperationException($"Secret '{secret.Name}' holds a value that is not valid base64.", exception);
         }
-    }
-
-    private async Task<(string? Value, bool Failed)> AccessSecretValueAsync(string secretId, string secretName)
-    {
-        try
-        {
-            var response = await HttpGetJson($"{_apiUrl}/secrets/{secretId}/versions/{Uri.EscapeDataString("latest_enabled")}/access");
-            if (response is null || !response.RootElement.TryGetProperty("data", out var data) || data.GetString() is not { } base64)
-            {
-                Log($"secret '{secretName}' has no accessible enabled version — its configuration value will be missing");
-                return (null, false);
-            }
-
-            return (Encoding.UTF8.GetString(Convert.FromBase64String(base64)), false);
-        }
-        catch (FormatException)
-        {
-            Log($"secret '{secretName}' holds a value that is not valid base64 — its configuration value will be missing");
-            return (null, true);
-        }
-        catch (Exception exception)
-        {
-            Log($"accessing secret '{secretName}' failed with {exception.Message} — its configuration value will be missing (403 means the key lacks the SecretManagerReadOnly permission set or its path condition)");
-            return (null, true);
-        }
-    }
-
-    private async Task<JsonDocument?> HttpGetJson(string requestUri)
-    {
-        using var response = await _httpClient.GetAsync(requestUri);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"HTTP {(int)response.StatusCode} from {requestUri}");
-        }
-
-        return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-    }
-
-    private void Log(string message)
-    {
-        // Configuration providers run before the DI logger exists, so failures are also written
-        // to stderr; otherwise a startup fetch failure is invisible (the process silently runs
-        // on its placeholder values until something downstream breaks).
-        Console.Error.WriteLine($"Scaleway Secret Manager: {message}");
-        _logger.LogError("Scaleway Secret Manager: {Message}", message);
     }
 
     private sealed record SecretSummary(string Id, string Name);

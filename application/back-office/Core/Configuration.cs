@@ -1,7 +1,6 @@
 using BackOffice.Authentication;
 using BackOffice.ExecutionContext;
 using BackOffice.Integrations.Account;
-using BackOffice.Integrations.InternalTls;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -42,7 +41,7 @@ public static class Configuration
 
         private IHostApplicationBuilder AddAccountInternalApiClient()
         {
-            builder.Services.AddTransient<BackOfficeDelegationTokenGenerator>();
+            builder.Services.AddSingleton<BackOfficeDelegationTokenGenerator>();
             builder.Services.AddTransient<BackOfficeDelegationHandler>();
 
             // Same address contract as the app-gateway's account client: the deploy passes
@@ -77,7 +76,7 @@ public static class Configuration
             // The staff identity scheme and the SPA-facing policies. The shared API stack
             // registers the platform's application scheme and the delegation contract; the staff
             // identity is this system's own: the handler resolves the principal from the mock
-            // selector's EasyAuth-style headers or the OIDC session cookie.
+            // selector's in-process identity or the OIDC session cookie, never from request headers.
             services
                 .AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, BackOfficeIdentityHandler>(BackOfficeIdentityDefaults.AuthenticationScheme, _ => { });

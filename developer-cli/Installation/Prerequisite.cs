@@ -14,6 +14,7 @@ public abstract record Prerequisite
     public static readonly Prerequisite TypeScriptLanguageServer = new CommandLineToolPrerequisite("typescript-language-server", "TypeScript Language Server", new Version(4, 3, 0));
     public static readonly Prerequisite CSharpLanguageServer = new CommandLineToolPrerequisite("csharp-ls", "C# Language Server", new Version(0, 22, 0));
     public static readonly Prerequisite Terraform = new CommandLineToolPrerequisite("terraform", "Terraform", new Version(1, 16));
+    public static readonly Prerequisite Kubectl = new CommandLineToolPrerequisite("kubectl", "kubectl", new Version(1, 28));
 
     protected abstract bool IsValid();
 

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using NJsonSchema.Generation;
 using SharedKernel.Antiforgery;
 using SharedKernel.Authentication;
@@ -362,12 +363,12 @@ public static class ApiDependencyConfiguration
         public IServiceCollection AddHttpForwardHeaders()
         {
             // Ensure correct client IP addresses are set for requests
-            // This is required when running behind a reverse proxy like YARP or Azure Container Apps
+            // This is required when running behind a reverse proxy like YARP or the cluster's ingress
             return services.Configure<ForwardedHeadersOptions>(options =>
                 {
-                    // X-Forwarded-For surfaces real upstream client IPs in Application Insights / logs.
+                    // X-Forwarded-For surfaces real upstream client IPs in telemetry and logs.
                     // X-Forwarded-Proto sets Request.Scheme so generated absolute URLs use https.
-                    // X-Forwarded-Host is intentionally NOT enabled: each Azure container app
+                    // X-Forwarded-Host is intentionally NOT enabled: each deployed workload
                     // registers only the SPA it serves (see Account.Api Program.cs), so endpoint
                     // matching no longer depends on Request.Host being rewritten from forwarded
                     // headers, and dev's dual-Kestrel setup delivers the right Host directly.
@@ -421,13 +422,13 @@ public sealed class ConfigureJwtBearerOptions(ITokenSigningClient tokenSigningCl
 }
 
 /// <summary>
-///     Wires the token signing validation parameters into the back-office delegation scheme. The
-///     parameters are the platform's (same HMAC key and issuer as application tokens) except for
-///     the audience: only delegation tokens minted by the back-office BFF carry
-///     BackOfficeDelegationDefaults.DelegationAudience, so application tokens are rejected here.
-///     Registered as IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
+///     Validates back-office delegation tokens: ES256 signatures against the delegation public key,
+///     the back-office issuer, and the delegation audience. Application tokens (HMAC, platform issuer
+///     and audience) fail every one of those checks. The public key resolves on the first delegation
+///     token, so systems without internal back-office routes need no key. Registered as
+///     IConfigureNamedOptions for the same reason as ConfigureJwtBearerOptions.
 /// </summary>
-public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient tokenSigningClient)
+public sealed class ConfigureBackOfficeDelegationJwtOptions(IConfiguration configuration)
     : IConfigureNamedOptions<JwtBearerOptions>
 {
     public void Configure(string? name, JwtBearerOptions options)
@@ -437,11 +438,19 @@ public sealed class ConfigureBackOfficeDelegationJwtOptions(ITokenSigningClient 
             return;
         }
 
-        options.TokenValidationParameters = tokenSigningClient.GetTokenValidationParameters(
-            validateLifetime: true,
-            clockSkew: TimeSpan.FromSeconds(5)
-        );
-        options.TokenValidationParameters.ValidAudience = BackOfficeDelegationDefaults.DelegationAudience;
+        var publicKey = new Lazy<SecurityKey>(() => BackOfficeDelegationKeys.LoadPublicKey(configuration));
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = BackOfficeDelegationDefaults.DelegationIssuer,
+            ValidateAudience = true,
+            ValidAudience = BackOfficeDelegationDefaults.DelegationAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeyResolver = (_, _, _, _) => [publicKey.Value],
+            ValidAlgorithms = [BackOfficeDelegationKeys.Algorithm],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(5)
+        };
     }
 
     public void Configure(JwtBearerOptions options)

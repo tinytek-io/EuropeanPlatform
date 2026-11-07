@@ -3,11 +3,6 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-# Bicep generated artifacts
-cloud-infrastructure/cluster/main-cluster.parameters.json
-cloud-infrastructure/cluster/main-cluster.json
-cloud-infrastructure/modules/*.json
-
 # User-specific files
 *.rsuser
 *.suo
@@ -439,6 +434,3 @@ application/playwright.combined.config.ts
 .claude/scheduled_tasks.lock
 .claude/worktrees
 
-# Authelia dev-harness TLS material — generated at startup into obj/authelia (AutheliaTls)
-application/AppHost/Authelia/authelia-tls.key
-application/AppHost/Authelia/authelia-tls.pem

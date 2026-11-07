@@ -4,8 +4,9 @@ This directory is the **bootstrap tier** of the Scaleway migration. It solves a 
 problem: the main Terraform module stores its state in Object Storage and `aspire publish`/`deploy`
 push images to the Container Registry, so both must exist *before* any module can run against them.
 
-The bootstrap itself therefore runs with **local state** (a single `terraform.tfstate` file next to
-this module). That is deliberate and documented here — it is the only tier that does. Keep the
+The bootstrap itself therefore runs with **local state** (one `terraform.<environment>.tfstate` file
+per environment next to this module). That is deliberate and documented here — it is the only tier
+that does. Keep the
 bootstrap file safe or re-run the bootstrap; all it does is create the state bucket, the registry
 namespace, and the deploy pipeline credentials.
 
@@ -25,6 +26,46 @@ namespace, and the deploy pipeline credentials.
 After the first deploy, point the staging hostnames at the cluster and verify the sending
 domain: see the [DNS guide](docs/dns-guide.md).
 
+## Environment tiers (preview / staging / production)
+
+One bootstrap module and one environment module serve every tier. An environment is a
+**tier file** (`environment/environments/<terraform-environment>.tfvars`) plus a bootstrap
+apply — never a module change. The deploy command refuses to plan an environment without its
+tier file, and every environment-specific value lives in that file (the domain, sizing,
+durability, the CCM-captured LB ids). Sizing and durability defaults reproduce staging; the
+public identity (`domain_name`, `edge_pipeline_name_prefix`) has no default, so a tier file that
+omits it fails at plan time.
+
+| Knob | preview (future) | staging (`stage.tfvars`) | production (future) |
+|---|---|---|---|
+| Bootstrap project | `pp-preview` + own state bucket | `pp-stage` | `pp-prod` + own state bucket |
+| Domain (`domain_name`) | `preview.europeanplatform.net` | `staging.europeanplatform.net` | `europeanplatform.net` (apex) |
+| Node pool | 1 x DEV1-S | 2 x PLAY2-NANO | 2+ x PLAY2-NANO or larger |
+| Database tier / HA | db-dev-s, no HA | db-dev-s, no HA | db-s or larger, HA (`database_ha = true`) |
+| Backups | 24 h / 7 d | 24 h / 7 d (pinned) | 24 h / longer retention |
+| Edge | own plan, own pipelines | professional plan, 2 pipelines | own plan, apex hostnames |
+| Registry | private; cluster pulls via the read-only registry-pull identity | same | same |
+
+The domain is the single public-facing knob: the edge hostnames derive as `app.<domain>` /
+`back-office.<domain>`, Transactional Email sends from the zone itself, and the deploy command
+passes all three to the AppHost (`Hostnames__App`, `Hostnames__BackOffice`, `Email__Sender`)
+so application configuration never duplicates them.
+
+Bootstrap runs on **local state**; each environment's bootstrap state is a separate file
+(`terraform apply -state=terraform.<environment>.tfstate`), because the project resource is keyed
+by the environment name — applying a second environment into one state file would REPLACE the
+first environment's project. The environment module's remote state bucket is per-environment
+(created by that environment's bootstrap) and declared in `environment/environments/<environment>.backend.hcl`;
+switching the working copy between environments is
+`terraform init -reconfigure -backend-config=environments/<environment>.backend.hcl`, which the deploy
+command runs before it reads any state.
+
+Known provider gap (terraform-provider-scaleway ~> 2.86): `scaleway_k8s_cluster` has no
+apiserver access-restriction attributes, so the Kubernetes API server stays publicly reachable
+with no allow-list. Revisit on the next provider upgrade; until then it is documented exposure,
+mitigated by kubeconfig being the only credential.
+
+
 ## Usage
 
 Credentials come from the environment (`SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,
@@ -42,24 +83,32 @@ see the cluster-ops README).
 ```bash
 cd cloud-infrastructure/scaleway/bootstrap
 terraform init
-terraform apply -var prefix=<your-unique-prefix> -var environment=stage
-terraform output   # registry endpoint + pipeline API key (secret is sensitive)
+terraform apply -state=terraform.stage.tfstate -var prefix=<your-unique-prefix> -var environment=stage
+terraform output -state=terraform.stage.tfstate   # registry endpoint + pipeline API key (secret is sensitive)
 ```
 
 ## Handover to the main module
 
-The main module (staging/prod topology) stores its state in the bucket created here, using S3
-conditional-write locking (Terraform >= 1.10). Fill in the bucket name and use the pipeline API key
-as the S3 credentials:
+The environment module stores its state in the bucket created here, using S3 conditional-write
+locking (Terraform >= 1.10). The backend block in `environment/main.tf` holds the shared settings;
+each environment's `environments/<environment>.backend.hcl` supplies its bucket (the bootstrap's
+`<prefix>-<environment>-<region>-terraform-state`) and endpoint, and the pipeline API key is the S3
+credential. Together they amount to:
 
 ```hcl
 terraform {
   backend "s3" {
     bucket       = "<prefix>-<environment>-<region>-terraform-state"
-    key          = "platformplatform/terraform.tfstate"
-    region       = "fr-par"
-    endpoint     = "https://s3.fr-par.scw.cloud"
+    key          = "platformplatform/environment.tfstate"
+    region       = "us-east-1" # any value: requests go to the endpoint below
     use_lockfile = true
+    endpoints = {
+      s3 = "https://s3.<region>.scw.cloud"
+    }
+    skip_credentials_validation = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
   }
 }
 ```

@@ -11,10 +11,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
+using SharedKernel.Authentication;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Authentication;
 
 namespace Account.Tests.BackOffice;
 
@@ -35,10 +37,6 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
         // exercise CORS themselves.
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, "https://localhost");
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, "https://localhost");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         Environment.SetEnvironmentVariable("Stripe__AllowMockProvider", "true");
         Environment.SetEnvironmentVariable("Stripe__PublishableKey", "pk_test_mock_publishable_key");
         Environment.SetEnvironmentVariable("BypassAntiforgeryValidation", "true");
@@ -85,7 +83,9 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                     ["BackOffice:AdminsGroupId"] = TestStaffIdentities.AdminsGroupId,
                     // The user-facing SPA shell is scoped to Hostnames:App via UseHostScopedSinglePageAppFallback.
                     // Tests that target the user-facing host use app.test.localhost.
-                    ["Hostnames:App"] = "app.test.localhost"
+                    ["Hostnames:App"] = "app.test.localhost",
+                    // The internal API validates delegation tokens against the back-office's public key.
+                    [BackOfficeDelegationDefaults.PublicKeyConfigurationKey] = TestBackOfficeDelegationKeys.PublicKeyPem
                 };
 
                 configuration.AddInMemoryCollection(backOfficeSettings);

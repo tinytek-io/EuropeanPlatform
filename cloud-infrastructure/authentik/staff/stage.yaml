@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Staging staff. Each entry is one person: sign-in is by an emailed one-time code to `email` (or a
+# passkey they add themselves); nobody has a password. Groups: `staff` may use the back-office,
+# `admins` additionally unlocks admin actions. Offboard by setting `is_active: false` — removing an
+# entry deletes nothing in authentik.
+version: 1
+metadata:
+  name: EuropeanPlatform staff (staging)
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: EuropeanPlatform staff identity
+      required: true
+  # - model: authentik_core.user
+  #   identifiers:
+  #     username: jane.doe
+  #   attrs:
+  #     name: Jane Doe
+  #     email: jane.doe@example.eu
+  #     type: internal
+  #     is_active: true
+  #     groups:
+  #       - !Find [authentik_core.group, [name, staff]]
+  #       - !Find [authentik_core.group, [name, admins]]

@@ -1,6 +1,4 @@
 using System.Net;
-using System.Text;
-using System.Text.Json;
 using BackOffice.Authentication;
 using BackOffice.Authentication.MockEasyAuth;
 using FluentAssertions;
@@ -17,8 +15,6 @@ namespace BackOffice.Tests.Authentication;
 
 public sealed class MockEasyAuthMiddlewareTests
 {
-    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
-
     [Fact]
     public async Task Invoke_WhenLoginPathRequested_ShouldRedirectToMockLoginPage()
     {
@@ -136,15 +132,13 @@ public sealed class MockEasyAuthMiddlewareTests
     }
 
     [Fact]
-    public async Task Invoke_WhenCookieCarriesKnownIdentity_ShouldInjectClientPrincipalHeaders()
+    public async Task Invoke_WhenCookieCarriesKnownIdentity_ShouldAttachIdentity()
     {
         // Arrange
-        var observed = new Dictionary<string, string>();
+        MockEasyAuthIdentity? observed = null;
         var middleware = new MockEasyAuthMiddleware(ctx =>
             {
-                observed[BackOfficeIdentityDefaults.PrincipalNameHeader] = ctx.Request.Headers[BackOfficeIdentityDefaults.PrincipalNameHeader].ToString();
-                observed[BackOfficeIdentityDefaults.PrincipalIdHeader] = ctx.Request.Headers[BackOfficeIdentityDefaults.PrincipalIdHeader].ToString();
-                observed[BackOfficeIdentityDefaults.PrincipalPayloadHeader] = ctx.Request.Headers[BackOfficeIdentityDefaults.PrincipalPayloadHeader].ToString();
+                observed = MockEasyAuthIdentities.GetAttached(ctx);
                 return Task.CompletedTask;
             }
         );
@@ -164,37 +158,34 @@ public sealed class MockEasyAuthMiddlewareTests
         await middleware.InvokeAsync(context);
 
         // Assert
-        observed[BackOfficeIdentityDefaults.PrincipalNameHeader].Should().Be(admin.Name);
-        observed[BackOfficeIdentityDefaults.PrincipalIdHeader].Should().Be(admin.ObjectId);
-
-        var payloadBytes = Convert.FromBase64String(observed[BackOfficeIdentityDefaults.PrincipalPayloadHeader]);
-        var json = Encoding.UTF8.GetString(payloadBytes);
-        var principal = JsonSerializer.Deserialize<BackOfficeClientPrincipal>(json, WebJsonOptions);
-        principal!.Claims.Should().Contain(c => c.Type == BackOfficeIdentityDefaults.GroupsClaimType && c.Value == "BackOfficeAdmins");
+        observed.Should().Be(admin);
     }
 
-    [Fact]
-    public async Task Invoke_WhenNoCookie_ShouldNotInjectHeaders()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("does-not-exist")]
+    public async Task Invoke_WhenCookieMissingOrUnknown_ShouldNotAttachIdentity(string? cookieValue)
     {
         // Arrange
-        var observed = new List<string>();
+        MockEasyAuthIdentity? observed = null;
         var middleware = new MockEasyAuthMiddleware(ctx =>
             {
-                if (ctx.Request.Headers.ContainsKey(BackOfficeIdentityDefaults.PrincipalNameHeader)) observed.Add("name");
+                observed = MockEasyAuthIdentities.GetAttached(ctx);
                 return Task.CompletedTask;
             }
         );
         var context = new DefaultHttpContext { Request = { Path = "/api/back-office/me", Method = HttpMethods.Get } };
+        if (cookieValue is not null) context.Request.Headers.Cookie = $"{MockEasyAuthCookie.CookieName}={cookieValue}";
 
         // Act
         await middleware.InvokeAsync(context);
 
         // Assert
-        observed.Should().BeEmpty();
+        observed.Should().BeNull();
     }
 
     [Fact]
-    public async Task UseMockEasyAuthInDevelopment_WhenOidcProviderIsConfigured_ShouldNotRegisterTheMiddleware()
+    public async Task UseMockEasyAuthWhenEnabled_WhenOidcProviderIsConfigured_ShouldNotRegisterTheMiddleware()
     {
         // Arrange: a fully configured OIDC provider, even in the development environment — the
         // mock would otherwise intercept the login path the provider's challenge endpoint maps.
@@ -210,7 +201,7 @@ public sealed class MockEasyAuthMiddlewareTests
     }
 
     [Fact]
-    public async Task UseMockEasyAuthInDevelopment_WhenNoProviderInDevelopment_ShouldRegisterTheMiddleware()
+    public async Task UseMockEasyAuthWhenEnabled_WhenNoProviderInDevelopment_ShouldRegisterTheMiddleware()
     {
         // Arrange
         var (pipeline, context) = BuildPipeline(false);
@@ -225,7 +216,7 @@ public sealed class MockEasyAuthMiddlewareTests
 
     // A minimal pipeline host — configuration (optionally with a fully configured OIDC provider),
     // a development environment, and a terminal handler — invoked on the login path, enough to
-    // observe whether UseMockEasyAuthInDevelopment registered the mock selector.
+    // observe whether UseMockEasyAuthWhenEnabled registered the mock selector.
     private static (RequestDelegate Pipeline, HttpContext Context) BuildPipeline(bool oidcConfigured)
     {
         var settings = new Dictionary<string, string?>
@@ -247,7 +238,7 @@ public sealed class MockEasyAuthMiddlewareTests
         var provider = services.BuildServiceProvider();
 
         var app = new ApplicationBuilder(provider);
-        app.UseMockEasyAuthInDevelopment();
+        app.UseMockEasyAuthWhenEnabled();
         app.Run(_ => Task.CompletedTask);
 
         var context = new DefaultHttpContext

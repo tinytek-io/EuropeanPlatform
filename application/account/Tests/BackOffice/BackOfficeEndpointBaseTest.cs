@@ -5,10 +5,14 @@ using Bogus;
 using JetBrains.Annotations;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using SharedKernel.Authentication;
 using SharedKernel.Authentication.TokenSigning;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Authentication;
 using SharedKernel.Tests.Telemetry;
 
 namespace Account.Tests.BackOffice;
@@ -65,6 +69,8 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
 
     protected MockStripeState StripeState { get; }
 
+    protected IServiceProvider Services => _factory.Services;
+
     public void Dispose()
     {
         Dispose(true);
@@ -112,11 +118,32 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
 
     private void AddDelegationToken(HttpClient client, ClaimsPrincipal principal)
     {
-        var tokenGenerator = new BackOfficeDelegationTokenGenerator(
-            _factory.Services.GetRequiredService<ITokenSigningClient>(),
-            _factory.Services.GetRequiredService<TimeProvider>()
-        );
+        var signingConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([new KeyValuePair<string, string?>(BackOfficeDelegationDefaults.SigningKeyConfigurationKey, TestBackOfficeDelegationKeys.SigningKeyPem)])
+            .Build();
+        var tokenGenerator = new BackOfficeDelegationTokenGenerator(signingConfiguration, _factory.Services.GetRequiredService<TimeProvider>());
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenGenerator.Generate(principal));
+    }
+
+    // A client carrying a token signed with the platform's HMAC key (the key every application
+    // token uses) that otherwise looks like a delegation token: same issuer, audience, and admin
+    // groups. The internal API must reject it — only the back-office's delegation key is trusted.
+    protected HttpClient CreateClientWithPlatformSignedToken(TestStaffIdentity identity)
+    {
+        var client = CreateClientWithoutIdentity();
+        var now = _factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
+        var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(BuildStaffPrincipal(identity).Claims),
+                NotBefore = now.UtcDateTime,
+                Expires = now.AddMinutes(2).UtcDateTime,
+                Issuer = BackOfficeDelegationDefaults.DelegationIssuer,
+                Audience = BackOfficeDelegationDefaults.DelegationAudience,
+                SigningCredentials = _factory.Services.GetRequiredService<ITokenSigningClient>().GetSigningCredentials()
+            }
+        );
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     // Rebuilds the staff principal from a fixed test identity, mirroring the claims the

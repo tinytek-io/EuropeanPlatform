@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using SharedKernel.Configuration;
 
 namespace SharedKernel.Integrations.BlobStorage;
 
@@ -13,7 +14,7 @@ namespace SharedKernel.Integrations.BlobStorage;
 /// </summary>
 public sealed class BlobStorageDataProtectionRepository(IBlobStorageClient blobStorageClient) : IXmlRepository
 {
-    private const string BucketName = "data-protection";
+    public const string BucketName = "data-protection";
     private const string BlobPrefix = "keys/";
 
     public IReadOnlyCollection<XElement> GetAllElements()
@@ -29,7 +30,9 @@ public sealed class BlobStorageDataProtectionRepository(IBlobStorageClient blobS
             if (download is null) continue;
 
             using var stream = download.Value.Stream;
-            elements.Add(XElement.Load(stream));
+            var element = XElement.Load(stream);
+            EnsureEncryptedByPlatform(element, blobName);
+            elements.Add(element);
         }
 
         return elements;
@@ -41,5 +44,24 @@ public sealed class BlobStorageDataProtectionRepository(IBlobStorageClient blobS
         element.Save(stream);
         stream.Position = 0;
         blobStorageClient.UploadAsync(BucketName, $"{BlobPrefix}{friendlyName}.xml", "application/xml", stream, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    // Only keys the platform encrypted are trusted. The storage identity is shared across workloads,
+    // and the framework accepts an unencrypted key or one naming any decryptor type, so a key planted
+    // by anyone with bucket write access would otherwise become a key the whole platform trusts.
+    // Refusing to load the ring fails loud instead. Revocation elements carry no secret.
+    private static void EnsureEncryptedByPlatform(XElement element, string blobName)
+    {
+        if (element.Name.LocalName != "key") return;
+
+        var platformDecryptorPrefix = $"{typeof(AesGcmXmlDecryptor).FullName},";
+        var encryptedSecrets = element.Descendants("encryptedSecret").ToArray();
+        var encryptedByPlatform = encryptedSecrets.Length > 0 &&
+                                  encryptedSecrets.All(secret => secret.Attribute("decryptorType")?.Value.StartsWith(platformDecryptorPrefix, StringComparison.Ordinal) == true) &&
+                                  !element.Descendants("masterKey").Any();
+        if (!encryptedByPlatform)
+        {
+            throw new InvalidOperationException($"The Data Protection key '{blobName}' is not encrypted with the platform keyring key, so the keyring is not loaded.");
+        }
     }
 }

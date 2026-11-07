@@ -22,7 +22,7 @@ OverrideAspireDashboardEnvironmentVariables(ports);
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Publish mode targets a real cluster, so the localhost-only concerns below (port probing, dev
-// certificates, Azurite bootstrapping) must not run. CheckPortAvailability in particular calls
+// certificates, emulator bootstrapping) must not run. CheckPortAvailability in particular calls
 // Environment.Exit(1) when Aspire is already running locally, which would abort every publish.
 var isPublishMode = builder.ExecutionContext.IsPublishMode;
 
@@ -45,18 +45,18 @@ if (isPublishMode)
     kubernetes = builder.AddKubernetesEnvironment("kubernetes")
         .WithHelm(helm => helm
             .WithChartName("platformplatform")
-            .WithChartDescription("PlatformPlatform self-contained systems on Kubernetes")
+            .WithChartDescription("EuropeanPlatform self-contained systems on Kubernetes")
         );
 
     // Images publish to the Scaleway Container Registry created by the bootstrap Terraform module
-    // (cloud-infrastructure/scaleway/bootstrap). Non-secret environment values are resolved from
-    // AppHost configuration at publish time, e.g. appsettings.staging.json via
-    // `aspire publish --environment staging`. Secrets (connection strings, API keys) stay deploy-time
-    // inputs in the chart's values.yaml.
+    // (cloud-infrastructure/scaleway/bootstrap). Values Terraform owns (registry, project, region,
+    // storage, hostnames) are passed by the deploy command from the Terraform outputs; per-tier
+    // choices live in appsettings.<environment>.json. Secrets (connection strings, API keys) stay
+    // deploy-time inputs in the chart's values.yaml.
     var registryEndpoint = builder.Configuration["Registry:Endpoint"]
-                           ?? throw new InvalidOperationException("Publish mode requires Registry:Endpoint (e.g. rg.fr-par.scw.cloud) in AppHost configuration.");
+                           ?? throw new InvalidOperationException("Publish mode requires Registry:Endpoint (the deploy passes the bootstrap module's registry_endpoint host).");
     var registryRepository = builder.Configuration["Registry:Repository"]
-                             ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the Scaleway registry namespace) in AppHost configuration.");
+                             ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the deploy passes the bootstrap module's registry namespace).");
     builder.AddContainerRegistry("scaleway-registry", registryEndpoint, registryRepository);
 }
 
@@ -65,7 +65,11 @@ if (isPublishMode)
 // per-workload keys come from the environment module's workload_secret_manager_keys outputs.
 var secretManagerProjectId = isPublishMode
     ? builder.Configuration["Scaleway:ProjectId"]
-      ?? throw new InvalidOperationException("Publish mode requires Scaleway:ProjectId in AppHost configuration.")
+      ?? throw new InvalidOperationException("Publish mode requires Scaleway:ProjectId (the deploy passes the bootstrap module's environment_project_id).")
+    : string.Empty;
+var scalewayRegion = isPublishMode
+    ? builder.Configuration["Scaleway:Region"]
+      ?? throw new InvalidOperationException("Publish mode requires Scaleway:Region (the deploy passes the environment module's region).")
     : string.Empty;
 
 // Transactional Email is sent through its HTTP API (see ScalewayTransactionalEmailClient), which
@@ -101,36 +105,66 @@ var appPublicUrl = $"https://{appPublicHostname}";
 // production leaves MockEasyAuth:Enabled unset so the middleware and the /login picker stay off.
 var mockEasyAuthEnabled = isPublishMode && builder.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
 
+// The staff group whose members get the back-office admin capability. Development uses the mock
+// admin identity's group; deployed environments name it explicitly per tier (the group the staff
+// identity provider emits), so admin gating never silently depends on the public mock constant.
+var backOfficeAdminsGroupId = isPublishMode
+    ? builder.Configuration["BackOffice:AdminsGroupId"]
+      ?? throw new InvalidOperationException("Publish mode requires BackOffice:AdminsGroupId in AppHost configuration.")
+    : MockEasyAuthIdentities.MockAdminsGroupId;
+
 // cert-manager contact email for the Let's Encrypt issuer (publish mode only).
 var acmeEmail = isPublishMode
     ? builder.Configuration["Acme:Email"]
       ?? throw new InvalidOperationException("Publish mode requires Acme:Email (the ACME account contact) in AppHost configuration.")
     : string.Empty;
 
-// Object storage URLs that AppGateway proxies avatars/logos through (publish mode only).
-var accountStorageUrl = isPublishMode
-    ? builder.Configuration["Storage:AccountUrl"]
-      ?? throw new InvalidOperationException("Publish mode requires Storage:AccountUrl in AppHost configuration.")
+// The Object Storage endpoint AppGateway proxies avatars/logos from, and the environment's bucket
+// name prefix (publish mode only; both from the environment module's outputs).
+var storageEndpoint = isPublishMode
+    ? builder.Configuration["Storage:Endpoint"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:Endpoint (the deploy passes the environment module's object_storage_endpoint).")
     : string.Empty;
-var mainStorageUrl = isPublishMode
-    ? builder.Configuration["Storage:MainUrl"]
-      ?? throw new InvalidOperationException("Publish mode requires Storage:MainUrl in AppHost configuration.")
+var storageBucketPrefix = isPublishMode
+    ? builder.Configuration["Storage:BucketPrefix"]
+      ?? throw new InvalidOperationException("Publish mode requires Storage:BucketPrefix (the deploy passes the environment module's bucket_prefix).")
     : string.Empty;
 
-var certificatePassword = await builder.CreateSslCertificateIfNotExists();
+// Development-machine material only: the dev HTTPS certificate (consumed by the build-only frontend
+// container, which never reaches the manifest) and the user-secrets token signing key. Deployed
+// workloads read their signing key and TLS material from Secret Manager.
+var certificatePassword = isPublishMode ? string.Empty : await builder.CreateSslCertificateIfNotExists();
 
-SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
+if (!isPublishMode)
+{
+    SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
+}
+
+var (delegationSigningKeyPem, delegationPublicKeyPem) = isPublishMode
+    ? (string.Empty, string.Empty)
+    : SecretManagerHelper.GetOrCreateBackOfficeDelegationKeyPair("back-office-delegation-signing-key");
 
 var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = ConfigureGoogleOAuthParameters();
 
 var (stripeConfigured, stripePublishableKey, stripeApiKey, stripeWebhookSecret) = ConfigureStripeParameters();
 var stripeFullyConfigured = stripeConfigured && builder.Configuration["Parameters:stripe-webhook-secret"] is not null and not "not-configured";
 
+// The billing UI (account's subscription pages and the back-office billing/revenue views). Forced on
+// in local development so newcomers see it without configuring Stripe; deployed environments show
+// it only when Stripe is fully configured, so a tier without Stripe never presents billing it
+// cannot serve.
+var subscriptionUiEnabled = !isPublishMode || stripeFullyConfigured ? "true" : "false";
+
 // Local development runs PostgreSQL as a container. Publish targets a managed database, so both
 // databases become externally supplied connection strings (same pattern as blob-storage below:
 // the values are filled from infrastructure outputs at deploy time).
 IResourceBuilder<IResourceWithConnectionString> accountDatabase;
 IResourceBuilder<IResourceWithConnectionString> mainDatabase;
+// The development Postgres server (null in publish mode, where RDB is external); the authentik
+// staff identity harness adds its own database to it.
+IResourceBuilder<PostgresServerResource>? developmentPostgres = null;
+IResourceBuilder<ParameterResource>? developmentPostgresPassword = null;
+IResourceBuilder<ContainerResource>? mailServer = null;
 
 if (isPublishMode)
 {
@@ -140,6 +174,7 @@ if (isPublishMode)
 else
 {
     var postgresPassword = builder.CreateStablePassword("postgres-password");
+    developmentPostgresPassword = postgresPassword;
     var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: ports.Postgres)
         .WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-postgres-data")
         .WithLifetime(ContainerLifetime.Persistent)
@@ -147,6 +182,7 @@ else
 
     accountDatabase = postgres.AddDatabase("account-database", "account");
     mainDatabase = postgres.AddDatabase("main-database", "main");
+    developmentPostgres = postgres;
 }
 
 // Object storage is S3 (Scaleway Object Storage when published, SeaweedFS in local development).
@@ -160,7 +196,7 @@ if (isPublishMode)
 }
 else
 {
-    // Fixed local development credentials, safe like the Azurite key they replace. SeaweedFS's
+    // Fixed local development credentials, safe for a local-only emulator. SeaweedFS's
     // default IAM accepts any credentials without configuration, so the values only exist to keep
     // the connection string shape identical to production.
     const string storageAccessKey = "seaweed-admin";
@@ -187,10 +223,10 @@ else
 // service, so there is nothing to deploy.
 if (!isPublishMode)
 {
-    builder
+    mailServer = builder
         .AddContainer("mail-server", "axllent/mailpit")
         .WithHttpEndpoint(ports.MailpitHttp, 8025)
-        .WithEndpoint(ports.MailpitSmtp, 1025)
+        .WithEndpoint(ports.MailpitSmtp, 1025, name: "smtp")
         .WithLifetime(ContainerLifetime.Persistent)
         .WithUrlForEndpoint("http", u => u.DisplayText = "Read mail here");
 }
@@ -212,16 +248,12 @@ var accountWorkers = builder
     .AddProject<Account_Workers>("account-workers")
     .WithReference(accountDatabase)
     .WithReference(blobStorage)
-    // The BillingDriftWorker resolves StripeClientFactory which reads these. Without them the worker
-    // process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and every
-    // stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every worker start.
-    .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
-    .WithEnvironment("Stripe__ApiKey", stripeApiKey)
-    .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
-    .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    // Mock Stripe is a developer-machine convenience and throws when enabled in deployed environments.
-    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WaitFor(accountDatabase);
+
+// The BillingDriftWorker resolves StripeClientFactory which reads the Stripe settings. Without them the
+// worker process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and
+// every stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every start.
+WithStripeConfiguration(accountWorkers);
 
 // KESTREL_PORT is a development-only listener: AddDevelopmentPort binds it in Development only,
 // so in containers the image default (8080) applies and workers need no inbound listener at all.
@@ -242,24 +274,19 @@ var accountApi = builder
     // bound by the AccountAndBackOffice document layout); the host value only satisfies its
     // startup validation — the staff-facing routes live in the back-office system.
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
     .WithReference(accountDatabase)
     .WithReference(blobStorage)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
     .WithEnvironment("OAuth__Google__ClientSecret", googleOAuthClientSecret)
-    // The mock OAuth/Stripe providers are developer-machine conveniences; the Stripe mock throws
-    // when enabled in deployed environments, so publish mode pins both off explicitly.
+    // The mock OAuth provider is a developer-machine convenience, so publish mode pins it off
+    // explicitly (WithStripeConfiguration does the same for the Stripe mock).
     .WithEnvironment("OAuth__AllowMockProvider", isPublishMode ? "false" : "true")
-    .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
-    .WithEnvironment("Stripe__ApiKey", stripeApiKey)
-    .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
-    .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
-    .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true")
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
-    // Force-on so newcomers see the back-office billing UI without Stripe configured. Set to "false" (or
-    // change back to `stripeFullyConfigured ? "true" : "false"`) to hide all billing/revenue/Stripe data.
-    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
     .WaitFor(accountWorkers);
+
+WithStripeConfiguration(accountApi);
 
 // KESTREL_PORT is a development-only listener (bound by AddDevelopmentPort), so it stays out of
 // published charts; in containers the image default (8080) applies.
@@ -313,15 +340,12 @@ if (isPublishMode)
 }
 
 // The standalone back-office system: a BFF over the feature systems' internal APIs, owning the
-// staff identity outright. Deployed dark during the migration — the edge still routes the
-// back-office hostname to account's folded routes — until the cutover flips the Gateway route.
+// staff identity outright; the gateway routes the back-office hostname here.
 var backOfficeApi = builder
     .AddProject<BackOffice_Api>("back-office-api")
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
-    // Force-on so staff see the back-office billing UI without Stripe configured — the same
-    // force-on account-api applies: the staff dashboard is where billing/revenue data lives.
-    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", "true")
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
     // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
     // localhost, the gateway hostname in publish mode).
     .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
@@ -331,7 +355,11 @@ if (!isPublishMode)
     backOfficeApi
         .WithEnvironment("KESTREL_PORT", ports.BackOfficeSystemApi.ToString())
         // Drives the dev static proxy to the rsbuild dev server.
-        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString());
+        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString())
+        // The back-office signs delegation tokens; account's internal API validates them (deployed
+        // environments receive both halves through Secret Manager).
+        .WithEnvironment("BackOfficeDelegation__SigningKeyPem", delegationSigningKeyPem);
+    accountApi.WithEnvironment("BackOfficeDelegation__PublicKeyPem", delegationPublicKeyPem);
 }
 
 if (isPublishMode)
@@ -347,52 +375,82 @@ if (isPublishMode)
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));
 }
 
-// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
-// provider — and points the back-office staff sign-in at it. This exercises the same generic
-// flow a production provider will use: discovery, authorization code + PKCE, the callback at
-// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
-// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
-// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
-if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
+// Back-office staff identity harness (development only): runs authentik — the staff identity
+// provider of the deployed environments — from the same blueprints
+// (cloud-infrastructure/authentik/blueprints) plus development staff (Authentik/dev-staff.yaml),
+// and points the back-office staff sign-in at it. This exercises the production flow end-to-end:
+// discovery, authorization code + PKCE, the passwordless email-code sign-in (codes land in
+// Mailpit), the callback at /.auth/login/aad/callback, and the groups claim for the staff and
+// admin gates. Gated behind Authentik:Enabled so the default dev stack keeps the MockEasyAuth
+// login picker; enable with AUTHENTIK__ENABLED=true and run the back-office-oidc e2e spec
+// (BACK_OFFICE_OIDC_ENABLED=true).
+if (!isPublishMode && builder.Configuration.GetSection("Authentik:Enabled").Get<bool>())
 {
-    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
+    // >= 2026.8.2: earlier releases let the email-device setup redirect the sign-in code to an
+    // attacker-chosen address (GHSA-qgqp-xh8r-v73r) — exactly the flow the blueprints use.
+    const string authentikImage = "goauthentik/server";
+    const string authentikTag = "2026.8.5";
+    const string authentikUrl = "https://auth.dev.localhost:9091";
+    const string backOfficeClientSecret = "dev-only-back-office-client-secret";
 
-    // Authelia's client registration needs the back-office callback URL, whose port comes from
-    // .workspace/port.txt — generate the effective configuration (from the template checked in
-    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
-    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
-    Directory.CreateDirectory(autheliaConfigFolder);
-    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
-    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
-    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
-    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemApi}/.auth/login/aad/callback";
-    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
-        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
-        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
-    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
-    foreach (var autheliaFile in new[] { "users_database.yml" })
+    var authentikPostgres = developmentPostgres!;
+    var authentikDatabase = authentikPostgres.AddDatabase("authentik-database", "authentik");
+    var authentikSecretKey = builder.CreateStablePassword("authentik-secret-key");
+    var blueprintsFolder = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "cloud-infrastructure", "authentik", "blueprints"));
+    var developmentStaffBlueprint = Path.Combine(builder.AppHostDirectory, "Authentik", "dev-staff.yaml");
+    var postgresEndpoint = authentikPostgres.Resource.PrimaryEndpoint;
+    var smtpEndpoint = mailServer!.GetEndpoint("smtp");
+
+    // Server and worker share one configuration; the worker applies the blueprints (it resolves
+    // their !Env tags), the server answers the browser and the back-office backchannel.
+    IResourceBuilder<ContainerResource> AddAuthentik(string name, string command)
     {
-        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
+        return builder
+            .AddContainer(name, authentikImage, authentikTag)
+            .WithImageRegistry("ghcr.io")
+            .WithArgs(command)
+            .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", postgresEndpoint.Property(EndpointProperty.Host))
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", postgresEndpoint.Property(EndpointProperty.TargetPort))
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentik")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", "postgres")
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", developmentPostgresPassword!)
+            .WithEnvironment("AUTHENTIK_POSTGRESQL__SSLMODE", "disable")
+            .WithEnvironment("AUTHENTIK_EMAIL__HOST", smtpEndpoint.Property(EndpointProperty.Host))
+            .WithEnvironment("AUTHENTIK_EMAIL__PORT", smtpEndpoint.Property(EndpointProperty.TargetPort))
+            .WithEnvironment("AUTHENTIK_EMAIL__USE_TLS", "false")
+            .WithEnvironment("AUTHENTIK_EMAIL__USE_SSL", "false")
+            .WithEnvironment("AUTHENTIK_EMAIL__FROM", "staff-sign-in@dev.localhost")
+            .WithEnvironment("AUTHENTIK_WEB__BASE_URL", authentikUrl)
+            .WithEnvironment("AUTHENTIK_ERROR_REPORTING__ENABLED", "false")
+            .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
+            .WithEnvironment("EP_BACK_OFFICE_REDIRECT_URI", backOfficeBaseUrl + "/.auth/login/aad/callback")
+            .WithEnvironment("BACK_OFFICE_OIDC_CLIENT_SECRET", backOfficeClientSecret)
+            .WithBindMount(blueprintsFolder, "/blueprints/custom", true)
+            .WithBindMount(developmentStaffBlueprint, "/blueprints/staff/dev-staff.yaml", true)
+            .WaitFor(authentikDatabase);
     }
 
-    builder
-        .AddContainer("authelia", "authelia/authelia:4.38")
-        .WithHttpEndpoint(9091, 9091, "https")
-        .WithBindMount(autheliaConfigFolder, "/config")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
-        .WaitFor(autheliaRedis);
+    AddAuthentik("authentik-worker", "worker");
+    // authentik serves HTTPS on 9443 with its own self-signed certificate.
+    var authentikServer = AddAuthentik("authentik-server", "server")
+        .WithHttpsEndpoint(9091, 9443, "https")
+        .WithUrlForEndpoint("https", url => url.DisplayText = "Staff identity (authentik)");
 
     backOfficeApi
-        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
+        .WithEnvironment("BackOffice__Oidc__Authority", $"{authentikUrl}/application/o/back-office/")
         .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
-        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
+        .WithEnvironment("BackOffice__Oidc__ClientSecret", backOfficeClientSecret)
         // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
         // and token requests) must tolerate it. Dev-harness only; production providers have
         // trusted certificates and leave this unset.
         .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
+        // The groups the staff blueprint assigns (dev-admin is in both, dev-staff only in staff).
+        .WithEnvironment("BackOffice__Oidc__StaffGroupId", "staff")
+        .WithEnvironment("BackOffice__AdminsGroupId", "admins")
         // The mock login picker would offer a bypass around the real provider's login screen.
-        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
+        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false")
+        .WaitFor(authentikServer);
 }
 
 var appGateway = builder
@@ -440,9 +498,9 @@ if (isPublishMode)
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"))
         .WithEnvironment("BACK_OFFICE_API_URL", backOfficeApi.GetEndpoint("https"))
         .WithEnvironment("MAIN_API_URL", mainApi.GetEndpoint("https"))
-        .WithEnvironment("ACCOUNT_STORAGE_URL", accountStorageUrl)
-        .WithEnvironment("MAIN_STORAGE_URL", mainStorageUrl)
-        .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", builder.Configuration["Storage:BucketPrefix"] ?? string.Empty)
+        .WithEnvironment("ACCOUNT_STORAGE_URL", storageEndpoint)
+        .WithEnvironment("MAIN_STORAGE_URL", storageEndpoint)
+        .WithEnvironment("BLOB_STORAGE_BUCKET_PREFIX", storageBucketPrefix)
         .WithKubernetesProbes("/openapi", "/openapi");
 }
 
@@ -487,7 +545,7 @@ if (isPublishMode)
             .WithEnvironment("SCW_SECRET_KEY", secretManagerKey)
             .WithEnvironment("SecretManager__Path", $"/{name}")
             .WithEnvironment("SCW_DEFAULT_PROJECT_ID", secretManagerProjectId)
-            .WithEnvironment("SCW_DEFAULT_REGION", "fr-par")
+            .WithEnvironment("SCW_DEFAULT_REGION", scalewayRegion)
             .WithEnvironment("SENDER_EMAIL_ADDRESS", senderEmailAddress);
 
         // Cockpit telemetry endpoints (per signal) arrive as plain environment values from the
@@ -516,9 +574,9 @@ if (isPublishMode)
 // HTTPS-only Kestrel (SharedKernel's AddInternalTls), and probes/env/routing on 8443.
 string[] internalTlsWorkloads = ["account-api", "main-api", "app-gateway", "back-office-api"];
 
-// Public ingress: one Cilium (Envoy) Gateway with two hostnames. The app hostname terminates at
-// the YARP gateway; the back-office hostname bypasses it and hits account-api directly,
-// mirroring the Azure post-split topology. cert-manager is installed BY THE CHART (same
+// Public ingress: one Cilium (Envoy) Gateway with two hostnames. Both terminate at the YARP
+// gateway, which routes the app hostname to the feature APIs and the back-office hostname to
+// the back-office API. cert-manager is installed BY THE CHART (same
 // upstream v1.20.2 the cluster-ops steps used to apply by hand, with CRDs and the Gateway API
 // shim enabled) and owns the production issuer: DNS/TLS bring-up is complete and the staging
 // endpoint's rate-limit protection is no longer needed.
@@ -593,6 +651,9 @@ const string jobTemplate = """
                                "helm.sh/hook-weight": "-1"
                            spec:
                              backoffLimit: 2
+                             # A hung migration fails the Job (and the upgrade, with the old version
+                             # still serving) after 15 minutes instead of blocking until Helm's own timeout.
+                             activeDeadlineSeconds: 900
                              template:
                                metadata:
                                  labels:
@@ -601,6 +662,8 @@ const string jobTemplate = """
                                    app.kubernetes.io/instance: "{{ .Release.Name }}"
                                spec:
                                  restartPolicy: Never
+                                 imagePullSecrets:
+                                   - name: "scaleway-registry-pull"
                                  containers:
                                    - name: "RESOURCE"
                                      image: "{{ .Values.parameters.VALUES_KEY.VALUES_KEY_image }}"
@@ -640,6 +703,8 @@ async Task PatchGeneratedChart(PipelineStepContext context)
     PatchGatewayRoutesForwardedProto(templatesFolder);
     AddInternalTlsManifests(templatesFolder);
     PatchWorkloadsForInternalTls(templatesFolder);
+    PatchWorkloadReplicas(templatesFolder);
+    PatchWorkloadImagePullSecrets(templatesFolder);
 }
 
 // The internal TLS trust chain, written as chart manifests because the Aspire publisher has no
@@ -648,6 +713,18 @@ async Task PatchGeneratedChart(PipelineStepContext context)
 // workloads through Secret Manager, and the CA — public material — reaches this publish pipeline
 // as the InternalTls:CaPem configuration value. The chart needs it in two places: the ConfigMap
 // Envoy validates against, and (referenced by name) the BackendTLSPolicies.
+// The Stripe settings every Stripe-consuming workload needs. The mock provider is a
+// developer-machine convenience and throws when enabled in deployed environments.
+void WithStripeConfiguration(IResourceBuilder<ProjectResource> workload)
+{
+    workload
+        .WithEnvironment("Stripe__SubscriptionEnabled", stripeFullyConfigured ? "true" : "false")
+        .WithEnvironment("Stripe__ApiKey", stripeApiKey)
+        .WithEnvironment("Stripe__WebhookSecret", stripeWebhookSecret)
+        .WithEnvironment("Stripe__PublishableKey", stripePublishableKey)
+        .WithEnvironment("Stripe__AllowMockProvider", isPublishMode ? "false" : "true");
+}
+
 void AddInternalTlsManifests(string templatesFolder)
 {
     var caPem = builder.Configuration["InternalTls:CaPem"];
@@ -700,8 +777,8 @@ void AddInternalTlsManifests(string templatesFolder)
 }
 
 // The publisher generates probes and port declarations from the publish-mode endpoint, but the
-// generated deployment still carries the plain-HTTP contract (scheme HTTP, port 8080) and no
-// certificate mounts — this patch completes the HTTPS-only conversion per workload.
+// generated deployment still carries the plain-HTTP contract (scheme HTTP, port 8080) — this patch
+// completes the HTTPS-only conversion per workload.
 void PatchWorkloadsForInternalTls(string templatesFolder)
 {
     foreach (var workload in internalTlsWorkloads)
@@ -716,9 +793,86 @@ void PatchWorkloadsForInternalTls(string templatesFolder)
             "- name: \"https\"\n              protocol: \"TCP\"\n              containerPort: 8443"
         );
 
+        // Fails the publish before helm-deploy-kubernetes runs when the generated layout no longer
+        // matches the replacements above (the workload would fail its probes or serve on 8080).
+        if (yaml.Contains("scheme: \"HTTP\"") || !yaml.Contains("containerPort: 8443"))
+        {
+            throw new InvalidOperationException($"Internal TLS patch did not convert {workload} to HTTPS on 8443 — the generated chart layout changed, update the patch.");
+        }
+
         File.WriteAllText(deploymentPath, yaml);
-        Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes, ports, certificate mount).");
+        Console.WriteLine($"Internal TLS patch: {workload} serves HTTPS only on 8443 (probes and ports; the certificate comes from Secret Manager).");
     }
+}
+
+// Redundancy at the workload tier: the serving workloads (the internal-TLS set) run with
+// `Workload:ServingReplicas` replicas instead of the generated single pod, so a pod loss or a node
+// drain (the pool runs two nodes for the same reason) never drops the serving path. Workers stay
+// single-replica: they take no user traffic and reschedule on node loss. The value is tier
+// configuration (appsettings.staging.json today; per-environment files later), absent in local
+// publish smoke runs — 1 keeps the chart valid without pretending redundancy.
+void PatchWorkloadReplicas(string templatesFolder)
+{
+    var replicas = builder.Configuration["Workload:ServingReplicas"];
+    if (string.IsNullOrWhiteSpace(replicas))
+    {
+        Console.WriteLine("Replicas patch: Workload:ServingReplicas unset, serving workloads stay at 1.");
+        return;
+    }
+
+    if (!int.TryParse(replicas, out var count) || count < 1)
+    {
+        throw new InvalidOperationException($"Workload:ServingReplicas is '{replicas}' — it must be a positive integer.");
+    }
+
+    foreach (var workload in internalTlsWorkloads)
+    {
+        var deploymentPath = Path.Combine(templatesFolder, workload, "deployment.yaml");
+        var yaml = File.ReadAllText(deploymentPath);
+        if (!yaml.Contains("  replicas: 1"))
+        {
+            throw new InvalidOperationException($"Expected 'replicas: 1' in {workload}'s deployment — the generated chart layout changed, update the replicas patch.");
+        }
+
+        File.WriteAllText(deploymentPath, yaml.Replace("  replicas: 1", $"  replicas: {count}"));
+    }
+
+    Console.WriteLine($"Replicas patch: {internalTlsWorkloads.Length} serving workloads pinned to {count} replicas.");
+}
+
+// The registry namespace is private (zero trust: no anonymous pulls), so every pod that pulls a
+// workload image authenticates through the cluster's dockerconfigjson Secret — the deploy command
+// applies it (idempotently) from the bootstrap module's read-only registry-pull identity. Kapsule
+// nodes have no native registry authentication, and the Secret must exist before the first pod of
+// a release pulls; the name here matches the Secret the deploy command creates.
+void PatchWorkloadImagePullSecrets(string templatesFolder)
+{
+    const string podSpecAnchor = "    spec:\n      containers:";
+    const string imagePullSecrets = "    spec:\n      imagePullSecrets:\n        - name: \"scaleway-registry-pull\"\n      containers:";
+
+    var deployments = Directory.GetFiles(templatesFolder, "deployment.yaml", SearchOption.AllDirectories);
+    if (deployments.Length == 0)
+    {
+        throw new InvalidOperationException("No deployment.yaml found in the generated chart — the chart layout changed, update the image-pull-secret patch.");
+    }
+
+    foreach (var deployment in deployments)
+    {
+        var yaml = File.ReadAllText(deployment);
+        if (yaml.Contains("imagePullSecrets:"))
+        {
+            continue;
+        }
+
+        if (!yaml.Contains(podSpecAnchor))
+        {
+            throw new InvalidOperationException($"No pod-spec anchor found in {deployment} — the generated chart layout changed, update the image-pull-secret patch.");
+        }
+
+        File.WriteAllText(deployment, yaml.Replace(podSpecAnchor, imagePullSecrets));
+    }
+
+    Console.WriteLine($"Image-pull-secret patch: {deployments.Length} deployments pull through scaleway-registry-pull.");
 }
 
 // The public requests' TLS terminates twice: at the Scaleway edge (its certificate) and again at
@@ -786,6 +940,14 @@ async Task PatchRolloutStrategyAsync(string templatesFolder)
 
         await File.WriteAllTextAsync(deployment, yaml.Replace("maxUnavailable: 1", "maxUnavailable: 0"));
         patched++;
+    }
+
+    // Fails the publish before helm-deploy-kubernetes runs: a deployment that still rolls out with
+    // unavailable pods would cause 504 windows on every deploy.
+    var unpatched = deployments.Where(deployment => !File.ReadAllText(deployment).Contains("maxUnavailable: 0")).ToArray();
+    if (unpatched.Length > 0)
+    {
+        throw new InvalidOperationException($"Rollout patch did not reach {string.Join(", ", unpatched.Select(Path.GetDirectoryName))} — the generated chart layout changed, update the rollout patch.");
     }
 
     Console.WriteLine($"Rollout patch: {patched} of {deployments.Length} deployments pinned to maxUnavailable: 0.");

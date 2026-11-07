@@ -16,18 +16,19 @@ terraform {
     }
   }
 
-  # Remote state lives in the bucket the bootstrap module created, using Scaleway's S3
-  # conditional-write locking. Credentials come from the deploy pipeline API key:
+  # Remote state lives in the bucket each environment's bootstrap created, using Scaleway's S3
+  # conditional-write locking. The bucket and endpoint are per environment and come from
+  # environments/<environment>.backend.hcl (partial configuration), so the working copy can never
+  # silently plan against another environment's state:
+  #   terraform init -reconfigure -backend-config=environments/<environment>.backend.hcl
+  # (the deploy command runs exactly that before it reads the state). Credentials come from the
+  # deploy pipeline API key:
   #   export AWS_ACCESS_KEY_ID=$(pipeline access key)
   #   export AWS_SECRET_ACCESS_KEY=$(pipeline secret key)
   backend "s3" {
-    bucket       = "pp-stage-fr-par-terraform-state"
     key          = "platformplatform/environment.tfstate"
     region       = "us-east-1"
     use_lockfile = true
-    endpoints = {
-      s3 = "https://s3.fr-par.scw.cloud"
-    }
     # The backend validates against AWS by default (STS, region names, account IDs); none of that
     # exists for a third-party S3-compatible endpoint like Scaleway Object Storage.
     skip_credentials_validation = true
@@ -39,7 +40,7 @@ terraform {
 
 provider "scaleway" {
   region = var.region
-  zone   = "${var.region}-1"
+  zone   = local.zone
 }
 
 variable "prefix" {
@@ -69,16 +70,6 @@ variable "operator_user_id" {
   type        = string
 }
 
-variable "gateway_lb_frontend_id" {
-  description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
-  type        = string
-}
-
-variable "gateway_lb_backend_id" {
-  description = "Zone-qualified id of the CCM-created Envoy TCP backend the edge backend stages target. Same capture flow as the frontend id; supply it as TF_VAR_gateway_lb_backend_id."
-  type        = string
-}
-
 variable "kubernetes_version" {
   description = "Kapsule Kubernetes version; 1.37 ships Cilium 1.20 (Gateway API ExternalAuth available)"
   type        = string
@@ -92,15 +83,33 @@ variable "node_type" {
 }
 
 variable "node_count" {
-  description = "Pool size. One node is enough for staging; use at least two in production so workloads stay up while Kapsule reboots a node for upgrades."
+  description = "Pool size. Two nodes so workloads stay up while Kapsule reboots or drains a node for version upgrades and host maintenance; a single node is a full-outage single point of failure."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "database_node_type" {
   description = "Managed PostgreSQL node type. db-dev-s (2 vCPU / 2 GB) is the development tier: fine for staging and a starting point for production, with no SLA. Production should move to db-s or larger."
   type        = string
   default     = "db-dev-s"
+}
+
+variable "database_ha" {
+  description = "Runs the managed PostgreSQL instance as a high-availability cluster, so the database survives a Scaleway host failure. Roughly doubles the database cost — production tier, not staging."
+  type        = bool
+  default     = false
+}
+
+variable "backup_schedule_frequency" {
+  description = "Automated backup frequency in hours. Pinned explicitly to Scaleway's default cadence (verified against the product docs) so the durability contract travels with the environment."
+  type        = number
+  default     = 24
+}
+
+variable "backup_schedule_retention" {
+  description = "Automated backup retention in days."
+  type        = number
+  default     = 7
 }
 
 variable "database_admin_user" {
@@ -110,6 +119,9 @@ variable "database_admin_user" {
 }
 
 locals {
+  # Zonal resources (NAT gateway, LB, node pool) all live in the region's first zone.
+  zone = "${var.region}-1"
+
   # Most resources take tags as a string list; object buckets take a string map.
   tags = ["environment:${var.environment}", "managed-by:terraform"]
   bucket_tags = {
@@ -118,8 +130,11 @@ locals {
   }
 }
 
-# All workloads and the database share one private network; the database is reachable from the
-# cluster, the public endpoint stays for operator access.
+# All workloads and the database share one private network. The database has ONLY a private
+# endpoint (scaleway_rdb_instance.main declares no load_balancer block, and the provider adds the
+# public endpoint only when no private network is set), so it is reachable from the cluster and
+# nowhere else; operator access needs a path into the private network (the default-deny network
+# policies in cluster-ops admit database egress only from the application workloads).
 resource "scaleway_vpc_private_network" "vpc" {
   name       = "${var.prefix}-${var.environment}"
   project_id = var.project_id
@@ -131,13 +146,13 @@ resource "scaleway_vpc_private_network" "vpc" {
 # advertises the default route. The gateway masquerades outbound traffic (image pulls, telemetry,
 # third-party APIs); nothing can reach the nodes inbound through it.
 resource "scaleway_vpc_public_gateway_ip" "nat" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_vpc_public_gateway" "nat" {
-  zone       = "${var.region}-1"
+  zone       = local.zone
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-nat"
   type       = "VPC-GW-S"
@@ -146,7 +161,7 @@ resource "scaleway_vpc_public_gateway" "nat" {
 }
 
 resource "scaleway_vpc_gateway_network" "nat" {
-  zone               = "${var.region}-1"
+  zone               = local.zone
   gateway_id         = scaleway_vpc_public_gateway.nat.id
   private_network_id = scaleway_vpc_private_network.vpc.id
   enable_masquerade  = true
@@ -161,13 +176,13 @@ resource "scaleway_vpc_gateway_network" "nat" {
 # (scw-loadbalancer-id + scw-loadbalancer-externally-managed) — see cluster-ops. The name MUST
 # NOT start with the cluster id: the CCM refuses to manage such LBs in externally-managed mode.
 resource "scaleway_lb_ip" "gateway" {
-  zone       = "fr-par-1"
+  zone       = local.zone
   project_id = var.project_id
   tags       = local.tags
 }
 
 resource "scaleway_lb" "gateway" {
-  zone       = "fr-par-1"
+  zone       = local.zone
   project_id = var.project_id
   name       = "${var.prefix}-${var.environment}-gateway"
   type       = "lb-s"
@@ -177,16 +192,25 @@ resource "scaleway_lb" "gateway" {
 
 # Managed PostgreSQL: one instance, one database per self-contained system. The databases are
 # isolated from each other (no shared schema), which keeps the system boundaries hard and makes
-# per-system pg_dump restores trivial. Connection string outputs feed the deploy-time secrets.
+# per-system pg_dump restores trivial. The connection strings reach the workloads through
+# Secret Manager (see local.base_workload_secrets), never through Terraform outputs.
 resource "scaleway_rdb_instance" "main" {
   name          = "${var.prefix}-${var.environment}-database"
   project_id    = var.project_id
   engine        = "PostgreSQL-17"
   node_type     = var.database_node_type
-  is_ha_cluster = false
+  is_ha_cluster = var.database_ha
   user_name     = var.database_admin_user
   password      = random_password.database.result
   tags          = local.tags
+
+  # Durability: automated backups are pinned explicitly instead of relying on Scaleway's invisible
+  # defaults (autobackup on, once a day, 7-day retention — verified against the product docs), so
+  # the durability contract travels with the environment. Restore path: restore a backup to a NEW
+  # instance (console/API), verify it, then cut over by pointing this resource at the clone —
+  # never restore in place under a running workload.
+  backup_schedule_frequency = var.backup_schedule_frequency
+  backup_schedule_retention = var.backup_schedule_retention
 
   private_network {
     pn_id       = scaleway_vpc_private_network.vpc.id
@@ -435,8 +459,8 @@ resource "scaleway_object_bucket" "data_protection" {
   tags       = local.bucket_tags
 
   lifecycle {
-    # Create the replacement before destroying the old bucket: the keyring blobs are copied
-    # across during a rename (see the decision notes) and a gap between buckets would have every
+    # Create the replacement before destroying the old bucket: a rename requires copying the
+    # keyring blobs to the replacement bucket first, and a gap between buckets would have every
     # API mint and validate against an empty ring. The provider has no force_destroy (2.84), so a
     # rename with content requires hand-emptying the old bucket; the keyring itself is recreatable
     # by the app (the key-ring owner generates a fresh ring on an empty bucket) at the cost of one
@@ -472,11 +496,6 @@ resource "scaleway_object" "maintenance_index" {
 
   depends_on = [scaleway_object_bucket_website_configuration.maintenance]
 }
-
-# The public-read bucket policies are applied by the application's S3 client when it creates the
-# buckets on first use: Scaleway's S3 API always acts through the API key's preferred project, so
-# policy writes must come from a key whose preferred project is this environment's project rather
-# than from whoever runs Terraform.
 
 # Observability: Cockpit receives the workloads' OTLP telemetry (metrics, logs, traces) and the
 # Edge Services WAF logs for this project. The Cockpit itself is implicit (every project has
@@ -568,7 +587,7 @@ resource "scaleway_k8s_pool" "default" {
   # Nodes keep outbound access for image pulls and telemetry through the private network.
   public_ip_disabled  = true
   autoscaling         = false
-  zone                = "${var.region}-1"
+  zone                = local.zone
   wait_for_pool_ready = true
   tags                = local.tags
   # The Kapsule API only accepts public_ip_disabled when the NAT gateway is attached and
@@ -592,10 +611,63 @@ variable "workload_key_expiry" {
   default     = "2027-10-05T00:00:00Z"
 }
 
+# Tier configuration: every environment-specific value lives here or in a sibling tfvars file
+# (environments/<environment>.tfvars, selected by the deploy command). One module serves
+# preview/staging/production; a new environment is a new tier file plus a bootstrap apply, never
+# a module change. Sizing and durability defaults reproduce staging; the public identity
+# (domain_name, edge_pipeline_name_prefix) has NO default, so a tier file that forgets it fails at
+# plan time instead of silently planning staging's hostnames into another environment.
+
+variable "domain_name" {
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name>, back-office.<domain_name>, and (with staff_identity_enabled) auth.<domain_name>; staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  type        = string
+}
+
+variable "staff_identity_enabled" {
+  description = "Run the authentik staff identity provider at auth.<domain_name>: its edge pipeline and origin frontend, database, generated secrets, and SMTP identity. Off until the in-cluster workload ships; the tier file turns it on."
+  type        = bool
+  default     = false
+}
+
+locals {
+  # Everything public derives from domain_name: one edge pipeline per hostname, and the TEM
+  # sending domain is the zone itself. The staff identity provider adds auth.<domain_name>.
+  edge_hostnames = merge(
+    { app = "app.${var.domain_name}", back-office = "back-office.${var.domain_name}" },
+    var.staff_identity_enabled ? { auth = "auth.${var.domain_name}" } : {}
+  )
+  tem_domain_name = var.domain_name
+}
+
+variable "edge_pipeline_name_prefix" {
+  description = "Edge pipeline names are \"<prefix>-<hostname key>\". Staging keeps its historical \"staging-\" prefix; other environments use their tier name."
+  type        = string
+}
+
+variable "gateway_lb_frontend_id" {
+  description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
+  type        = string
+}
+
+variable "gateway_lb_backend_id" {
+  description = "Zone-qualified id of the CCM-created Envoy TCP backend the edge backend stages target. Same capture flow as the frontend id; supply it as TF_VAR_gateway_lb_backend_id."
+  type        = string
+}
+
 # The HMAC token-signing key is shared by the token-issuing APIs and the token-validating gateway,
 # so it is fanned out into every path that needs it.
 resource "random_bytes" "authentication_token_signing_key" {
   length = 64
+}
+
+# The back-office delegation key pair (ES256): the back-office BFF signs short-lived delegation
+# tokens with the private key, and account's internal API validates them with the public key. A
+# key of its own, instead of the platform's HMAC token key, means a compromised back-office cannot
+# mint application tokens, and account cannot mint delegation tokens. Rotate with
+# terraform apply -replace=tls_private_key.back_office_delegation, then redeploy.
+resource "tls_private_key" "back_office_delegation" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
 }
 
 # The AES key material protecting the shared Data Protection keyring persisted in Object Storage:
@@ -723,6 +795,7 @@ locals {
       # (AddNamedBlobStorages("account-storage")); without it the proxy 500s on first use.
       ConnectionStrings__account-storage = local.blob_storage_connection_string
       Authentication__TokenSigning__Key  = local.signing_key
+      BackOfficeDelegation__PublicKeyPem = tls_private_key.back_office_delegation.public_key_pem
       data-protection-encryption-key     = local.data_protection_encryption_key
       InternalTls__CertificatePem        = tls_locally_signed_cert.workload["account-api"].cert_pem
       InternalTls__KeyPem                = tls_private_key.workload["account-api"].private_key_pem
@@ -765,25 +838,30 @@ locals {
       # Antiforgery tokens minted by the back-office BFF are validated by itself; it consumes the
       # shared Data Protection keyring (main-api owns generation), so it needs the encryption key.
       # The blob client reads that keyring from Object Storage (registered by AddApiServices in
-      # deployed environments) — hence the blob-storage connection string. The token signing key
-      # feeds the shared application JWT scheme that the shared API wiring registers for every
-      # API; the back-office auth cleanup re-evaluates whether this system keeps that scheme.
-      ConnectionStrings__blob-storage   = local.blob_storage_connection_string
-      Authentication__TokenSigning__Key = local.signing_key
-      data-protection-encryption-key    = local.data_protection_encryption_key
-      InternalTls__CertificatePem       = tls_locally_signed_cert.workload["back-office-api"].cert_pem
-      InternalTls__KeyPem               = tls_private_key.workload["back-office-api"].private_key_pem
+      # deployed environments) — hence the blob-storage connection string. It holds the private
+      # delegation key but NOT the platform token signing key: the BFF never receives application
+      # tokens, so a compromised back-office cannot mint them.
+      ConnectionStrings__blob-storage     = local.blob_storage_connection_string
+      BackOfficeDelegation__SigningKeyPem = tls_private_key.back_office_delegation.private_key_pem_pkcs8
+      data-protection-encryption-key      = local.data_protection_encryption_key
+      InternalTls__CertificatePem         = tls_locally_signed_cert.workload["back-office-api"].cert_pem
+      InternalTls__KeyPem                 = tls_private_key.workload["back-office-api"].private_key_pem
       # The internal CA (public material) validates account's in-cluster TLS on the BFF's
       # internal API calls, mirroring the app-gateway's trust configuration.
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
   }
 
+  # The back-office's OIDC client secret for the staff identity provider (staff-identity.tf).
+  staff_identity_workload_secrets = var.staff_identity_enabled ? {
+    back-office-api = { BackOffice__Oidc__ClientSecret = random_password.back_office_oidc_client_secret[0].result }
+  } : {}
+
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
   # Cockpit resource and travels the same Secret Manager path as the workload's other secrets.
   workload_secrets = {
     for workload, secrets in local.base_workload_secrets :
-    workload => merge(secrets, { Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key })
+    workload => merge(secrets, try(local.staff_identity_workload_secrets[workload], {}), { Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key })
   }
 
   secret_entries = merge([
@@ -854,9 +932,11 @@ resource "scaleway_iam_api_key" "workload" {
 # Transactional Email: the environment-specific sending domain — staging mail stays isolated
 # from production's domain reputation, and the apex domain stays free for the production project
 # to register. The offer subscription itself has no Terraform resource (read-only data source),
-# so subscribing to the essential plan stays an imperative one-time step.
+# so subscribing to the essential plan stays an imperative one-time step. The resource's ADDRESS
+# keeps its historical "staging" label for every environment: renaming it would force a domain
+# replacement (re-verification, DKIM re-check) with no benefit.
 resource "scaleway_tem_domain" "staging" {
-  name       = "staging.tinytek.dev"
+  name       = local.tem_domain_name
   accept_tos = true
   project_id = var.project_id
   region     = var.region
@@ -878,32 +958,35 @@ resource "scaleway_edge_services_plan" "main" {
 
 locals {
   # The CCM creates the gateway LB's own frontends and backends; their ids arrive as variables
-  # because they belong to the cluster, not to this module's resources.
-  edge_app_frontend_id  = var.gateway_lb_frontend_id # LB 443 frontend (CCM-managed)
-  edge_envoy_backend_id = var.gateway_lb_backend_id  # Envoy TCP backend (CCM-managed, zone-localized id)
-  edge_pipelines = {
-    app = {
-      fqdn = "app.staging.tinytek.dev"
-    }
-    back-office = {
-      fqdn = "back-office.staging.tinytek.dev"
-    }
-  }
+  # (captured after each environment's first deploy) because they belong to the cluster, not to
+  # this module's resources.
+  edge_pipelines = { for key, fqdn in local.edge_hostnames : key => { fqdn = fqdn } }
 }
 
-# Dedicated origin frontend for the back-office pipeline (app keeps the CCM-managed 443
-# frontend). TCP passthrough to the same Envoy backend: Envoy terminates TLS and routes by
-# the SNI the edge presents (the backend stage's domain_name).
-resource "scaleway_lb_frontend" "back_office" {
+# Dedicated origin frontends for every pipeline but app (which keeps the CCM-managed 443
+# frontend): the edge keeps one active backend stage per frontend. TCP passthrough to the same
+# Envoy backend: Envoy terminates TLS and routes by the SNI the edge presents (the backend stage's
+# domain_name).
+locals {
+  dedicated_origin_ports = { for key, port in { back-office = 8443, auth = 8444 } : key => port if contains(keys(local.edge_pipelines), key) }
+}
+
+resource "scaleway_lb_frontend" "edge_origin" {
+  for_each     = local.dedicated_origin_ports
   lb_id        = scaleway_lb.gateway.id
-  name         = "${var.prefix}-${var.environment}-back-office-https"
-  inbound_port = 8443
-  backend_id   = local.edge_envoy_backend_id
+  name         = "${var.prefix}-${var.environment}-${each.key}-https"
+  inbound_port = each.value
+  backend_id   = var.gateway_lb_backend_id
+}
+
+moved {
+  from = scaleway_lb_frontend.back_office
+  to   = scaleway_lb_frontend.edge_origin["back-office"]
 }
 
 resource "scaleway_edge_services_pipeline" "gateway" {
   for_each   = local.edge_pipelines
-  name       = "staging-${each.key}"
+  name       = "${var.edge_pipeline_name_prefix}-${each.key}"
   project_id = var.project_id
 }
 
@@ -914,8 +997,8 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
   lb_backend_config {
     lb_config {
       id          = scaleway_lb.gateway.id
-      zone        = "fr-par-1"
-      frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : local.edge_app_frontend_id
+      zone        = local.zone
+      frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.
       domain_name   = local.edge_pipelines[each.key].fqdn

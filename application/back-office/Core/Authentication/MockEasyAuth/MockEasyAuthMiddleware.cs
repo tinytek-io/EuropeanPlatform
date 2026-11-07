@@ -37,19 +37,17 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
             return;
         }
 
-        InjectClientPrincipalHeaders(context);
+        AttachCookieIdentity(context);
         await next(context);
     }
 
-    private static void InjectClientPrincipalHeaders(HttpContext context)
+    private static void AttachCookieIdentity(HttpContext context)
     {
         if (!context.Request.Cookies.TryGetValue(MockEasyAuthCookie.CookieName, out var identityId)) return;
         var identity = MockEasyAuthIdentities.Find(identityId);
         if (identity is null) return;
 
-        context.Request.Headers[BackOfficeIdentityDefaults.PrincipalNameHeader] = identity.Name;
-        context.Request.Headers[BackOfficeIdentityDefaults.PrincipalIdHeader] = identity.ObjectId;
-        context.Request.Headers[BackOfficeIdentityDefaults.PrincipalPayloadHeader] = MockEasyAuthCookie.EncodePayload(identity);
+        MockEasyAuthIdentities.Attach(context, identity);
     }
 
     private static void RedirectToMockLoginPage(HttpContext context)
@@ -114,27 +112,25 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
 
 public static class MockEasyAuthMiddlewareExtensions
 {
+    // The single decision for whether the mock identity selector is active. A configured OIDC
+    // provider always wins: the mock would otherwise intercept the login path the provider's
+    // challenge endpoint maps, offering a bypass around the real login screen. Otherwise it is on
+    // during local development, and MockEasyAuth:Enabled turns it on explicitly for other
+    // environments (e.g. a staging cluster before a staff OIDC provider exists); it must NEVER be
+    // enabled in production.
+    public static bool IsMockEasyAuthEnabled(IConfiguration configuration, IHostEnvironment environment)
+    {
+        if (configuration.IsBackOfficeOidcConfigured()) return false;
+        return environment.IsDevelopment() || configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
+    }
+
     extension(IApplicationBuilder app)
     {
-        public IApplicationBuilder UseMockEasyAuthInDevelopment()
+        public IApplicationBuilder UseMockEasyAuthWhenEnabled()
         {
-            // A configured OIDC provider takes precedence over the mock selector — the same rule
-            // Program applies for the login picker. The mock middleware would otherwise intercept
-            // the login path the provider's challenge endpoint maps, offering a bypass around the
-            // real login screen.
             var configuration = app.ApplicationServices.GetRequiredService<IConfiguration>();
-            if (configuration.IsBackOfficeOidcConfigured())
-            {
-                return app;
-            }
-
-            // Enabled by default during local development. The MockEasyAuth:Enabled configuration
-            // key turns it on explicitly for non-development environments (e.g. a staging cluster
-            // before a proper OIDC provider for staff exists); it must NEVER be enabled in
-            // production.
             var environment = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>();
-            var enabledByConfiguration = configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
-            return environment.IsDevelopment() || enabledByConfiguration ? app.UseMiddleware<MockEasyAuthMiddleware>() : app;
+            return IsMockEasyAuthEnabled(configuration, environment) ? app.UseMiddleware<MockEasyAuthMiddleware>() : app;
         }
     }
 }

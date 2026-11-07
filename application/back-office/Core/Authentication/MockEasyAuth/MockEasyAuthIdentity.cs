@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Microsoft.AspNetCore.Http;
 
 namespace BackOffice.Authentication.MockEasyAuth;
 
@@ -16,6 +17,20 @@ public static class MockEasyAuthIdentities
         new("admin", "Admin", "admin@dev.localhost", "00000000-0000-0000-0000-0000000000a1", [MockAdminsGroupId]),
         new("user", "User", "user@dev.localhost", "00000000-0000-0000-0000-0000000000a2", [])
     ];
+
+    // The mock selector hands the cookie-resolved identity to BackOfficeIdentityHandler in-process.
+    // HttpContext.Items cannot be populated from the network, unlike request headers.
+    private static readonly object HttpContextItemKey = new();
+
+    public static void Attach(HttpContext context, MockEasyAuthIdentity identity)
+    {
+        context.Items[HttpContextItemKey] = identity;
+    }
+
+    public static MockEasyAuthIdentity? GetAttached(HttpContext context)
+    {
+        return context.Items.TryGetValue(HttpContextItemKey, out var identity) ? identity as MockEasyAuthIdentity : null;
+    }
 
     public static MockEasyAuthIdentity? Find(string id)
     {

@@ -12,7 +12,7 @@
 > - Replace Data Processor details below with your company information
 > - Review and customize Schedule 1 processing details to match your actual service (remove "Communications data" if you don't have chat/messaging features)
 > - Update Schedule 2 when you add new sub-processors (and notify existing customers with 14 days notice)
-> - Update Schedule 3 to accurately describe your security practices (current version describes Azure PaaS baseline - add MFA, penetration testing, training programs, certifications, etc. if you implement them)
+> - Update Schedule 3 to accurately describe your security practices (current version describes the Scaleway managed-services baseline - add MFA, penetration testing, training programs, certifications, etc. if you implement them)
 > - Ensure employees have confidentiality obligations (contractual or statutory per employment law)
 > - Update governing law if not Denmark
 > - Have it reviewed by a legal professional
@@ -146,9 +146,11 @@ The Account remains responsible for determining whether the breach must be notif
 
 ## 9. International Data Transfers
 
-Personal Data processed under this DPA is stored within the Azure region selected during Account creation and is not transferred outside that region.
+Personal Data processed under this DPA is stored and processed exclusively within the EU (Scaleway's Paris region) and is not transferred outside the EU.
 
-Pseudonymized analytics data is processed within the EU region. For Accounts located outside the EU, analytics data will be transferred from the local region to our EU-based Azure Application Insights instance for centralized processing. These transfers are protected by Microsoft's Data Processing Agreement incorporating Standard Contractual Clauses approved by the European Commission where required by applicable data protection laws.
+Pseudonymized analytics data is processed within the same EU region. For Accounts located outside the EU, analytics data is processed within the EU; no data is transferred to the Account's local region.
+
+Scaleway, our cloud infrastructure provider, is a French company subject to EU data protection law; its processing on our behalf is governed by this DPA complying with GDPR Article 28. Processing within the EU requires no additional transfer safeguards such as Standard Contractual Clauses.
 
 Information about transfer safeguards and Standard Contractual Clauses are available on our [Legal and Compliance](/legal/) page.
 
@@ -255,8 +257,7 @@ We are authorized to use the following Sub-Processors to process Personal Data o
 
 ```
 Sub-Processor                Service                                       Location
-Microsoft Azure              Cloud infrastructure and hosting              Region selected upon signup
-Azure Application Insights   Analytics and performance monitoring          EU region
+Scaleway                     Cloud infrastructure, analytics, and email     EU (Paris)
 Stripe                       Payment processing                            Global
 ```
 
@@ -270,29 +271,32 @@ We will provide 14 days advance notice before engaging additional Sub-Processors
 
 **Encryption:**
 
-- Data in transit protected by HTTPS/TLS 1.3 or higher
-- Data at rest encrypted by Azure platform services
+- Data in transit protected by HTTPS/TLS 1.3 or higher at the edge
+- In-cluster service-to-service traffic encrypted with TLS via an internally managed certificate authority
+- Data at rest encrypted by Scaleway platform services (database, object storage)
+- The Data Protection keyring (antiforgery and token-signing material) additionally encrypted with a customer-managed key stored in Scaleway Secret Manager
 
 **Access Controls:**
 
 - Role-based access control
 - Authentication and access management
+- Per-workload IAM identities (Scaleway IAM) granting each service least-privilege access to exactly its own secrets
 
 **Database Security:**
 
-- Database audit logging (90-day retention)
 - Encrypted connections with certificate verification
-- Private network isolation
+- Private network isolation (the database is reachable only from the cluster's private network)
 
 **Monitoring and Logging:**
 
-- Application monitoring and logging
-- Database audit logs
+- Application monitoring and logging (OpenTelemetry to Scaleway Cockpit, EU)
 - Security event logging
 
 **Infrastructure Security:**
 
-- Azure Platform-as-a-Service security (managed infrastructure, automatic patching, network protection)
+- Scaleway managed services security (managed infrastructure, automatic patching, network protection)
+- Web Application Firewall in blocking mode at the edge (managed OWASP ruleset)
+- Cluster nodes without public IP addresses (private networking with NAT egress)
 
 ### Organizational Security Measures
 
@@ -308,7 +312,7 @@ We will provide 14 days advance notice before engaging additional Sub-Processors
 **Data Protection:**
 
 - Data retention and deletion policies as described in Section 11 and [Privacy Policy](/legal/privacy)
-- Backup procedures (Azure-managed)
+- Backup procedures (Scaleway-managed automated database backups)
 
 ---
 

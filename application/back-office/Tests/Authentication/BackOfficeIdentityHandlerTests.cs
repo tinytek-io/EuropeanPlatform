@@ -1,8 +1,7 @@
 using System.Security.Claims;
-using System.Text;
 using System.Text.Encodings.Web;
-using System.Text.Json;
 using BackOffice.Authentication;
+using BackOffice.Authentication.MockEasyAuth;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -14,10 +13,8 @@ namespace BackOffice.Tests.Authentication;
 
 public sealed class BackOfficeIdentityHandlerTests
 {
-    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
-
     [Fact]
-    public async Task HandleAuthenticate_WhenPrincipalNameHeaderMissing_ShouldReturnNoResult()
+    public async Task HandleAuthenticate_WhenNoIdentityAttached_ShouldReturnNoResult()
     {
         // Arrange
         var (handler, context) = await CreateHandlerAsync();
@@ -31,20 +28,11 @@ public sealed class BackOfficeIdentityHandlerTests
     }
 
     [Fact]
-    public async Task HandleAuthenticate_WhenPrincipalHeadersPresent_ShouldReturnSuccessWithClaims()
+    public async Task HandleAuthenticate_WhenMockIdentityAttached_ShouldReturnSuccessWithClaims()
     {
         // Arrange
-        var payload = BuildPrincipalPayload(
-            new BackOfficeClientPrincipalClaim { Type = "groups", Value = "BackOfficeAdmins" },
-            new BackOfficeClientPrincipalClaim { Type = "preferred_username", Value = "alice@example.com" }
-        );
-        var (handler, _) = await CreateHandlerAsync(headers =>
-            {
-                headers[BackOfficeIdentityDefaults.PrincipalNameHeader] = "Alice Anderson";
-                headers[BackOfficeIdentityDefaults.PrincipalIdHeader] = "00000000-0000-0000-0000-0000000000a1";
-                headers[BackOfficeIdentityDefaults.PrincipalPayloadHeader] = payload;
-            }
-        );
+        var admin = MockEasyAuthIdentities.Default.Single(identity => identity.Id == "admin");
+        var (handler, _) = await CreateHandlerAsync(context => MockEasyAuthIdentities.Attach(context, admin));
 
         // Act
         var result = await handler.AuthenticateAsync();
@@ -52,20 +40,21 @@ public sealed class BackOfficeIdentityHandlerTests
         // Assert
         result.Succeeded.Should().BeTrue();
         var principal = result.Principal!;
-        principal.FindFirstValue(ClaimTypes.Name).Should().Be("Alice Anderson");
-        principal.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be("00000000-0000-0000-0000-0000000000a1");
-        principal.Claims.Should().Contain(c => c.Type == "groups" && c.Value == "BackOfficeAdmins");
-        principal.Claims.Should().Contain(c => c.Type == "preferred_username" && c.Value == "alice@example.com");
+        principal.FindFirstValue(ClaimTypes.Name).Should().Be(admin.Name);
+        principal.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be(admin.ObjectId);
+        principal.FindFirstValue(ClaimTypes.Email).Should().Be(admin.Email);
+        principal.Claims.Should().Contain(c => c.Type == BackOfficeIdentityDefaults.GroupsClaimType && c.Value == MockEasyAuthIdentities.MockAdminsGroupId);
     }
 
     [Fact]
-    public async Task HandleAuthenticate_WhenPayloadIsInvalidBase64_ShouldStillSucceedWithNameOnly()
+    public async Task HandleAuthenticate_WhenOnlyEasyAuthHeadersPresent_ShouldReturnNoResult()
     {
         // Arrange
-        var (handler, _) = await CreateHandlerAsync(headers =>
+        var forgedPrincipal = Convert.ToBase64String("""{"claims":[{"typ":"groups","val":"BackOfficeAdmins"}]}"""u8.ToArray());
+        var (handler, _) = await CreateHandlerAsync(context =>
             {
-                headers[BackOfficeIdentityDefaults.PrincipalNameHeader] = "Alice Anderson";
-                headers[BackOfficeIdentityDefaults.PrincipalPayloadHeader] = "not-valid-base64!@#";
+                context.Request.Headers["X-MS-CLIENT-PRINCIPAL-NAME"] = "attacker";
+                context.Request.Headers["X-MS-CLIENT-PRINCIPAL"] = forgedPrincipal;
             }
         );
 
@@ -73,17 +62,14 @@ public sealed class BackOfficeIdentityHandlerTests
         var result = await handler.AuthenticateAsync();
 
         // Assert
-        result.Succeeded.Should().BeTrue();
-        var principal = result.Principal!;
-        principal.FindFirstValue(ClaimTypes.Name).Should().Be("Alice Anderson");
-        principal.Claims.Should().NotContain(c => c.Type == "groups");
+        result.None.Should().BeTrue();
     }
 
     [Fact]
     public async Task HandleChallenge_WhenAcceptIsHtml_ShouldRedirectToLogin()
     {
         // Arrange
-        var (handler, context) = await CreateHandlerAsync(headers => headers.Accept = "text/html");
+        var (handler, context) = await CreateHandlerAsync(context => context.Request.Headers.Accept = "text/html");
         context.Request.Path = "/api/back-office/me";
         context.Request.QueryString = new QueryString("?foo=bar");
 
@@ -101,7 +87,7 @@ public sealed class BackOfficeIdentityHandlerTests
     public async Task HandleChallenge_WhenAcceptIsJson_ShouldReturnUnauthorized()
     {
         // Arrange
-        var (handler, context) = await CreateHandlerAsync(headers => headers.Accept = "application/json");
+        var (handler, context) = await CreateHandlerAsync(context => context.Request.Headers.Accept = "application/json");
 
         // Act
         await handler.ChallengeAsync(new AuthenticationProperties());
@@ -115,7 +101,7 @@ public sealed class BackOfficeIdentityHandlerTests
     public async Task HandleForbidden_WhenAcceptIsHtml_ShouldRedirectToAccessDenied()
     {
         // Arrange
-        var (handler, context) = await CreateHandlerAsync(headers => headers.Accept = "text/html");
+        var (handler, context) = await CreateHandlerAsync(context => context.Request.Headers.Accept = "text/html");
 
         // Act
         await handler.ForbidAsync(new AuthenticationProperties());
@@ -129,7 +115,7 @@ public sealed class BackOfficeIdentityHandlerTests
     public async Task HandleForbidden_WhenAcceptIsJson_ShouldReturnForbidden()
     {
         // Arrange
-        var (handler, context) = await CreateHandlerAsync(headers => headers.Accept = "application/json");
+        var (handler, context) = await CreateHandlerAsync(context => context.Request.Headers.Accept = "application/json");
 
         // Act
         await handler.ForbidAsync(new AuthenticationProperties());
@@ -139,27 +125,14 @@ public sealed class BackOfficeIdentityHandlerTests
         context.Response.Headers.Location.Should().BeEmpty();
     }
 
-    private static string BuildPrincipalPayload(params BackOfficeClientPrincipalClaim[] claims)
-    {
-        var principal = new BackOfficeClientPrincipal
-        {
-            AuthenticationType = "aad",
-            NameType = ClaimTypes.Name,
-            RoleType = ClaimTypes.Role,
-            Claims = claims
-        };
-        var json = JsonSerializer.Serialize(principal, WebJsonOptions);
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-    }
-
-    private static async Task<(BackOfficeIdentityHandler Handler, HttpContext Context)> CreateHandlerAsync(Action<IHeaderDictionary>? configureHeaders = null)
+    private static async Task<(BackOfficeIdentityHandler Handler, HttpContext Context)> CreateHandlerAsync(Action<HttpContext>? configureContext = null)
     {
         var optionsMonitor = Options.Create(new AuthenticationSchemeOptions());
         var monitor = new TestOptionsMonitor<AuthenticationSchemeOptions>(optionsMonitor.Value);
         var handler = new BackOfficeIdentityHandler(monitor, NullLoggerFactory.Instance, UrlEncoder.Default);
 
         var context = new DefaultHttpContext();
-        configureHeaders?.Invoke(context.Request.Headers);
+        configureContext?.Invoke(context);
 
         var scheme = new AuthenticationScheme(BackOfficeIdentityDefaults.AuthenticationScheme, BackOfficeIdentityDefaults.AuthenticationScheme, typeof(BackOfficeIdentityHandler));
         await handler.InitializeAsync(scheme, context);

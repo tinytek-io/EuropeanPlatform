@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -49,6 +50,12 @@ public static class BackOfficeOidcExtensions
             return services;
         }
 
+        var staffGroupId = options.StaffGroupId;
+        if (string.IsNullOrWhiteSpace(staffGroupId))
+        {
+            throw new InvalidOperationException("BackOffice:Oidc:StaffGroupId is required when a staff identity provider is configured: signing in to the provider alone must not grant staff access.");
+        }
+
         services
             .AddAuthentication()
             .AddCookie(BackOfficeOidcDefaults.CookieScheme, ConfigureBackOfficeOidcSessionCookie)
@@ -62,18 +69,37 @@ public static class BackOfficeOidcExtensions
                     oidc.CallbackPath = BackOfficeIdentityDefaults.CallbackPath;
                     oidc.SignInScheme = BackOfficeOidcDefaults.CookieScheme;
                     oidc.SaveTokens = false;
+                    // Current providers (authentik, Authelia 4.39+, Entra ID for large group sets) deliver
+                    // groups, name, and email through the userinfo endpoint rather than the ID
+                    // token. The claim actions land them under the claim types the staff context
+                    // and the staff/admin gates read; the unique mappings never duplicate a value
+                    // the ID token already carried.
+                    oidc.GetClaimsFromUserInfoEndpoint = true;
+                    oidc.ClaimActions.MapJsonKey(BackOfficeIdentityDefaults.GroupsClaimType, "groups");
+                    oidc.ClaimActions.MapUniqueJsonKey(ClaimTypes.Name, "name");
+                    oidc.ClaimActions.MapUniqueJsonKey(ClaimTypes.Email, "email");
                     oidc.Scope.Clear();
                     oidc.Scope.Add(OpenIdConnectScope.OpenIdProfile);
                     oidc.Scope.Add(OpenIdConnectScope.Email);
-                    // The admin gate matches the 'groups' claim against BackOffice:AdminsGroupId;
-                    // request the groups scope when that gate is configured (providers that do not
-                    // know the scope ignore it).
-                    if (!string.IsNullOrWhiteSpace(configuration["BackOffice:AdminsGroupId"]))
-                    {
-                        oidc.Scope.Add("groups");
-                    }
+                    // The staff gate below and the admin gate match the 'groups' claim (providers
+                    // that do not know the scope ignore it).
+                    oidc.Scope.Add("groups");
 
-                    // Dev-only escape hatch for the local Authelia harness, whose certificate is
+                    // Only members of the staff group get a back-office session: anyone else is sent
+                    // to the access-denied page before the session cookie is issued.
+                    oidc.Events.OnTicketReceived = context =>
+                    {
+                        var isStaff = context.Principal?.Claims.Any(claim => claim.Type == BackOfficeIdentityDefaults.GroupsClaimType && claim.Value == staffGroupId) == true;
+                        if (!isStaff)
+                        {
+                            context.Response.Redirect(BackOfficeIdentityDefaults.AccessDeniedPath);
+                            context.HandleResponse();
+                        }
+
+                        return Task.CompletedTask;
+                    };
+
+                    // Dev-only escape hatch for the local authentik harness, whose certificate is
                     // self-signed: the backchannel (discovery, token, userinfo) then tolerates it.
                     // Production providers have trusted certificates and leave this unset.
                     if (configuration.GetSection("BackOffice:Oidc:DevAllowUntrustedCertificate").Get<bool>())
@@ -109,7 +135,7 @@ public static class BackOfficeOidcExtensions
     }
 
     /// <summary>
-    ///     Maps the Easy Auth-style login/logout endpoints that redirect into the provider. Only
+    ///     Maps the login/logout endpoints that redirect into the provider. Only
     ///     mapped when the provider is configured; otherwise the mock identity selector owns these
     ///     paths. The callback itself is consumed by the OIDC handler, not an endpoint.
     /// </summary>

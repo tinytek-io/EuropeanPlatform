@@ -2,8 +2,9 @@ namespace BackOffice.Authentication;
 
 /// <summary>
 ///     Configuration for the back-office staff identity provider. Any standard OpenID Connect
-///     provider works (Entra ID, Google Workspace, Auth0, ...): set Authority/ClientId/ClientSecret
-///     and, if admin actions should be available, BackOffice:AdminsGroupId to the value the provider
+///     provider works (Entra ID, Google Workspace, Auth0, ...): set Authority/ClientId/ClientSecret,
+///     StaffGroupId to the 'groups' claim value every staff member carries, and, if admin actions
+///     should be available, BackOffice:AdminsGroupId to the value the provider
 ///     issues in the 'groups' claim for staff administrators. When unconfigured, the mock identity
 ///     selector applies (local development and explicitly opted-in environments).
 /// </summary>
@@ -18,6 +19,13 @@ public sealed class BackOfficeOidcOptions
 
     /// <summary>Comes from Secret Manager in deployed workloads (BackOffice__Oidc__ClientSecret).</summary>
     public string? ClientSecret { get; init; }
+
+    /// <summary>
+    ///     The 'groups' claim value every staff member carries. Required with a provider: signing in
+    ///     to the identity provider must not by itself grant staff access (a multi-tenant or consumer
+    ///     provider authenticates people who are not staff).
+    /// </summary>
+    public string? StaffGroupId { get; init; }
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Authority)

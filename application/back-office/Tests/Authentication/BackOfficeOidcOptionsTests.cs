@@ -1,6 +1,7 @@
 using BackOffice.Authentication;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace BackOffice.Tests.Authentication;
@@ -57,5 +58,34 @@ public sealed class BackOfficeOidcOptionsTests
         );
 
         configuration.GetSection(BackOfficeOidcOptions.SectionName).Get<BackOfficeOidcOptions>()!.IsConfigured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AddBackOfficeOidcIdentity_WhenStaffGroupMissing_ShouldFailLoud()
+    {
+        var configuration = BuildConfiguration(
+            ("BackOffice:Oidc:Authority", "https://login.example.com/v2.0"),
+            ("BackOffice:Oidc:ClientId", "client-id"),
+            ("BackOffice:Oidc:ClientSecret", "secret")
+        );
+
+        var act = () => new ServiceCollection().AddBackOfficeOidcIdentity(configuration);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*StaffGroupId*");
+    }
+
+    [Fact]
+    public void AddBackOfficeOidcIdentity_WhenStaffGroupConfigured_ShouldRegisterTheProvider()
+    {
+        var configuration = BuildConfiguration(
+            ("BackOffice:Oidc:Authority", "https://login.example.com/v2.0"),
+            ("BackOffice:Oidc:ClientId", "client-id"),
+            ("BackOffice:Oidc:ClientSecret", "secret"),
+            ("BackOffice:Oidc:StaffGroupId", "staff")
+        );
+
+        var services = new ServiceCollection().AddBackOfficeOidcIdentity(configuration);
+
+        services.Should().NotBeEmpty();
     }
 }

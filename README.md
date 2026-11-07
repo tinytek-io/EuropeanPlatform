@@ -1,10 +1,10 @@
-# 👋 Welcome to PlatformPlatform
+# 👋 Welcome to EuropeanPlatform
 
 Kick-start building top-tier B2B & B2C cloud SaaS products with sleek design, fully localized and accessible, vertical slice architecture, automated and fast DevOps, and top-notch security.
 
 Ships with signup and login via Google or email one-time password, Stripe-powered subscription and payment management with plan upgrades, downgrades, and invoicing, feature flags with A/B-rollout, plan-gating, and per-user/tenant overrides, and a back-office dashboard with MRR and revenue trends, plan distribution, and tenant growth.
 
-Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Scaleway, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where PlatformPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
+Built to demonstrate seamless flow: backend contracts feed a fully-typed React UI, pipelines make fully automated deployments to Scaleway, and a multi-agent workflow built on Claude Code's native [Agent Teams](https://code.claude.com/docs/en/agent-teams) where EuropeanPlatform-expert agents collaborate to deliver complete features following the opinionated architecture. Think of it as a ready-made blueprint, not a pile of parts to assemble.
 
 ## What's inside
 
@@ -14,7 +14,7 @@ Built to demonstrate seamless flow: backend contracts feed a fully-typed React U
 * **Infrastructure** - Cost efficient and scalable Scaleway services like Kapsule (Kubernetes), Managed PostgreSQL, and Object Storage
 * **Developer CLI** - Extendable .NET CLI for DevEx - set up CI/CD is one command and a couple of questions
 * **AI rules** - 30+ rules & skills, refined and battle-tested over a year of daily use, capturing our opinionated patterns
-* **Multi-agent development** - Agent Teams workflow where specialized Claude Code agents with deep PlatformPlatform expertise collaborate end-to-end
+* **Multi-agent development** - Agent Teams workflow where specialized Claude Code agents with deep EuropeanPlatform expertise collaborate end-to-end
 
 Follow our [up-to-date roadmap](https://github.com/orgs/PlatformPlatform/projects/2/views/2).
 
@@ -31,7 +31,7 @@ Operate the platform from a dedicated SPA on its own hostname, behind its own st
 * **Billing events** - Authoritative event log of subscription, payment, and billing transitions, filterable by event type and account, with deep-link from dashboard cards
 * **Feature flags** - Four levers (System / Subscription plan / Account / User) plus A/B-rollout with rich telemetry; declared in C# and surfaced as a strongly-typed React hook; back-office UI for rollouts and overrides
 
-<img src="https://platformplatformgithub.blob.core.windows.net/BackOffice.gif" alt="PlatformPlatform Back Office" title="PlatformPlatform Back Office" />
+<img src="https://platformplatformgithub.blob.core.windows.net/BackOffice.gif" alt="EuropeanPlatform Back Office" title="EuropeanPlatform Back Office" />
 
 ### User-facing SaaS product
 
@@ -47,7 +47,7 @@ Production-ready end-user surfaces — fully localized, accessible, and ready to
 * **User preferences** - Theme (light/dark/system) and zoom per device, language per profile
 * **Sessions** - Active session list with device type, browser, and OS, plus one-click revocation of any session
 
-<img src="https://platformplatformgithub.blob.core.windows.net/$root/PlatformPlatformDemo.gif" alt="PlatformPlatform Demo" title="PlatformPlatform Demo" />
+<img src="https://platformplatformgithub.blob.core.windows.net/$root/EuropeanPlatformDemo.gif" alt="EuropeanPlatform Demo" title="EuropeanPlatform Demo" />
 
 # Getting Started
 
@@ -252,7 +252,7 @@ We recommend you keep the commit history, which serves as a great learning and t
 
 ## 2. (Optional) Install the Developer CLI
 
-The PlatformPlatform CLI provides convenient commands for common tasks. From the cloned repository, install it globally to use the `pp` command from anywhere in your terminal.
+The EuropeanPlatform CLI provides convenient commands for common tasks. From the cloned repository, install it globally to use the `pp` command from anywhere in your terminal.
 
 ```bash
 cd developer-cli
@@ -288,7 +288,7 @@ Once the Aspire dashboard fully loads, click to the WebApp and sign up for a new
 
 ### 3.1 (Optional) Set up Google OAuth for "Sign in with Google" on localhost
 
-PlatformPlatform supports authentication via Google OAuth using OpenID Connect with PKCE. This is optional for local development since email-based one-time passwords work without any configuration. The Aspire dashboard prompts whether to enable Google OAuth on first startup.
+EuropeanPlatform supports authentication via Google OAuth using OpenID Connect with PKCE. This is optional for local development since email-based one-time passwords work without any configuration. The Aspire dashboard prompts whether to enable Google OAuth on first startup.
 
 <details>
 
@@ -319,7 +319,7 @@ All values are stored securely in .NET user secrets and persist across restarts.
 
 ### 3.2 (Optional) Set up Stripe sandbox for localhost
 
-PlatformPlatform includes a comprehensive Stripe integration for subscription management and payments: embedded Stripe checkout and payment elements, prorated plan upgrades and downgrades, tax management, localized UI and invoice text, refund overview in billing history, telemetry events for the subscription lifecycle, grandfather pricing for existing subscribers, dunning and failed payment recovery, and full sync between Stripe and the local database via webhooks. The Stripe Dashboard must be set up and configured according to the Stripe Dashboard setup guide below before enabling Stripe in Aspire.
+EuropeanPlatform includes a comprehensive Stripe integration for subscription management and payments: embedded Stripe checkout and payment elements, prorated plan upgrades and downgrades, tax management, localized UI and invoice text, refund overview in billing history, telemetry events for the subscription lifecycle, grandfather pricing for existing subscribers, dunning and failed payment recovery, and full sync between Stripe and the local database via webhooks. The Stripe Dashboard must be set up and configured according to the Stripe Dashboard setup guide below before enabling Stripe in Aspire.
 
 <details>
 
@@ -416,38 +416,47 @@ variables on the back-office API — the keys under `BackOffice:Oidc`:
 - `BackOffice:Oidc:ClientId` — the application/client ID registered with the provider
 - `BackOffice:Oidc:ClientSecret` — the client secret (`BackOffice__Oidc__ClientSecret` as a
   Secret Manager entry)
+- `BackOffice:Oidc:StaffGroupId` — the `groups` claim value every staff member carries
+  (required: a sign-in without it is denied, so an account at the provider alone never grants
+  staff access)
 
 Register the redirect URI `https://back-office.<your-domain>/.auth/login/aad/callback` with the
-provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` set to the
-value the provider issues in the `groups` claim for staff administrators — the back-office's own
-admin policy and account's internal-API admin gate both read it. When these keys are
+provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` (in the
+tier's AppHost configuration) set to the value the provider issues in the `groups` claim for staff
+administrators — the back-office's own admin policy and account's internal-API admin gate both
+read it, and deployed environments must set it explicitly. When these keys are
 configured, the mock identity selector is disabled automatically.
 
-#### Test the OIDC flow locally with the Authelia harness
+#### Test the staff sign-in locally with the authentik harness
 
-The local dev stack can run [Authelia](https://www.authelia.com) — a small open-source OIDC
-provider — as a stand-in for a production identity provider, exercising the exact same flow:
-discovery, the authorization redirect, code + PKCE, the callback, and the `groups` claim that
-gates admin features.
+Staff sign in through [authentik](https://goauthentik.io) (MIT core), the staff identity provider
+of the deployed environments. The local dev stack can run it from the same blueprints
+(`cloud-infrastructure/authentik/blueprints/`), exercising the production flow end to end:
+discovery, the authorization redirect, the passwordless sign-in (email one-time code, or a passkey
+the user added), code + PKCE, the callback, and the `groups` claim that gates staff and admin
+features. Nobody has a password: staff are listed with their email address and groups in a staff
+blueprint, and passkeys live only in authentik's database.
 
-1. Start the dev stack with the harness enabled: `AUTHELIA__ENABLED=true dotnet run --project
-   AppHost` (or export `Authelia__Enabled=true`). This adds `authelia` + `authelia-redis`
-   containers at `https://authelia.dev.localhost:9091`, wires the back-office to them, and hides
-   the mock login picker.
-2. Run the harness spec against it:
+1. Start the dev stack with the harness enabled: `AUTHENTIK__ENABLED=true` on the AppHost. This
+   adds `authentik-server` + `authentik-worker` containers at `https://auth.dev.localhost:9091`
+   (an `authentik` database on the dev Postgres, codes delivered to Mailpit), wires the
+   back-office to them, and hides the mock login picker.
+2. Sign in as `dev-admin@dev.localhost` (groups `staff` + `admins`) or `dev-staff@dev.localhost`
+   (`staff` only) — see `application/AppHost/Authentik/dev-staff.yaml` — and read the code in
+   Mailpit.
+3. Run the harness spec against it:
 
    ```bash
    dotnet run --project developer-cli -- e2e back-office-oidc --no-wait-for-aspire
    ```
 
    with `BACK_OFFICE_OIDC_ENABLED=true` in the environment (the spec skips itself otherwise, so
-   it stays out of the default suite). It signs in as `oidcadmin` / `OIDCTest123!` — a static
-   dev user in the `admins` group (see `application/AppHost/Authelia/`) — and asserts the
-   dashboard renders.
+   it stays out of the default suite). It signs in as `dev-admin`, reads the code from Mailpit's
+   API, and asserts the dashboard and the admin-only accounts list render.
 
-The harness certificate is self-signed (`authelia-tls.pem`), so the OIDC backchannel runs with
-the dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
-providers.
+The harness serves authentik's self-signed certificate, so the OIDC backchannel runs with the
+dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
+deployments.
 
 ### (Optional) Configure Stripe for staging and production
 
@@ -480,7 +489,7 @@ Add the back-office CNAME record the same way as the app hostname (see the
 
 # Multi-Agent Development with Claude Code
 
-PlatformPlatform includes a multi-agent autonomous development workflow powered by [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams). Specialized AI agents collaborate to deliver complete features, from requirements to production-ready code, while enforcing enterprise-grade quality standards.
+EuropeanPlatform includes a multi-agent autonomous development workflow powered by [Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams). Specialized AI agents collaborate to deliver complete features, from requirements to production-ready code, while enforcing enterprise-grade quality standards.
 
 The entire process can take several hours depending on complexity, but at the end you get a fully implemented feature: backend logic, database migrations, API endpoints, frontend UI, localization, and end-to-end tests. All committed. All tests passing. Ready to ship.
 
@@ -494,7 +503,7 @@ The agents work like a real engineering team, inside the tools you already use. 
 
 **Native Agent Teams coordination**: Built on Claude Code's Agent Teams primitives: `TeamCreate`, `Task` with `team_name`, `SendMessage`, and a shared `TaskList`. The team lead spawns and coordinates all agents automatically.
 
-**Real collaboration via `SendInterruptSignal`**: Native Agent Teams are fragile out of the box. Agents treat `SendMessage` like an inbox: they finish their current task fully before reading the next message, so a team lead that sends a nudge mid-flight never hears back. Team leads then assume the agent is stuck, spawn replacements, and the new agents behave the same way. PlatformPlatform ships a custom MCP command, `SendInterruptSignal`, that solves this. It pairs with an ID-correlated follow-up `SendMessage` and is auto-delivered by a `PostToolUse` hook as a blocking error on the target agent's next tool call. Agents skip stale queued messages until they find the matching interrupt ID. Engineers interrupt QA when contracts change. Reviewers interrupt engineers with in-progress findings. The result is agents that truly collaborate in real time instead of talking past each other.
+**Real collaboration via `SendInterruptSignal`**: Native Agent Teams are fragile out of the box. Agents treat `SendMessage` like an inbox: they finish their current task fully before reading the next message, so a team lead that sends a nudge mid-flight never hears back. Team leads then assume the agent is stuck, spawn replacements, and the new agents behave the same way. EuropeanPlatform ships a custom MCP command, `SendInterruptSignal`, that solves this. It pairs with an ID-correlated follow-up `SendMessage` and is auto-delivered by a `PostToolUse` hook as a blocking error on the target agent's next tool call. Agents skip stale queued messages until they find the matching interrupt ID. Engineers interrupt QA when contracts change. Reviewers interrupt engineers with in-progress findings. The result is agents that truly collaborate in real time instead of talking past each other.
 
 **Plan before acting**: The team lead always starts in plan mode. Before spawning any agents, it investigates the work, then presents a plan describing which agents will be spawned, what each will do, and the expected sequence. Implementation begins only once the user approves. Small tasks get brief plans, large tasks get detailed plans.
 
@@ -581,7 +590,7 @@ The pair programmer is a standalone agent that works directly with you as a hand
 
 # Inside Our Monorepo
 
-PlatformPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) containing all application code, infrastructure, tools, libraries, documentation, etc. A monorepo is a powerful way to organize a codebase, used by Google, Facebook, Uber, Microsoft, etc.
+EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) containing all application code, infrastructure, tools, libraries, documentation, etc. A monorepo is a powerful way to organize a codebase, used by Google, Facebook, Uber, Microsoft, etc.
 
 ```bash
 .
@@ -671,7 +680,7 @@ The frontend is built with these technologies:
 
 ### Scaleway Infrastructure With Enterprise-Grade Security and Zero Secrets
 
-PlatformPlatform's cloud infrastructure is built on Scaleway managed services, defined entirely
+EuropeanPlatform's cloud infrastructure is built on Scaleway managed services, defined entirely
 in Terraform and deployed through the Aspire pipeline:
 
 - [Kapsule](https://www.scaleway.com/en/docs/containers/kubernetes/) - managed Kubernetes (Cilium networking, Gateway API ingress)

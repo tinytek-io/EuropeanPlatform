@@ -15,7 +15,7 @@ public sealed class ApiAggregationServiceTests
     private const string AccountOpenApiJson = """
                                               {
                                                 "openapi": "3.0.0",
-                                                "info": { "title": "PlatformPlatform Account API", "version": "v1" },
+                                                "info": { "title": "EuropeanPlatform Account API", "version": "v1" },
                                                 "paths": {
                                                   "/api/account/users": { "get": { "responses": { "200": { "description": "OK" } } } },
                                                   "/internal-api/account/probe": { "get": { "responses": { "200": { "description": "OK" } } } }
@@ -26,7 +26,7 @@ public sealed class ApiAggregationServiceTests
     private const string MainOpenApiJson = """
                                            {
                                              "openapi": "3.0.0",
-                                             "info": { "title": "PlatformPlatform Main API", "version": "v1" },
+                                             "info": { "title": "EuropeanPlatform Main API", "version": "v1" },
                                              "paths": {
                                                "/api/main/health": { "get": { "responses": { "200": { "description": "OK" } } } }
                                              }
@@ -38,7 +38,7 @@ public sealed class ApiAggregationServiceTests
     private const string AccountOpenApiJsonWithLeakedBackOfficePath = """
                                                                       {
                                                                         "openapi": "3.0.0",
-                                                                        "info": { "title": "PlatformPlatform Account API", "version": "v1" },
+                                                                        "info": { "title": "EuropeanPlatform Account API", "version": "v1" },
                                                                         "paths": {
                                                                           "/api/account/users": { "get": { "responses": { "200": { "description": "OK" } } } },
                                                                           "/api/back-office/leaked": { "get": { "responses": { "200": { "description": "OK" } } } }

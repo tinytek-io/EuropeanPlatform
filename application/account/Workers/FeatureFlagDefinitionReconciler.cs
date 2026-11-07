@@ -36,6 +36,7 @@ public sealed class FeatureFlagDefinitionReconciler(
     AccountDbContext accountDbContext,
     TimeProvider timeProvider,
     ITelemetryEventsCollector telemetryEventsCollector,
+    TelemetryClient telemetryClient,
     ILogger<FeatureFlagDefinitionReconciler> logger
 )
 {
@@ -218,7 +219,7 @@ public sealed class FeatureFlagDefinitionReconciler(
         while (telemetryEventsCollector.HasEvents)
         {
             var telemetryEvent = telemetryEventsCollector.Dequeue();
-            logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
+            telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
         }
 
         logger.LogInformation(
