@@ -22,10 +22,12 @@
 #             (api.scaleway.com), and the three Cockpit OTLP endpoints. Never the broad `world`
 #             entity.
 #
-# The placeholders are replaced before applying (README.md §7):
-#   terraform -chdir=../environment output -raw database_endpoint_ip     -> <rdb-ip>
-#   terraform -chdir=../environment output -raw database_endpoint_port   -> <rdb-port>
-#   terraform -chdir=../environment output -raw region                   -> <region>
+# The file ships in the Aspire chart: the AppHost's network policy patch resolves the placeholders
+# from the values the deploy command passes from the environment module's outputs, drops these
+# comments, and adds the policies to the release, so every deploy converges them (README.md §7):
+#   <rdb-ip>, <rdb-port>  database_endpoint_ip / database_endpoint_port
+#   <region>              region
+# Never write Helm template braces here: the chart renders this file as a template.
 #
 # CAVEAT (verify on first apply): toFQDNs rules require Cilium's DNS proxy, which is ON in
 # Cilium's default configuration but UNVERIFIED on Kapsule's managed Cilium. The verification
@@ -43,9 +45,9 @@
 # public path breaks, the fallback is the previous `fromEndpoints` kube-system selector with the
 # same 8443 port scoping.
 #
-# Rollback is `kubectl delete -f network-policies.yaml` — without a policy, Cilium's default is
-# allow-all, so removal restores the pre-policy state exactly.
-
+# Removing a policy from this file removes it from the cluster on the next deploy. Without a policy,
+# Cilium's default is allow-all, so an emergency rollback is `kubectl delete cnp --all -n default`
+# (the next deploy restores them).
 ---
 # Namespace baseline: every pod in `default`, including ones no other policy names. The empty
 # endpointSelector selects all endpoints in the policy's namespace; the ingress and egress

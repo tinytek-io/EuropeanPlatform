@@ -1,5 +1,5 @@
 output "region" {
-  description = "Scaleway region of every regional resource; cluster-ops substitutes it for the <region> placeholder in network-policies.yaml and set-gateway-lb-failover.sh derives the LB API region from it"
+  description = "Scaleway region of every regional resource; the deploy passes it to the AppHost, which substitutes it for the <region> placeholder in network-policies.yaml and set-gateway-lb-failover.sh derives the LB API region from it"
   value       = var.region
 }
 

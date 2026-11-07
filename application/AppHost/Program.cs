@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using AppHost;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
@@ -679,9 +680,57 @@ async Task PatchGeneratedChart(PipelineStepContext context)
     await AddMigrationJobsAsync(templatesFolder);
     PatchGatewayRoutesForwardedProto(templatesFolder);
     AddInternalTlsManifests(templatesFolder);
+    AddNetworkPolicyManifests(templatesFolder);
     PatchWorkloadsForInternalTls(templatesFolder);
     PatchWorkloadReplicas(templatesFolder);
     PatchWorkloadImagePullSecrets(templatesFolder);
+}
+
+// The east-west network policies (cloud-infrastructure/scaleway/cluster-ops/network-policies.yaml)
+// ship in the chart, so every deploy converges them and a policy removed from the file is removed
+// from the cluster. The file's placeholders are values Terraform owns, passed by the deploy
+// command: the database endpoint and the region. Full-line comments are dropped: they document
+// the placeholders and would read wrongly once those are resolved.
+void AddNetworkPolicyManifests(string templatesFolder)
+{
+    var policiesPath = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "cloud-infrastructure", "scaleway", "cluster-ops", "network-policies.yaml"));
+    var placeholders = new Dictionary<string, string>
+    {
+        ["<rdb-ip>"] = RequireDeploySetting("Database:EndpointIp"),
+        ["<rdb-port>"] = RequireDeploySetting("Database:EndpointPort"),
+        ["<region>"] = scalewayRegion
+    };
+
+    var lines = File.ReadAllLines(policiesPath).Where(line => !line.TrimStart().StartsWith('#'));
+    var policies = placeholders.Aggregate(string.Join("\n", lines), (yaml, placeholder) => yaml.Replace(placeholder.Key, placeholder.Value));
+
+    // The templates folder is rendered by Helm: template braces would be evaluated, and an
+    // unresolved placeholder would apply a policy that matches nothing (or fails to parse).
+    if (policies.Contains("{{"))
+    {
+        throw new InvalidOperationException($"'{policiesPath}' contains '{{{{', which Helm would evaluate as a template expression.");
+    }
+
+    var unresolvedPlaceholder = Regex.Match(policies, "<[a-z-]+>");
+    if (unresolvedPlaceholder.Success)
+    {
+        throw new InvalidOperationException($"'{policiesPath}' has the placeholder '{unresolvedPlaceholder.Value}', which the network policy patch does not resolve.");
+    }
+
+    var networkPoliciesFolder = Path.Combine(templatesFolder, "network-policies");
+    Directory.CreateDirectory(networkPoliciesFolder);
+    File.WriteAllText(Path.Combine(networkPoliciesFolder, "network-policies.yaml"), policies);
+
+    var policyCount = Regex.Matches(policies, "^kind: CiliumNetworkPolicy$", RegexOptions.Multiline).Count;
+    Console.WriteLine($"Network policy patch: {policyCount} Cilium network policies added.");
+}
+
+string RequireDeploySetting(string key)
+{
+    var value = builder.Configuration[key];
+    return string.IsNullOrWhiteSpace(value)
+        ? throw new InvalidOperationException($"Publish mode requires {key} (the deploy passes it from the environment module's outputs).")
+        : value;
 }
 
 // The internal TLS trust chain, written as chart manifests because the Aspire publisher has no

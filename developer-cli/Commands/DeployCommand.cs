@@ -217,6 +217,8 @@ public sealed partial class DeployCommand : Command
         var region = (await RunTerraformAsync(environmentModuleFolder, "output -raw region", "read the region output")).Trim();
         var storageEndpoint = (await RunTerraformAsync(environmentModuleFolder, "output -raw object_storage_endpoint", "read the Object Storage endpoint output")).Trim();
         var bucketPrefix = (await RunTerraformAsync(environmentModuleFolder, "output -raw bucket_prefix", "read the bucket prefix output")).Trim();
+        var databaseEndpointIp = (await RunTerraformAsync(environmentModuleFolder, "output -raw database_endpoint_ip", "read the database endpoint IP output")).Trim();
+        var databaseEndpointPort = (await RunTerraformAsync(environmentModuleFolder, "output -raw database_endpoint_port", "read the database endpoint port output")).Trim();
 
         // The API images compose the SPA bundles straight from the working tree (the csproj
         // Content includes ../WebApp/dist), so whatever dist is on disk ships verbatim. A
@@ -257,6 +259,7 @@ public sealed partial class DeployCommand : Command
         var registryPullSecretKey = (await RunTerraformAsync(bootstrapModuleFolder, $"output -state={bootstrapState} -raw registry_pull_secret_key", "read the registry pull key output (has the bootstrap module been applied with the registry-pull identity?)")).Trim();
         var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
         ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
+        AdoptHandAppliedNetworkPolicies(kubeconfigPath, repositoryRoot);
 
         PrintHeader("Running the Aspire deploy pipeline");
 
@@ -283,7 +286,10 @@ public sealed partial class DeployCommand : Command
             ("Registry__Endpoint", registryHost),
             ("Registry__Repository", registryEndpoint[(registryHost.Length + 1)..]),
             ("Storage__Endpoint", storageEndpoint),
-            ("Storage__BucketPrefix", bucketPrefix)
+            ("Storage__BucketPrefix", bucketPrefix),
+            // The network policies in the chart admit database egress to exactly this endpoint.
+            ("Database__EndpointIp", databaseEndpointIp),
+            ("Database__EndpointPort", databaseEndpointPort)
         };
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
@@ -538,6 +544,59 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
+    }
+
+    // The network policies ship in the chart, but clusters set up before that carry them applied by
+    // hand, and Helm refuses to take over a resource it did not create. Each hand-applied policy is
+    // labelled as owned by the release (named after the chart's internal CA ConfigMap, which every
+    // release carries), so the upgrade adopts it in place. Deleting them instead would leave the
+    // namespace allow-all until Helm recreates them.
+    private static void AdoptHandAppliedNetworkPolicies(string kubeconfigPath, string repositoryRoot)
+    {
+        var policiesPath = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "network-policies.yaml");
+        var policyNames = Regex.Matches(File.ReadAllText(policiesPath), "^kind: CiliumNetworkPolicy\nmetadata:\n  name: (\\S+)$", RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+
+        var kubectl = $"kubectl --kubeconfig {kubeconfigPath} --namespace default";
+        var existing = ProcessHelper.ExecuteQuietly($"{kubectl} get ciliumnetworkpolicies --no-headers -o custom-columns=NAME:.metadata.name,MANAGED_BY:.metadata.labels.app\\.kubernetes\\.io/managed-by");
+        if (!existing.Success)
+        {
+            AnsiConsole.MarkupLine("[red]Listing the cluster's network policies failed:[/] " + Markup.Escape(existing.GetErrorSummary("kubectl")));
+            Environment.Exit(existing.ExitCode);
+        }
+
+        var handApplied = existing.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(columns => columns[1] != "Helm" && policyNames.Contains(columns[0]))
+            .Select(columns => columns[0])
+            .ToArray();
+        if (handApplied.Length == 0)
+        {
+            return;
+        }
+
+        var release = ProcessHelper.ExecuteQuietly($"{kubectl} get configmap internal-root-ca-bundle --no-headers -o custom-columns=NAME:.metadata.annotations.meta\\.helm\\.sh/release-name,NAMESPACE:.metadata.annotations.meta\\.helm\\.sh/release-namespace");
+        var releaseColumns = release.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!release.Success || releaseColumns.Length != 2 || releaseColumns.Contains("<none>"))
+        {
+            AnsiConsole.MarkupLine("[red]The cluster has hand-applied network policies but no release to adopt them into[/] (the internal-root-ca-bundle ConfigMap carries no Helm release name).");
+            AnsiConsole.MarkupLine("[dim]Delete them (kubectl delete cnp --all -n default) and deploy again; the chart recreates them.[/]");
+            Environment.Exit(1);
+        }
+
+        foreach (var policyName in handApplied)
+        {
+            var label = ProcessHelper.ExecuteQuietly($"{kubectl} label ciliumnetworkpolicy {policyName} app.kubernetes.io/managed-by=Helm --overwrite");
+            var annotate = ProcessHelper.ExecuteQuietly($"{kubectl} annotate ciliumnetworkpolicy {policyName} meta.helm.sh/release-name={releaseColumns[0]} meta.helm.sh/release-namespace={releaseColumns[1]} --overwrite");
+            if (!label.Success || !annotate.Success)
+            {
+                AnsiConsole.MarkupLine($"[red]Adopting the network policy {policyName} into the release failed:[/] " + Markup.Escape((label.Success ? annotate : label).GetErrorSummary("kubectl")));
+                Environment.Exit(1);
+            }
+        }
+
+        AnsiConsole.MarkupLine($"  [green]✓[/] {handApplied.Length} hand-applied network policies adopted into the release");
     }
 
     private static void PrintHeader(string title)

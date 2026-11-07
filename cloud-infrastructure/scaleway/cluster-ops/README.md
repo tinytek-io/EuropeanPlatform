@@ -138,7 +138,7 @@ kubectl get secret scaleway-registry-pull -n default
 kubectl run pull-test --rm -it --image=rg.<region>.scw.cloud/<namespace>/<image>:<tag> --restart=Never -- command -v true
 ```
 
-## 7. East-west network policies (default-deny + derived allows)
+## 7. East-west network policies (default-deny + derived allows) — NO LONGER MANUAL
 
 `network-policies.yaml` enforces zero-trust east-west: a namespace-wide baseline
 (`default-namespace-default-deny`) puts every pod in `default` into default-deny in and out —
@@ -146,15 +146,14 @@ only kubelet probes and DNS are admitted — so a pod without its own policy (a 
 system) is isolated rather than allow-all. The per-workload policies add exactly the traffic the
 AppHost wiring declares on top (Cilium allows are additive; see the file's header for the
 per-workload map). Envoy reaches the serving workloads as the reserved `ingress` entity, on 8443
-only. The RDB and region placeholders are resolved from Terraform outputs first:
+only.
 
-```bash
-RDB_IP=$(terraform -chdir=../environment output -raw database_endpoint_ip)
-RDB_PORT=$(terraform -chdir=../environment output -raw database_endpoint_port)
-REGION=$(terraform -chdir=../environment output -raw region)
-sed -e "s/<rdb-ip>/$RDB_IP/g" -e "s/<rdb-port>/$RDB_PORT/g" -e "s/<region>/$REGION/g" \
-  network-policies.yaml | kubectl apply -f -
-```
+The policies ship in the Aspire chart: the AppHost resolves the file's placeholders (database
+endpoint, region) from the values the deploy passes from the Terraform
+outputs, so `deploy` converges them and a policy removed from the file is removed from the
+cluster. Do not `kubectl apply` the file by hand. Policies applied by hand before the chart owned
+them are adopted into the release by the deploy (labelled and annotated in place, never deleted,
+so the namespace is never allow-all during the switch).
 
 Verify (in this order — the site must stay green throughout):
 
@@ -176,11 +175,8 @@ The `toFQDNs` rules depend on Cilium's DNS proxy. If Cockpit/Secret Manager look
 policy (Kapsule's managed Cilium config is the unknown), the interim fallback is `toEntities:
 [world]` + the same port scoping (weaker: any IP on those ports) until the DNS proxy is proven.
 
-Rollback restores the pre-policy state exactly (Cilium without policies is allow-all):
-
-```bash
-kubectl delete -f network-policies.yaml
-```
+Rollback: remove the policy from the file and deploy. In an emergency, `kubectl delete cnp --all
+-n default` restores Cilium's allow-all default until the next deploy recreates them.
 
 ## Known gap: the Kubernetes API server
 
