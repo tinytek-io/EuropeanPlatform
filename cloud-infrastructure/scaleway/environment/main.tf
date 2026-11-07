@@ -846,9 +846,11 @@ locals {
       # internal API calls, mirroring the app-gateway's trust configuration.
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
-    # The back-office's background work owns no database and no storage; its Secret Manager path
-    # exists for the telemetry token every workload receives (merged in below).
-    back-office-workers = {}
+    # The back-office's background work owns no database and no storage. The security checks it
+    # runs need the gateway LB they verify (zone-qualified, as Terraform reports it).
+    back-office-workers = {
+      SecurityChecks__GatewayLoadBalancerId = scaleway_lb.gateway.id
+    }
   }
 
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
@@ -910,6 +912,16 @@ resource "scaleway_iam_policy" "workload" {
     for_each = startswith(each.key, "account-") ? [1] : []
     content {
       permission_set_names = ["TransactionalEmailEmailFullAccess"]
+      project_ids          = [var.project_id]
+    }
+  }
+
+  # The back-office security checks read the project's public entry points: Load Balancers with
+  # their frontends and ACLs, and the Edge Services pipelines with their WAF stages. Read-only.
+  dynamic "rule" {
+    for_each = each.key == "back-office-workers" ? [1] : []
+    content {
+      permission_set_names = ["LoadBalancersReadOnly", "EdgeServicesReadOnly"]
       project_ids          = [var.project_id]
     }
   }

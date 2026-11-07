@@ -77,7 +77,24 @@ Rules that keep it closed:
 - If the CCM recreates the 443 frontend (new id), recapture `gateway_lb_frontend_id` (§5b of the
   cluster-ops README) and apply; until then the new frontend is open.
 - The ACL covers the frontends the edge uses. Any other frontend on the LB (the CCM's :80 one for
-  the failover page) is not covered; the planned security check verifies every frontend.
+  the failover page) is not covered, and the security check below reports it until it is.
+
+## Continuous security check (back-office worker)
+
+The back-office worker (`SecurityCheckWorker`) re-verifies this every 15 minutes with a read-only
+key (`LoadBalancersReadOnly` + `EdgeServicesReadOnly`) and logs one line per check: information on
+pass, error on fail, naming the offending resource. Rules: `SecurityCheckEvaluator`.
+
+| Check | Holds when |
+|---|---|
+| `gateway-frontends-edge-only` | Every frontend on the gateway LB has, as its first ACL, a deny unless the source is Edge Services (no extra IP list). |
+| `only-gateway-load-balancer-is-public` | No other Load Balancer in the project's region has a public IP. |
+| `edge-waf-enforced` | Every pipeline has a WAF stage in `enable` mode with no exclusion rules, and no TLS or cache stage targets the backend directly. |
+
+An unreadable inventory (API outage, missing permission) is logged as an error too, never as a
+pass. Alerting on these errors comes with the operations work. The checks run inside Scaleway, so
+they cannot prove the LB refuses internet traffic; that needs the external probe in the
+verification step above, run from outside Scaleway.
 
 Verify after apply (from outside Scaleway):
 
