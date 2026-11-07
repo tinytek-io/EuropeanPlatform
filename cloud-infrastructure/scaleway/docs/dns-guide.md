@@ -1,6 +1,7 @@
 # DNS and email setup for staging (europeanplatform.net)
 
-This guide covers the records you need to create **once**, after the first `aspire deploy`. The
+This guide covers the records you need to create **once**, after the environment module's first
+`terraform apply` (the values come from its state). The
 records are created in the DNS console of wherever the `europeanplatform.net` zone is hosted,
 unless you delegate the staging sub-zone to Scaleway DNS (see the last section). The same record
 shapes apply on any other DNS provider (Hetzner, Simply.com, Cloudflare, ...).
@@ -8,9 +9,10 @@ shapes apply on any other DNS provider (Hetzner, Simply.com, Cloudflare, ...).
 ## 0. Let the tooling check it for you
 
 The `dns-check` command derives every record below from the Terraform state (never mutating it),
-resolves each one against live DNS, and prints a table with ok/missing/mismatch per record — it
-also runs automatically at the end of every `pp deploy`. Fix whatever it reports here in the DNS
-console.
+resolves each one against live DNS, and prints a table with ok/missing/mismatch per record. Every
+`deploy` runs it first and stops on a missing or mismatched record, before anything is built; an
+environment's first bring-up, whose records are still being created, passes `--skip-dns-check`.
+Fix whatever it reports here in the DNS console.
 
 ## 1. Web traffic: point the staging hostnames at the Edge Services pipelines
 

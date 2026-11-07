@@ -64,14 +64,21 @@ public sealed partial class DeployCommand : Command
             Description = "Deploy even when `terraform plan` reports infrastructure drift"
         };
 
+        var skipDnsCheckOption = new Option<bool>("--skip-dns-check")
+        {
+            Description = "Deploy even when the hosting zone's DNS records do not match the environment (an environment's first bring-up)"
+        };
+
         Options.Add(environmentOption);
         Options.Add(prefixOption);
         Options.Add(skipPlanCheckOption);
+        Options.Add(skipDnsCheckOption);
 
         SetAction(parseResult => Execute(
                 parseResult.GetValue(environmentOption)!,
                 parseResult.GetValue(prefixOption)!,
-                parseResult.GetValue(skipPlanCheckOption)
+                parseResult.GetValue(skipPlanCheckOption),
+                parseResult.GetValue(skipDnsCheckOption)
             ).GetAwaiter().GetResult()
         );
     }
@@ -79,7 +86,7 @@ public sealed partial class DeployCommand : Command
     [GeneratedRegex("^(?:\\s*)(\\w+_image):\\s*\"([^\"]+)\"")]
     private static partial Regex ChartImagePattern { get; }
 
-    private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck)
+    private static async Task Execute(string aspireEnvironment, string prefix, bool skipPlanCheck, bool skipDnsCheck)
     {
         Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
 
@@ -153,6 +160,21 @@ public sealed partial class DeployCommand : Command
             }
 
             AnsiConsole.MarkupLine("[green]Infrastructure matches the configuration.[/]");
+        }
+
+        // DNS drift is invisible to Terraform (the public zone lives at an external provider), and a
+        // missing record breaks what the deploy rolls out: the edge serves nothing for a hostname
+        // without its CNAME, and Let's Encrypt cannot issue the Gateway certificate. So the records
+        // are verified before anything is built; an environment's first bring-up, whose records
+        // are still being created, passes --skip-dns-check.
+        if (!skipDnsCheck)
+        {
+            PrintHeader("Verifying the DNS records");
+            if (await DnsCheckCommand.PrintDnsReportAsync() > 0)
+            {
+                AnsiConsole.MarkupLine("[red]The DNS records do not match the environment.[/] Fix them first (the table above has the exact values), or pass --skip-dns-check to deploy anyway.");
+                Environment.Exit(1);
+            }
         }
 
         PrintHeader("Resolving deploy-time inputs from Terraform outputs");
@@ -337,12 +359,6 @@ public sealed partial class DeployCommand : Command
         await PruneRegistryTagsAsync(bootstrapModuleFolder, bootstrapState);
 
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
-
-        // DNS drift is invisible to Terraform (the public zone lives at an external provider), so
-        // every deploy ends by printing the expected records and their live resolution —
-        // informational here, never failing the deploy; the standalone dns-check exits non-zero.
-        PrintHeader("Verifying the DNS records");
-        await DnsCheckCommand.PrintDnsReportAsync();
     }
 
     /// <summary>

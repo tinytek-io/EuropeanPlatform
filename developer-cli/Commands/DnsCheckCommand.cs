@@ -10,8 +10,8 @@ namespace DeveloperCli.Commands;
 /// <summary>
 ///     Prints every DNS record the environment's hosting zone is expected to carry and verifies each
 ///     one against live DNS. Read-only: the expected values are derived from the Terraform state
-///     itself (no apply, no new outputs) and the live values are resolved with dig. Meant to run
-///     after aspire deploy (which calls it) and standalone at any time — a missing or wrong record is
+///     itself (no apply, no new outputs) and the live values are resolved with dig. The deploy runs
+///     it first and stops on drift; it also runs standalone at any time — a missing or wrong record is
 ///     exactly the class of silent failure that turns into "the site is down" only when someone looks.
 /// </summary>
 /// <remarks>
@@ -40,8 +40,8 @@ public sealed partial class DnsCheckCommand : Command
         }
     }
 
-    // Shared with DeployCommand, which prints the same report at the end of a successful deploy —
-    // there it is informational (never fails the deploy); standalone runs exit non-zero on drift.
+    // Shared with DeployCommand, which runs the same report before building and stops on drift
+    // (unless --skip-dns-check); standalone runs exit non-zero on drift.
     public static async Task<int> PrintDnsReportAsync()
     {
         var environmentModuleFolder = Path.Combine(Configuration.SourceCodeFolder, "cloud-infrastructure", "scaleway", "environment");
