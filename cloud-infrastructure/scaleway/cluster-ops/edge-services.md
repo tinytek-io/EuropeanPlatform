@@ -56,28 +56,45 @@ requests matching the managed OWASP CRS ruleset are rejected at the edge before 
 cluster. Known false positives are excepted with `exclusion_rules` by CRS rule ID in Terraform —
 never by flipping the mode out of band. Revisit together with CrowdSec (production).
 
-## Known risk: direct requests to the gateway Load Balancer bypass the edge
+## Origin lockdown: only Edge Services may reach the gateway Load Balancer
 
-Edge Services connects to the gateway Load Balancer's public flexible IP, and nothing restricts
-that IP to Edge Services: anyone who learns it can connect straight to Envoy
-(`curl --resolve app.<domain>:443:<lb-ip> ...`) and skip the WAF, edge TLS, and caching. Edge
-Services offers no way to authenticate itself to the origin today — no client certificate
-(authenticated origin pulls), no custom origin header — and publishes no egress IP ranges, so
-neither an origin mTLS check nor an LB ACL allowlist can be built on supported features. The
-backend is TCP passthrough, so the LB could only filter on source IP anyway.
+Edge Services connects to the gateway Load Balancer's public flexible IP. Without a restriction,
+anyone who learns that IP could connect straight to Envoy (`curl --resolve app.<domain>:443:<lb-ip>
+...`) and skip the WAF, edge TLS, and caching. Envoy routes by SNI, not by frontend, so one open
+frontend would serve every hostname.
 
-What the bypass does NOT skip: Envoy still terminates TLS, every endpoint enforces its own
-authentication and authorization, `/internal-api/*` stays blocked at the app-gateway, and the
-staff identity is never taken from request headers. The loss is the WAF layer of defence in
-depth, not an authentication bypass, and the LB IP is not published in DNS.
+`scaleway_lb_acl.edge_only` (`../environment/main.tf`) closes that: every frontend an edge pipeline
+targets (the CCM's 443 frontend for app, the Terraform-owned 8443/8444 frontends for back-office and
+auth) carries an ACL at index 0 that denies every source except Scaleway Edge Services
+(`ips_edge_services`, inverted). The backend is TCP passthrough, so source IP is all an ACL can
+match. LB health checks run on the backend side and are not affected.
 
-Status: accepted for staging. The question is open with Scaleway (is `GET
-/edge-services/v1beta1/nodes` a stable egress list; is Edge → private LB over VPC supported or
-coming — the SDK already carries `private_network_id` on the backend; are authenticated origin
-pulls on the roadmap). Decide before production: a private-network origin if Scaleway ships it,
-otherwise an LB source-IP allowlist (`loadBalancerSourceRanges` on the gateway Service plus a
-`scaleway_lb_acl` on the Terraform-owned back-office frontend) with a scheduled drift check
-against the edge node list.
+Rules that keep it closed:
+
+- **Never set `loadBalancerSourceRanges` on the gateway Service.** The CCM only replaces the ACLs
+  it generates itself (named `<frontend-id>-lb-source-range-*`), which is why the Terraform ACL on
+  its 443 frontend survives. With source ranges set, the CCM replaces ALL ACLs on the frontend.
+- If the CCM recreates the 443 frontend (new id), recapture `gateway_lb_frontend_id` (§5b of the
+  cluster-ops README) and apply; until then the new frontend is open.
+- The ACL covers the frontends the edge uses. Any other frontend on the LB (the CCM's :80 one for
+  the failover page) is not covered; the planned security check verifies every frontend.
+
+Verify after apply (from outside Scaleway):
+
+```bash
+LB_IP=<the gateway LB flexible IP>
+curl -sk --max-time 5 --resolve "app.<domain>:443:$LB_IP" https://app.<domain>/ -o /dev/null -w '%{http_code}\n' || echo "refused (correct)"
+curl -s -o /dev/null -w '%{http_code}\n' https://app.<domain>/      # via the edge: still 200
+```
+
+Residual risks (open with Scaleway):
+
+- The match is "any Edge Services IP", shared by every Scaleway customer. Whether another
+  organization's pipeline can target our LB (and so pass the ACL with its own, weaker WAF) is
+  unverified. Edge Services offers no origin authentication (no client certificate, no custom
+  origin header) to close that.
+- The end state is a private LB reached by Edge over a VPC endpoint. The SDK already carries the
+  VPC endpoint API, but the docs and the Terraform provider do not support private LB backends yet.
 
 ## DNS (user action)
 

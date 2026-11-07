@@ -86,7 +86,10 @@ scw lb backend list "lb-id=${LB_ID}" "zone=${LB_ZONE}" -o json \
 ```
 
 Export both as `TF_VAR_gateway_lb_frontend_id` and `TF_VAR_gateway_lb_backend_id` (they are
-cluster-specific and never committed) and apply — the edge backend stages reference them.
+cluster-specific and never committed) and apply — the edge backend stages reference them, and
+the edge-only ACL on the 443 frontend is attached through the frontend id (a recreated frontend
+is open to direct requests until it is recaptured and applied; see
+[edge-services.md](edge-services.md#origin-lockdown-only-edge-services-may-reach-the-gateway-load-balancer)).
 
 The CCM names its resources `<gateway-service-uid>_tcp_<port>`; anything named
 `<prefix>-<environment>-*` is Terraform-owned. If the 443 frontend or the TCP backend is

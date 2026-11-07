@@ -638,6 +638,11 @@ variable "edge_pipeline_name_prefix" {
 variable "gateway_lb_frontend_id" {
   description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
   type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f-]{36}$", var.gateway_lb_frontend_id))
+    error_message = "gateway_lb_frontend_id must be the bare frontend UUID (not zone-qualified)."
+  }
 }
 
 variable "gateway_lb_backend_id" {
@@ -949,14 +954,64 @@ locals {
   edge_pipelines = { for key, fqdn in local.edge_hostnames : key => { fqdn = fqdn } }
 }
 
-# Dedicated origin frontend for the back-office pipeline (app keeps the CCM-managed 443
-# frontend). TCP passthrough to the same Envoy backend: Envoy terminates TLS and routes by
-# the SNI the edge presents (the backend stage's domain_name).
-resource "scaleway_lb_frontend" "back_office" {
+# Dedicated origin frontends for every pipeline but app (which keeps the CCM-managed 443
+# frontend): the edge keeps one active backend stage per frontend. TCP passthrough to the same
+# Envoy backend: Envoy terminates TLS and routes by the SNI the edge presents (the backend stage's
+# domain_name).
+locals {
+  dedicated_origin_ports = { back-office = 8443 }
+}
+
+resource "scaleway_lb_frontend" "edge_origin" {
+  for_each     = local.dedicated_origin_ports
   lb_id        = scaleway_lb.gateway.id
-  name         = "${var.prefix}-${var.environment}-back-office-https"
-  inbound_port = 8443
+  name         = "${var.prefix}-${var.environment}-${each.key}-https"
+  inbound_port = each.value
   backend_id   = var.gateway_lb_backend_id
+
+  # The edge-only ACLs below are separate resources (one shape for these and the CCM's frontend).
+  external_acls = true
+}
+
+moved {
+  from = scaleway_lb_frontend.back_office
+  to   = scaleway_lb_frontend.edge_origin["back-office"]
+}
+
+# Origin lockdown: every frontend an edge pipeline targets accepts connections from Scaleway Edge
+# Services only, so nobody can reach Envoy on the LB's public IP and skip the WAF. Envoy routes by
+# SNI, not by frontend, so every edge frontend needs it: a single open frontend would serve every
+# hostname. The backend is TCP passthrough, so the source IP is the only thing an ACL can match.
+#
+# The app pipeline's 443 frontend is the CCM's. The CCM only replaces the ACLs it generates itself
+# (named "<frontend-id>-lb-source-range-*", from the Service's loadBalancerSourceRanges), so this
+# Terraform-owned ACL survives its reconciliation. But setting loadBalancerSourceRanges on the
+# gateway Service makes the CCM replace ALL ACLs on that frontend, this one included. Never set it.
+locals {
+  edge_origin_frontend_ids = {
+    for key in keys(local.edge_pipelines) : key => (
+      contains(keys(scaleway_lb_frontend.edge_origin), key)
+      ? scaleway_lb_frontend.edge_origin[key].id
+      : "${local.zone}/${var.gateway_lb_frontend_id}"
+    )
+  }
+}
+
+resource "scaleway_lb_acl" "edge_only" {
+  for_each    = local.edge_origin_frontend_ids
+  frontend_id = each.value
+  name        = "${var.prefix}-${var.environment}-${each.key}-edge-only"
+  description = "Only Scaleway Edge Services may connect; everything else is refused before it reaches Envoy"
+  index       = 0
+
+  action {
+    type = "deny"
+  }
+
+  match {
+    ips_edge_services = true
+    invert            = true
+  }
 }
 
 resource "scaleway_edge_services_pipeline" "gateway" {
@@ -973,7 +1028,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
     lb_config {
       id          = scaleway_lb.gateway.id
       zone        = local.zone
-      frontend_id = each.key == "back-office" ? scaleway_lb_frontend.back_office.id : var.gateway_lb_frontend_id
+      frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : var.gateway_lb_frontend_id
       # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
       # (empty domain_name) leave the pipeline unconfigurable.
       domain_name   = local.edge_pipelines[each.key].fqdn
