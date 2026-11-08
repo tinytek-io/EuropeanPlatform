@@ -1059,8 +1059,8 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
       id          = scaleway_lb.gateway.id
       zone        = local.zone
       frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : var.gateway_lb_frontend_id
-      # With is_ssl the edge requires an explicit origin SNI/Host; pass-through backends
-      # (empty domain_name) leave the pipeline unconfigurable.
+      # With is_ssl, domain_name is both the origin SNI and the Host. Left empty, the visitor's
+      # Host passes through but the edge sends no SNI, which Envoy's listeners need.
       domain_name   = local.edge_pipelines[each.key].fqdn
       is_ssl        = true
       has_websocket = true

@@ -44,10 +44,36 @@ SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
   terminates TLS, so the extra frontend needs no certificate).
 - A backend stage's `frontend_id` CANNOT be updated in place (API 400) — taint and recreate the
   stage instead.
-- With `is_ssl` the `domain_name` is mandatory and becomes BOTH the origin SNI and the Host
-  header Envoy routes by (no pass-through; see the parked wildcard notes in the decision log).
+- With `is_ssl`, `domain_name` becomes BOTH the origin SNI and the Host header Envoy routes by.
+  Left empty, the stage is still accepted: the visitor's Host header passes through, but the
+  edge sends NO SNI (measured with an echo origin, 2026-11-08). Envoy's listeners match by SNI,
+  so the pipelines set `domain_name` to their own hostname.
+- The edge does not verify the origin's certificate (the echo origin's self-signed certificate
+  was accepted). The edge-to-LB hop is encrypted but not authenticated, so Envoy's Let's Encrypt
+  certificate adds no security today; it stays so the origin keeps working if Scaleway starts
+  verifying.
 - Stage evaluation is PATCH-triggered: freshly created stages can sit `inactive` until an
   update re-evaluates them.
+
+## Why one pipeline per hostname, not one wildcard pipeline
+
+A single pipeline with a wildcard DNS stage (`*.staging...`) would remove the per-hostname CNAME,
+pipeline, and LB frontend. It is parked until per-PR preview environments need hostnames without
+setup, because it trades away more security than it buys:
+
+- A wildcard certificate cannot use the edge's managed Let's Encrypt (wildcards are DNS-01 only).
+  cert-manager would issue it with a DNS-write API key inside the cluster, and a sync job would
+  copy the private key into Secret Manager. Today Scaleway issues and holds every edge key, and
+  no automated credential can write DNS.
+- One key would cover every hostname of the environment, and one cache would serve all of them
+  (its key must then include the Host).
+- With `domain_name` empty the visitor chooses the Host, and the edge sends no SNI, so Envoy
+  would need a listener without hostnames that routes on Host alone.
+- Every name under the wildcard resolves, and a wildcard left after a pipeline is removed points
+  at nothing we own.
+
+If preview environments come, give them their own environment and project with the wildcard,
+so the DNS-write key can only touch throwaway environments.
 
 ## WAF mode
 
@@ -113,6 +139,8 @@ Residual risks (open with Scaleway):
   organization's pipeline can target our LB (and so pass the ACL with its own, weaker WAF) is
   unverified. Edge Services offers no origin authentication (no client certificate, no custom
   origin header) to close that.
+- The edge does not verify the origin certificate (see the backend-stage notes above), so
+  nothing proves to the edge that it reached our LB rather than something on the path to it.
 - The end state is a private LB reached by Edge over a VPC endpoint. The SDK already carries the
   VPC endpoint API, but the docs and the Terraform provider do not support private LB backends yet.
 
