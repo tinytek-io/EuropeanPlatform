@@ -4,7 +4,7 @@ This folder contains the Terraform modules that provision the platform on [Scale
 
 ## Structure
 
-- `scaleway/bootstrap`: the one-time bootstrap tier — creates the per-environment Scaleway Project (e.g. `pp-stage`), the Object Storage bucket that holds every later module's Terraform state, the Container Registry namespace, and the operator, deploy pipeline and registry-pull identities. Its own state lives in the bucket it creates; see its [README](scaleway/README.md).
+- `scaleway/bootstrap`: the one-time bootstrap tier — creates the per-environment Scaleway Project (e.g. `ep-stage`), the Object Storage bucket that holds every later module's Terraform state, the Container Registry namespace, and the operator, deploy pipeline and registry-pull identities. Its own state lives in the bucket it creates; see its [README](scaleway/README.md).
 - `scaleway/environment`: the environment stack — VPC, managed PostgreSQL (one database per self-contained system), public-read Object Storage buckets for avatars/logos, and the Kapsule cluster (Cilium CNI for the Gateway API ingress). State lives in the bootstrap bucket with S3 conditional-write locking.
 
 ## Usage
@@ -20,4 +20,4 @@ The deploy command reads its inputs from the environment module's outputs (`terr
 
 ## Naming conventions
 
-Resources are named `{prefix}-{environment}-{name}`, e.g. `pp-stage-database` and `pp-stage-avatars`, following the same convention as the previous cloud (where the resource group carried the environment, that role now belongs to the per-environment Scaleway Project). All resources are tagged with `environment:{stage|prod}` and `managed-by:terraform`.
+Resources are named `{prefix}-{environment}-{name}`, e.g. `ep-stage-database` and `ep-stage-avatars`, following the same convention as the previous cloud (where the resource group carried the environment, that role now belongs to the per-environment Scaleway Project). All resources are tagged with `environment:{stage|prod}` and `managed-by:terraform`.

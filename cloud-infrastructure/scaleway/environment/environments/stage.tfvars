@@ -11,9 +11,10 @@
 # environment name and the project they resolve by name (<prefix>-<environment>).
 
 # The infrastructure prefix every resource name starts with (<prefix>-<environment>-...). The
-# bootstrap and deploy commands read it from here; set once per fork (the rebrand skill), never
-# changed for a live environment, because every resource would be renamed.
-prefix = "pp"
+# bootstrap and deploy commands read it from here. Bucket and registry names are global across
+# all Scaleway customers, so each fork picks its own (EuropeanPlatform: ep), and a live
+# environment never changes it, because every resource would be renamed.
+prefix = "ep"
 
 node_count = 2 # Two nodes so a Kapsule node reboot or drain never drops the whole serving path
 node_type  = "PLAY2-NANO"

@@ -1,5 +1,5 @@
 variable "prefix" {
-  description = "Unique prefix for resource names, e.g. `pp` or `ppdemo` (2-6 characters)"
+  description = "Unique prefix for resource names, e.g. `ep` or `epdemo` (2-6 characters)"
   type        = string
 
   validation {

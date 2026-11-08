@@ -12,7 +12,7 @@ namespace, and the deploy pipeline credentials.
 
 ## What it creates
 
-- `Scaleway Project` for the environment (e.g. `pp-stage`), the counterpart of the previous
+- `Scaleway Project` for the environment (e.g. `ep-stage`), the counterpart of the previous
   per-environment resource groups: every resource of an environment lives in its own project so
   cost and blast radius can be tracked per environment
 - `Object Storage bucket` for Terraform remote state (versioned, `prevent_destroy`)
@@ -38,7 +38,7 @@ omits it fails at plan time.
 
 | Knob | preview (future) | staging (`stage.tfvars`) | production (future) |
 |---|---|---|---|
-| Bootstrap project | `pp-preview` + own state bucket | `pp-stage` | `pp-prod` + own state bucket |
+| Bootstrap project | `ep-preview` + own state bucket | `ep-stage` | `ep-prod` + own state bucket |
 | Domain (`domain_name`) | `preview.europeanplatform.net` | `staging.europeanplatform.net` | `europeanplatform.net` (apex) |
 | Node pool | 1 x DEV1-S | 2 x PLAY2-NANO | 2+ x PLAY2-NANO or larger |
 | Database tier / HA | db-dev-s, no HA | db-dev-s, no HA | db-s or larger, HA (`database_ha = true`) |

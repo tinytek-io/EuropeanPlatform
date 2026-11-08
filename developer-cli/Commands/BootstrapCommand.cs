@@ -47,7 +47,7 @@ public sealed class BootstrapCommand : Command
         var projectName = $"{prefix}-{terraformEnvironment}";
         var moduleFolder = ScalewayEnvironment.BootstrapModuleFolder;
 
-        // A bootstrap state from before the bootstrap kept its state in the bucket.
+        // The bootstrap's state before it is in the bucket.
         var localStateFileName = $"terraform.{terraformEnvironment}.tfstate";
         var localState = Path.Combine(moduleFolder, localStateFileName);
 
@@ -65,19 +65,25 @@ public sealed class BootstrapCommand : Command
         var projectId = await ScalewayEnvironment.FindProjectIdAsync(administrator, organizationId, projectName);
         var planArguments = $"-var prefix={prefix} -var environment={terraformEnvironment} -var administrator_user_id={administratorKey.UserId} -var organization_id={organizationId}";
 
-        if (projectId is null)
+        // A local state means the bucket may not exist yet: a first run, a first run that stopped
+        // before the bucket was created, or a state from before the bootstrap kept it in the bucket.
+        // Each finishes the same way: apply with the local state, then move it into the bucket.
+        if (projectId is null || File.Exists(localState))
         {
-            if (File.Exists(localState))
+            AnsiConsole.MarkupLine(projectId is null
+                ? $"No project named [cyan]{projectName}[/] exists: creating the environment."
+                : $"Continuing from the local bootstrap state [cyan]{Markup.Escape(localStateFileName)}[/]; it moves into the state bucket once the bucket exists."
+            );
+            ScalewayEnvironment.ExportForTerraform(administrator, organizationId, projectId);
+            projectId = await ApplyWithLocalStateAsync(moduleFolder, localState, planArguments, autoApprove);
+            ScalewayEnvironment.ExportForTerraform(administrator, organizationId, projectId);
+            await InitializeRemoteStateAsync(moduleFolder, backendConfiguration);
+            if (await HasRemoteStateAsync(moduleFolder))
             {
-                AnsiConsole.MarkupLine($"[red]{Markup.Escape(localStateFileName)} exists, but the project '{projectName}' does not.[/] The local state describes resources that are gone; move it aside after checking it, then run again to create the environment.");
+                AnsiConsole.MarkupLine($"[red]The state bucket already holds a bootstrap state, and so does {Markup.Escape(localState)}.[/] Compare the two and remove the stale one; the bootstrap never overwrites a state in the bucket.");
                 Environment.Exit(1);
             }
 
-            AnsiConsole.MarkupLine($"No project named [cyan]{projectName}[/] exists: creating the environment.");
-            ScalewayEnvironment.ExportForTerraform(administrator, organizationId, null);
-            projectId = await CreateEnvironmentAsync(moduleFolder, localState, planArguments, autoApprove);
-            ScalewayEnvironment.ExportForTerraform(administrator, organizationId, projectId);
-            await InitializeRemoteStateAsync(moduleFolder, backendConfiguration);
             await MoveLocalStateToBucketAsync(moduleFolder, localState);
         }
         else
@@ -87,13 +93,8 @@ public sealed class BootstrapCommand : Command
 
             if (!await HasRemoteStateAsync(moduleFolder))
             {
-                if (!File.Exists(localState))
-                {
-                    AnsiConsole.MarkupLine($"[red]The project '{projectName}' exists, but no bootstrap state was found[/] (neither in its state bucket nor at {Markup.Escape(localState)}). Applying now would try to create everything again. Copy the environment's bootstrap state to that path, and run again to move it into the bucket.");
-                    Environment.Exit(1);
-                }
-
-                await MoveLocalStateToBucketAsync(moduleFolder, localState);
+                AnsiConsole.MarkupLine($"[red]The project '{projectName}' exists, but no bootstrap state was found[/] (neither in its state bucket nor at {Markup.Escape(localState)}). Applying now would try to create everything again. Copy the environment's bootstrap state to that path, and run again to move it into the bucket.");
+                Environment.Exit(1);
             }
 
             await TerraformHelper.ApplyChangesAsync(moduleFolder, planArguments, autoApprove, "Bootstrap cancelled; nothing was changed.");
@@ -103,10 +104,10 @@ public sealed class BootstrapCommand : Command
     }
 
     /// <summary>
-    ///     The first run has no bucket to keep state in yet, so it applies with a local state file
-    ///     (a temporary backend override) and returns the new project's id.
+    ///     Applies with a local state file (a temporary backend override), for when the state bucket
+    ///     may not exist yet, and returns the environment's project id.
     /// </summary>
-    private static async Task<string> CreateEnvironmentAsync(string moduleFolder, string localState, string planArguments, bool autoApprove)
+    private static async Task<string> ApplyWithLocalStateAsync(string moduleFolder, string localState, string planArguments, bool autoApprove)
     {
         var overrideFile = Path.Combine(moduleFolder, "first_run_override.tf");
         await File.WriteAllTextAsync(overrideFile, $"terraform {{\n  backend \"local\" {{\n    path = \"{Path.GetFileName(localState)}\"\n  }}\n}}\n");
@@ -114,7 +115,7 @@ public sealed class BootstrapCommand : Command
         try
         {
             await TerraformHelper.RunSensitiveAsync(moduleFolder, "init -reconfigure -input=false -no-color", "initialize the bootstrap with local state");
-            await TerraformHelper.ApplyChangesAsync(moduleFolder, planArguments, autoApprove, "Bootstrap cancelled; nothing was created.");
+            await TerraformHelper.ApplyChangesAsync(moduleFolder, planArguments, autoApprove, "Bootstrap cancelled; nothing was changed.");
             return await TerraformHelper.OutputAsync(moduleFolder, "environment_project_id");
         }
         finally

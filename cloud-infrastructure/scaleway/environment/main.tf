@@ -44,7 +44,7 @@ provider "scaleway" {
 }
 
 variable "prefix" {
-  description = "Unique prefix shared with the bootstrap module, e.g. `pp`"
+  description = "Unique prefix shared with the bootstrap module, e.g. `ep`"
   type        = string
 }
 
@@ -59,7 +59,7 @@ variable "region" {
   default     = "fr-par"
 }
 
-# The per-environment project created by the bootstrap module (e.g. `pp-stage`).
+# The per-environment project created by the bootstrap module (e.g. `ep-stage`).
 variable "project_id" {
   description = "Scaleway Project ID from the bootstrap module's environment_project_id output"
   type        = string

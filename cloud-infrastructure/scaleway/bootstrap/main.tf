@@ -34,7 +34,7 @@ provider "scaleway" {
 }
 
 # One Scaleway Project per environment (the counterpart of the per-environment resource groups
-# of the previous cloud): every staging resource lives in the "pp-stage" project, production in
+# of the previous cloud): every staging resource lives in the "ep-stage" project, production in
 # its own, so cost and blast radius can be tracked and isolated per environment.
 resource "scaleway_account_project" "environment" {
   name        = "${var.prefix}-${var.environment}"

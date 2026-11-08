@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -149,6 +150,15 @@ public static partial class ScalewayEnvironment
         httpClient.DefaultRequestHeaders.Add("X-Auth-Token", credentials.SecretKey);
 
         var response = await httpClient.GetAsync(path);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            var hint = credentials.Source.StartsWith("SCW_")
+                ? " Exported variables take precedence over the scw profiles; unset SCW_ACCESS_KEY and SCW_SECRET_KEY to use the profile instead."
+                : "";
+            AnsiConsole.MarkupLine($"[red]The key {Markup.Escape(credentials.AccessKey)} from {Markup.Escape(credentials.Source)} is not valid[/] (revoked, expired, or mistyped).{Markup.Escape(hint)}");
+            Environment.Exit(1);
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             AnsiConsole.MarkupLine($"[red]Could not {Markup.Escape(action)}:[/] HTTP {(int)response.StatusCode} with the key from {Markup.Escape(credentials.Source)}.");
@@ -159,14 +169,25 @@ public static partial class ScalewayEnvironment
     }
 
     public sealed record ApiKey(
-        [property: JsonPropertyName("user_id")] string? UserId,
-        [property: JsonPropertyName("application_id")] string? ApplicationId,
-        [property: JsonPropertyName("default_project_id")] string DefaultProjectId
+        [property: JsonPropertyName("user_id")]
+        string? UserId,
+        [property: JsonPropertyName("application_id")]
+        string? ApplicationId,
+        [property: JsonPropertyName("default_project_id")]
+        string DefaultProjectId
     );
 
     [UsedImplicitly]
-    private sealed record Project([property: JsonPropertyName("id")] string Id, [property: JsonPropertyName("name")] string Name, [property: JsonPropertyName("organization_id")] string OrganizationId);
+    private sealed record Project(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("organization_id")]
+        string OrganizationId
+    );
 
     [UsedImplicitly]
-    private sealed record ProjectPage([property: JsonPropertyName("projects")] Project[] Projects);
+    private sealed record ProjectPage(
+        [property: JsonPropertyName("projects")]
+        Project[] Projects
+    );
 }
