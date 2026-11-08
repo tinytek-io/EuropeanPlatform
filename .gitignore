@@ -381,6 +381,8 @@ FodyWeavers.xsd
 *.terraform.lock.hcl
 *.tfstate.lock.info
 *.tfstate.backup
+# An operator's local tier overrides (the deploy layers them over the committed tier file)
+*.local.tfvars
 
 # macOS files
 .DS_Store

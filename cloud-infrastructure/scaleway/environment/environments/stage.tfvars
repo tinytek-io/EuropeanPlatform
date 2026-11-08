@@ -21,6 +21,8 @@ backup_schedule_retention = 7  # ...kept seven days (Scaleway's default cadence,
 
 # The environment's zone on the public domain — the single domain knob: the edge hostnames
 # derive as app.<domain> / back-office.<domain>, and Transactional Email sends from the zone.
+# To deploy under another domain (a test domain, say), set domain_name in a git-ignored
+# stage.local.tfvars beside this file; the deploy layers it over this one.
 domain_name = "staging.europeanplatform.net"
 
 edge_pipeline_name_prefix = "staging"

@@ -516,6 +516,15 @@ public sealed partial class DeployCommand : Command
             Environment.Exit(1);
         }
 
+        // An operator's git-ignored <environment>.local.tfvars (a test domain, say) is layered on top
+        // of the committed tier file: Terraform lets the later var file win.
+        var varFiles = $"-var-file=environments/{terraformEnvironment}.tfvars";
+        if (File.Exists(Path.Combine(environmentModuleFolder, "environments", $"{terraformEnvironment}.local.tfvars")))
+        {
+            varFiles += $" -var-file=environments/{terraformEnvironment}.local.tfvars";
+            AnsiConsole.MarkupLine($"[yellow]Using the local overrides in environments/{terraformEnvironment}.local.tfvars.[/]");
+        }
+
         // A saved plan holds every sensitive value in plain text, so it lives in an owner-only
         // folder that is removed even when the deploy exits early.
         var planFolder = Directory.CreateTempSubdirectory($"pp-{terraformEnvironment}-plan-");
@@ -523,7 +532,7 @@ public sealed partial class DeployCommand : Command
         var planFile = Path.Combine(planFolder.FullName, "environment.tfplan");
 
         var plan = await ProcessHelper.ExecuteQuietlyAsync(
-            $"terraform plan -detailed-exitcode -input=false -no-color -out={planFile} -var-file=environments/{terraformEnvironment}.tfvars -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
+            $"terraform plan -detailed-exitcode -input=false -no-color -out={planFile} {varFiles} -var prefix={prefix} -var environment={terraformEnvironment} -var project_id={projectId}",
             environmentModuleFolder,
             ("SCW_DEFAULT_PROJECT_ID", projectId)
         );
