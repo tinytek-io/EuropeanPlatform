@@ -64,12 +64,23 @@ variable "project_id" {
   }
 }
 
-variable "operator_user_id" {
-  description = "IAM user id of the Terraform operator. The state bucket's policy is the complete access spec for the bucket, so the operator must be listed or Terraform locks itself out of its own state. Supply it as TF_VAR_operator_user_id (the same value the environment module takes); it is never committed."
+variable "administrator_user_id" {
+  description = "IAM user id of the administrator who runs the bootstrap. The state bucket's policy is the complete access spec for the bucket, so the administrator must be listed or the bootstrap locks itself out of its own state. The bootstrap command reads it from the administrator's API key."
   type        = string
 
   validation {
-    condition     = can(regex("^[0-9a-f-]{36}$", var.operator_user_id))
-    error_message = "The operator user ID must be a Scaleway UUID."
+    condition     = can(regex("^[0-9a-f-]{36}$", var.administrator_user_id))
+    error_message = "The administrator user ID must be a Scaleway UUID."
+  }
+}
+
+variable "operator_key_expiry" {
+  description = "Expiry of the environment operator's API key (RFC3339). Change to rotate the key; the bootstrap command then rewrites the operator's scw profile."
+  type        = string
+  default     = "2027-11-08T00:00:00Z"
+
+  validation {
+    condition     = can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", var.operator_key_expiry))
+    error_message = "The expiry must be an RFC3339 UTC timestamp, e.g. 2027-11-08T00:00:00Z."
   }
 }

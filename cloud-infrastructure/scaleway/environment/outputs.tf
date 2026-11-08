@@ -87,3 +87,21 @@ output "edge_hostnames" {
   description = "Public hostname per edge pipeline (app and back-office), derived from domain_name; the deploy passes them to the AppHost as Hostnames__App / Hostnames__BackOffice"
   value       = local.edge_hostnames
 }
+
+# Bootstrap-owned values the deploy needs, passed through so the deploy reads only this module's
+# state: the registry it pushes to and prunes, and the cluster's read-only pull identity.
+output "registry_endpoint" {
+  description = "Registry endpoint images are pushed to, e.g. rg.fr-par.scw.cloud/<namespace> (from the bootstrap)"
+  value       = data.terraform_remote_state.bootstrap.outputs.registry_endpoint
+}
+
+output "registry_namespace_id" {
+  description = "Registry namespace id the deploy prunes stale deploy tags through (from the bootstrap)"
+  value       = data.terraform_remote_state.bootstrap.outputs.registry_namespace_id
+}
+
+output "registry_pull_secret_key" {
+  description = "Secret key of the cluster's read-only registry-pull identity, which the deploy writes into the dockerconfigjson pull Secret (from the bootstrap)"
+  value       = data.terraform_remote_state.bootstrap.outputs.registry_pull_secret_key
+  sensitive   = true
+}

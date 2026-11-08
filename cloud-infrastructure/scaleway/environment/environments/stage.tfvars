@@ -7,8 +7,13 @@
 # production tier file has a complete example to diff against. domain_name and
 # edge_pipeline_name_prefix have no module default: every tier file must set them.
 #
-# prefix, environment, and project_id stay deploy-command -var inputs (they come from the
-# bootstrap module's outputs) and are intentionally not repeated here.
+# environment and project_id stay -var inputs: the deploy and bootstrap commands pass the
+# environment name and the project they resolve by name (<prefix>-<environment>).
+
+# The infrastructure prefix every resource name starts with (<prefix>-<environment>-...). The
+# bootstrap and deploy commands read it from here; set once per fork (the rebrand skill), never
+# changed for a live environment, because every resource would be renamed.
+prefix = "pp"
 
 node_count = 2 # Two nodes so a Kapsule node reboot or drain never drops the whole serving path
 node_type  = "PLAY2-NANO"
@@ -26,7 +31,3 @@ backup_schedule_retention = 7  # ...kept seven days (Scaleway's default cadence,
 domain_name = "staging.europeanplatform.net"
 
 edge_pipeline_name_prefix = "staging"
-
-# gateway_lb_frontend_id, gateway_lb_backend_id, and operator_user_id are cluster- and
-# operator-specific: they come from TF_VAR_* environment variables and are never committed
-# (see the cluster-ops README for capturing the LB ids).

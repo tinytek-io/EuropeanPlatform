@@ -65,9 +65,32 @@ variable "project_id" {
   type        = string
 }
 
-variable "operator_user_id" {
-  description = "IAM user id of the Terraform operator. A bucket policy is the complete access spec for its bucket, so the operator must be listed or Terraform locks itself out. Supply it as TF_VAR_operator_user_id; it is never committed."
-  type        = string
+# The bootstrap's outputs (the operators, the registry, the cluster's pull identity) come from its
+# state, which the bootstrap command keeps in this environment's state bucket next to this module's.
+data "terraform_remote_state" "bootstrap" {
+  backend = "s3"
+  config = {
+    bucket = "${var.prefix}-${var.environment}-${var.region}-terraform-state"
+    key    = "platformplatform/bootstrap.tfstate"
+    region = "us-east-1"
+    endpoints = {
+      s3 = "https://s3.${var.region}.scw.cloud"
+    }
+    skip_credentials_validation = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+  }
+}
+
+locals {
+  # A bucket policy is the complete access spec for its bucket (IAM permissions alone no longer
+  # grant anything), so whoever runs Terraform must be listed or it locks itself out: the
+  # environment's operator application (deploys) and the administrator who runs the bootstrap.
+  terraform_operator_principals = [
+    "application_id:${data.terraform_remote_state.bootstrap.outputs.operator_application_id}",
+    "user_id:${data.terraform_remote_state.bootstrap.outputs.administrator_user_id}"
+  ]
 }
 
 variable "kubernetes_version" {
@@ -380,13 +403,11 @@ resource "scaleway_object_bucket_policy" "avatars" {
         ]
       },
       {
-        # The Terraform operator's IAM user (the owner). With a policy attached, the policy is
-        # the COMPLETE access spec for the bucket — IAM permissions alone no longer grant
-        # anything — so the operator must be listed or Terraform itself is locked out
-        # (found live: refresh started failing with AccessDenied on GetBucketCors).
+        # Terraform's own identities (see terraform_operator_principals): without them Terraform
+        # is locked out (found live: refresh started failing with AccessDenied on GetBucketCors).
         Effect = "Allow"
         Principal = {
-          SCW = "user_id:${var.operator_user_id}"
+          SCW = local.terraform_operator_principals
         }
         Action = "s3:*"
         Resource = [
@@ -429,13 +450,11 @@ resource "scaleway_object_bucket_policy" "logos" {
         ]
       },
       {
-        # The Terraform operator's IAM user (the owner). With a policy attached, the policy is
-        # the COMPLETE access spec for the bucket — IAM permissions alone no longer grant
-        # anything — so the operator must be listed or Terraform itself is locked out
-        # (found live: refresh started failing with AccessDenied on GetBucketCors).
+        # Terraform's own identities (see terraform_operator_principals): without them Terraform
+        # is locked out (found live: refresh started failing with AccessDenied on GetBucketCors).
         Effect = "Allow"
         Principal = {
-          SCW = "user_id:${var.operator_user_id}"
+          SCW = local.terraform_operator_principals
         }
         Action = "s3:*"
         Resource = [
@@ -632,21 +651,6 @@ locals {
 
 variable "edge_pipeline_name_prefix" {
   description = "Edge pipeline names are \"<prefix>-<hostname key>\". Staging keeps its historical \"staging-\" prefix; other environments use their tier name."
-  type        = string
-}
-
-variable "gateway_lb_frontend_id" {
-  description = "Id of the CCM-created LB 443 frontend the app pipeline's edge backend stage targets. Cluster-specific: capture it after the environment's first deploy (see cluster-ops README) and supply it as TF_VAR_gateway_lb_frontend_id; it is never committed."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[0-9a-f-]{36}$", var.gateway_lb_frontend_id))
-    error_message = "gateway_lb_frontend_id must be the bare frontend UUID (not zone-qualified)."
-  }
-}
-
-variable "gateway_lb_backend_id" {
-  description = "Zone-qualified id of the CCM-created Envoy TCP backend the edge backend stages target. Same capture flow as the frontend id; supply it as TF_VAR_gateway_lb_backend_id."
   type        = string
 }
 
@@ -982,7 +986,7 @@ resource "scaleway_lb_frontend" "edge_origin" {
   lb_id        = scaleway_lb.gateway.id
   name         = "${var.prefix}-${var.environment}-${each.key}-https"
   inbound_port = each.value
-  backend_id   = var.gateway_lb_backend_id
+  backend_id   = local.gateway_envoy_backend_id
 
   # The edge-only ACLs below are separate resources (one shape for these and the CCM's frontend).
   external_acls = true
@@ -1025,6 +1029,13 @@ locals {
       ])
     }
   )
+
+  # The CCM's 443 frontend carries the app pipeline, and the Envoy TCP backend behind it also
+  # serves the Terraform-owned edge frontends. Both are read from the LB instead of captured by
+  # hand, so they exist only after the environment's first deploy created the gateway Service.
+  # The data source returns the backend id bare, while frontends take it zone-qualified.
+  gateway_app_frontend     = one([for frontend in data.scaleway_lb_frontends.gateway.frontends : frontend if frontend.inbound_port == 443])
+  gateway_envoy_backend_id = "${local.zone}/${local.gateway_app_frontend.backend_id}"
 }
 
 resource "scaleway_lb_acl" "edge_only" {
@@ -1058,7 +1069,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
     lb_config {
       id          = scaleway_lb.gateway.id
       zone        = local.zone
-      frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : var.gateway_lb_frontend_id
+      frontend_id = contains(keys(scaleway_lb_frontend.edge_origin), each.key) ? scaleway_lb_frontend.edge_origin[each.key].id : local.gateway_app_frontend.id
       # With is_ssl, domain_name is both the origin SNI and the Host. Left empty, the visitor's
       # Host passes through but the edge sends no SNI, which Envoy's listeners need.
       domain_name   = local.edge_pipelines[each.key].fqdn

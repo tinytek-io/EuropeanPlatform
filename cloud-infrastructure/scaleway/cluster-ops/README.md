@@ -65,35 +65,19 @@ The LB name must NOT start with the Kapsule cluster id (the CCM refuses such LBs
 externally-managed mode). The CCM still owns the frontend/backend on the adopted LB — that is
 by design (the pool contains node IPs) — so `set-gateway-lb-failover.sh` still applies.
 
-## 5b. Capture the CCM-created LB frontend/backend ids (after the first deploy)
+## 5b. The CCM-created LB frontend and backend (no capture needed)
 
 The CCM owns the frontends and backends it creates on the adopted LB; Terraform owns only the
-LB shell and its flexible IP. The edge configuration needs two of those CCM-created ids as
-INPUTS — the app pipeline's backend stage targets the CCM's 443 frontend, and the TF-created
-back-office 8443 frontend targets the CCM's Envoy TCP backend — so capture them once per
-cluster, after the first deploy has created the annotated gateway Service:
+LB shell and its flexible IP. The edge configuration builds on two of the CCM's resources — the
+app pipeline's backend stage targets the CCM's 443 frontend, and the Terraform-owned 8443/8444
+frontends forward to the CCM's Envoy TCP backend — and the environment module reads both from the
+LB (`data.scaleway_lb_frontends.gateway`: the frontend on port 443, and its backend). Nothing is
+captured or exported.
 
-```bash
-LB_REF=$(terraform -chdir=../environment output -raw gateway_lb_ref)   # zone/lb-id
-LB_ZONE=${LB_REF%%/*}
-LB_ID=${LB_REF##*/}                                                   # the scw CLI wants the bare id
-
-scw lb frontend list "lb-id=${LB_ID}" "zone=${LB_ZONE}" -o json \
-  | jq -r '.[] | select(.inbound_port == 443) | .id'                  # -> gateway_lb_frontend_id
-scw lb backend list "lb-id=${LB_ID}" "zone=${LB_ZONE}" -o json \
-  | jq -r --arg zone "${LB_ZONE}" \
-      '.[] | select(.forward_protocol == "tcp") | "\($zone)/\(.id)"'  # -> gateway_lb_backend_id
-```
-
-Export both as `TF_VAR_gateway_lb_frontend_id` and `TF_VAR_gateway_lb_backend_id` (they are
-cluster-specific and never committed) and apply — the edge backend stages reference them. The
-edge-only ACLs need no captured id: Terraform finds the CCM's 443 and 80 frontends by port (see
-[edge-services.md](edge-services.md#origin-lockdown-only-edge-services-may-reach-the-gateway-load-balancer)).
-
-The CCM names its resources `<gateway-service-uid>_tcp_<port>`; anything named
-`<prefix>-<environment>-*` is Terraform-owned. If the 443 frontend or the TCP backend is
-missing after a deploy, the §5 adoption annotations did not take — re-run §5, redeploy, and
-capture again.
+They exist only once a deploy has created the annotated gateway Service, so an environment's very
+first plan cannot resolve them. The CCM names its resources `<gateway-service-uid>_tcp_<port>`;
+anything named `<prefix>-<environment>-*` is Terraform-owned. If the plan cannot find the 443
+frontend after a deploy, the §5 adoption annotations did not take — re-run §5 and redeploy.
 
 ## 6. Verify
 

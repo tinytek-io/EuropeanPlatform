@@ -39,3 +39,29 @@ output "registry_pull_secret_key" {
   value       = scaleway_iam_api_key.registry_pull.secret_key
   sensitive   = true
 }
+
+output "organization_id" {
+  description = "The Scaleway Organization the environment's project belongs to"
+  value       = scaleway_account_project.environment.organization_id
+}
+
+output "administrator_user_id" {
+  description = "IAM user id of the administrator who runs the bootstrap; the environment module lists it in its bucket policies"
+  value       = var.administrator_user_id
+}
+
+output "operator_application_id" {
+  description = "IAM application the environment's deploys run as; the environment module lists it in its bucket policies"
+  value       = scaleway_iam_application.operator.id
+}
+
+output "operator_access_key" {
+  description = "Access key of the environment operator's API key (the bootstrap command writes it into the operator's scw profile)"
+  value       = scaleway_iam_api_key.operator.access_key
+}
+
+output "operator_secret_key" {
+  description = "Secret key of the environment operator's API key (sensitive; the bootstrap command writes it into the operator's scw profile)"
+  value       = scaleway_iam_api_key.operator.secret_key
+  sensitive   = true
+}

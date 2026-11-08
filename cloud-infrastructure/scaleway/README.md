@@ -51,14 +51,11 @@ The domain is the single public-facing knob: the edge hostnames derive as `app.<
 passes all three to the AppHost (`Hostnames__App`, `Hostnames__BackOffice`, `Email__Sender`)
 so application configuration never duplicates them.
 
-Bootstrap runs on **local state**; each environment's bootstrap state is a separate file
-(`terraform apply -state=terraform.<environment>.tfstate`), because the project resource is keyed
-by the environment name — applying a second environment into one state file would REPLACE the
-first environment's project. The environment module's remote state bucket is per-environment
-(created by that environment's bootstrap) and declared in `environment/environments/<environment>.backend.hcl`;
-switching the working copy between environments is
-`terraform init -reconfigure -backend-config=environments/<environment>.backend.hcl`, which the deploy
-command runs before it reads any state.
+Each environment's bootstrap keeps its own state in that environment's state bucket (see
+[State](#state)), because the project resource is keyed by the environment name — one shared
+state would REPLACE one environment's project with another's. Both modules' state is selected
+per environment through `environment/environments/<environment>.backend.hcl`, and the bootstrap
+and deploy commands run `terraform init -reconfigure` with it before they read any state.
 
 Known provider gap (terraform-provider-scaleway ~> 2.86): `scaleway_k8s_cluster` has no
 apiserver access-restriction attributes, so the Kubernetes API server stays publicly reachable
@@ -68,55 +65,52 @@ mitigated by kubeconfig being the only credential.
 
 ## Usage
 
-Credentials come from the environment (`SCW_ACCESS_KEY`, `SCW_SECRET_KEY`,
-`SCW_DEFAULT_ORGANIZATION_ID`, `SCW_DEFAULT_PROJECT_ID`) or the equivalent variables below.
-
-Both modules take `TF_VAR_operator_user_id` (the IAM user id of whoever runs Terraform; never
-committed): the Terraform state bucket and the public asset buckets carry bucket policies, which are
-the complete access spec for their bucket, so the operator must be listed. The state bucket admits
-only the operator and the deploy pipeline — workload storage keys cannot read the state.
-
-The environment module also takes cluster-specific inputs that are never committed:
-`TF_VAR_gateway_lb_frontend_id` / `TF_VAR_gateway_lb_backend_id` (captured after the first deploy;
-see the cluster-ops README).
+Two developer CLI commands drive both modules; neither needs exported ids, a local state file, or
+a hand-run `terraform`:
 
 ```bash
-cd cloud-infrastructure/scaleway/bootstrap
-terraform init
-terraform apply -state=terraform.stage.tfstate -var prefix=<your-unique-prefix> -var environment=stage
-terraform output -state=terraform.stage.tfstate   # registry endpoint + pipeline API key (secret is sensitive)
+# Once per environment, and again whenever the bootstrap changes (idempotent, reviewed plan).
+# Runs with an administrator's personal key (the active scw profile).
+dotnet run --project developer-cli -- bootstrap -e staging
+
+# Every deploy. Runs with the environment's operator key, from the scw profile the bootstrap wrote.
+dotnet run --project developer-cli -- deploy -e staging
 ```
 
-## Handover to the main module
+Both resolve the environment from its name: the prefix comes from the committed tier file
+(`environment/environments/<environment>.tfvars`), the project is found by name
+(`<prefix>-<environment>`), and the organization from the project. In CI, export the operator's
+key as `SCW_ACCESS_KEY` and `SCW_SECRET_KEY` instead of using a profile.
 
-The environment module stores its state in the bucket created here, using S3 conditional-write
-locking (Terraform >= 1.10). The backend block in `environment/main.tf` holds the shared settings;
-each environment's `environments/<environment>.backend.hcl` supplies its bucket (the bootstrap's
-`<prefix>-<environment>-<region>-terraform-state`) and endpoint, and the pipeline API key is the S3
-credential. Together they amount to:
+### Identities
 
-```hcl
-terraform {
-  backend "s3" {
-    bucket       = "<prefix>-<environment>-<region>-terraform-state"
-    key          = "platformplatform/environment.tfstate"
-    region       = "us-east-1" # any value: requests go to the endpoint below
-    use_lockfile = true
-    endpoints = {
-      s3 = "https://s3.<region>.scw.cloud"
-    }
-    skip_credentials_validation = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
-    skip_metadata_api_check     = true
-  }
-}
-```
+| Identity | Created by | Used for | Reach |
+|---|---|---|---|
+| Administrator (a person's own key) | — | `bootstrap` | the organization |
+| `<prefix>-<environment>-operator` | bootstrap | `deploy`: the environment module's plan/apply, the Aspire deploy | everything in the environment's project, plus IAM application and policy management |
+| `<prefix>-<environment>-deploy-pipeline` | bootstrap | registry pushes and state access for a pipeline that does not run Terraform | registry and Object Storage in the project |
+| `<prefix>-<environment>-registry-pull` | bootstrap | the cluster's image pulls | registry read in the project |
 
-```bash
-export AWS_ACCESS_KEY_ID=<pipeline access key>
-export AWS_SECRET_ACCESS_KEY=<pipeline secret key>
-```
+Scaleway's IAM permissions exist at organization scope only, and the environment module creates
+the workloads' IAM applications, policies and keys, so the operator also manages IAM applications
+and policies. That stops a mistake from reaching another environment, not a stolen key: a holder
+could write a policy for another project. Hard isolation (production) is a separate Scaleway
+Organization.
+
+### State
+
+The environment module's state and the bootstrap's own state both live in the environment's state
+bucket (`platformplatform/environment.tfstate` and `platformplatform/bootstrap.tfstate`). The
+bucket's policy, which is its complete access spec, admits the administrator, the operator and the
+deploy pipeline only — workload storage keys cannot read the state. The bootstrap command applies
+a new environment's first run with local state (the bucket does not exist yet) and moves it into
+the bucket right after; a bootstrap state left from before is moved the same way on the next run.
+The environment module reads the bootstrap's outputs (operators, registry, pull key) through
+`terraform_remote_state`.
+
+Object Storage acts in the API key's preferred project, so both commands pass the state backend
+the key as `<access-key>@<project-id>`, which targets the environment's project whatever the key's
+preferred project is.
 
 The `environment` and `managed-by=terraform` tags follow the naming conventions described in
 [`cloud-infrastructure/README.md`](../README.md), with the region (e.g. `fr-par`) as the

@@ -7,6 +7,23 @@ terraform {
       version = "~> 2.86"
     }
   }
+
+  # The bootstrap keeps its own state in the state bucket it creates, next to the environment
+  # module's, so any machine (or CI) can run it again safely: the bootstrap command applies a new
+  # environment's first run with local state and migrates it into the bucket right after. The
+  # bucket comes from the command as partial configuration (-backend-config), like the
+  # environment module's environments/<environment>.backend.hcl.
+  backend "s3" {
+    key          = "platformplatform/bootstrap.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    # The backend validates against AWS by default (STS, region names, account IDs); none of that
+    # exists for a third-party S3-compatible endpoint like Scaleway Object Storage.
+    skip_credentials_validation = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_metadata_api_check     = true
+  }
 }
 
 # Credentials default to the SCW_* environment variables; the variables below only override them.
@@ -44,7 +61,8 @@ resource "scaleway_object_bucket" "terraform_state" {
 # state — including the workloads' storage identity, whose key ships in every pod — and the state
 # holds the kubeconfig, the database admin password, the internal CA key and every API key. A
 # bucket policy is the COMPLETE access spec for its bucket (IAM permissions alone no longer grant
-# anything), so only the Terraform operator and the deploy pipeline are listed.
+# anything), so only Terraform's identities are listed: the administrator who runs the bootstrap,
+# the environment's operator (deploys), and the deploy pipeline.
 resource "scaleway_object_bucket_policy" "terraform_state" {
   bucket     = scaleway_object_bucket.terraform_state.name
   region     = var.region
@@ -56,7 +74,8 @@ resource "scaleway_object_bucket_policy" "terraform_state" {
         Effect = "Allow"
         Principal = {
           SCW = [
-            "user_id:${var.operator_user_id}",
+            "user_id:${var.administrator_user_id}",
+            "application_id:${scaleway_iam_application.operator.id}",
             "application_id:${scaleway_iam_application.deploy_pipeline.id}"
           ]
         }
@@ -141,6 +160,45 @@ resource "scaleway_iam_api_key" "deploy_pipeline" {
   expires_at     = var.pipeline_key_expiry
   # Scaleway's S3 API always acts through the key's preferred project, so the pipeline key must
   # point at the per-environment project its bucket and state live in.
+  default_project_id = scaleway_account_project.environment.id
+}
+
+# The environment's operator: the identity deploys run as (the environment module's plan/apply and
+# the Aspire deploy), so a day-to-day key reaches this environment's project only, never another
+# environment's resources or state. Scaleway's IAM permissions exist at organization scope only,
+# and the environment module creates the workloads' IAM applications, policies and keys, so the
+# operator also manages IAM applications and policies. That makes it a guard against mistakes, not
+# against a stolen key: a holder could write a policy for another project. Hard isolation for
+# production is a separate Scaleway Organization.
+resource "scaleway_iam_application" "operator" {
+  name        = "${var.prefix}-${var.environment}-operator"
+  description = "Runs Terraform and deploys for the ${var.environment} environment"
+}
+
+resource "scaleway_iam_policy" "operator" {
+  name           = "${var.prefix}-${var.environment}-operator"
+  description    = "Everything in the ${var.environment} project, plus the IAM the environment module manages"
+  application_id = scaleway_iam_application.operator.id
+
+  rule {
+    permission_set_names = ["AllProductsFullAccess"]
+    project_ids          = [scaleway_account_project.environment.id]
+  }
+
+  rule {
+    # The workloads' identities (IAMApplicationManager includes their API keys), and finding the
+    # environment's project by name.
+    permission_set_names = ["IAMApplicationManager", "IAMPolicyManager", "ProjectReadOnly"]
+    organization_id      = scaleway_account_project.environment.organization_id
+  }
+}
+
+# See the deploy pipeline key for the expiry-pinning rationale; rotate by changing the date.
+resource "scaleway_iam_api_key" "operator" {
+  application_id = scaleway_iam_application.operator.id
+  description    = "API key for the ${var.environment} operator (the operator's scw profile)"
+  expires_at     = var.operator_key_expiry
+  # Object Storage acts in the key's preferred project, where the state bucket lives.
   default_project_id = scaleway_account_project.environment.id
 }
 
