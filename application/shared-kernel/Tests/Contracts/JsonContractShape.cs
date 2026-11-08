@@ -103,7 +103,7 @@ public static class JsonContractShape
 
     private static Type? DictionaryValueType(Type type)
     {
-        var dictionary = type.GetInterfaces().Append(type).FirstOrDefault(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>) || candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+        var dictionary = type.GetInterfaces().Append(type).FirstOrDefault(candidate => (candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)) || (candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>)));
         return dictionary?.GetGenericArguments()[1];
     }
 
