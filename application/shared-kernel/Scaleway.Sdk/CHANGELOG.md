@@ -11,6 +11,19 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Added
 
+- **Load Balancer** (zoned API, `v1`) — `ScalewayProjectClient.LoadBalancers` (`Scaleway.Sdk.Lb.V1`): Load
+  Balancers, their frontends and ACLs, with List, Get, Create and Delete. Frontends are listed under their Load
+  Balancer and ACLs under their frontend. Update is not generated for any of the three: Scaleway updates them with
+  `PUT`, and the CRUD matcher recognises `PATCH` updates only, so the manifest lists the groups without one. The
+  project scope carries no default zone, so zoned calls pass the zone.
+
+- **Account projects** (`v3`) — `ScalewayClient.Projects` (`Scaleway.Sdk.Account.V3`): the organization's projects,
+  with full CRUD. It sits on the account client because projects belong to the organization; listing fills
+  `organization_id` from it.
+
+- **Registry images and tags** — `RegistryApi` gains the `Image` (List, Get, Update, Delete) and `Tag` (List, Get,
+  Delete) groups next to `Namespace`.
+
 - **Secret Manager paths on `ScalewaySecretClient`** — `GetOrCreateAsync` and `SetAsync` take an optional
   `path` (default `/`, the root): the secret is created under it, and an existing secret found on a different
   path is moved there via `UpdateSecret` without touching its value. Paths are the unit Scaleway's resource-level
@@ -123,12 +136,41 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Fixed
 
+- `BREAKING:` nested schema components are named after their parent. A component was named by its last dotted
+  segment alone, so `Domain.Status` and `Email.Status` in Transactional Email were one `Status`, and every reference
+  to the domain's status resolved to the email statuses: `Domain.Status` was typed with `sending`/`sent` and could not
+  express `checked`. Each nested component now has its own type, which renames these public types:
+
+  | Service | Before | After |
+  |---|---|---|
+  | Transactional Email | `Address`, `Attachment`, `Header` | `CreateEmailRequestAddress`, `CreateEmailRequestAttachment`, `CreateEmailRequestHeader` |
+  | Transactional Email | `Try` | `EmailTry` |
+  | Transactional Email | `DomainStatus` (email values) | `DomainStatus` (domain values: `checked`, `pending`, …) |
+  | Serverless Containers | `OrderBy` | `ListContainersOrderBy`, `ListDomainsOrderBy`, `ListNamespacesOrderBy` |
+  | Secret Manager | `OrderBy` | `ListSecretsOrderBy` |
+  | Serverless Jobs | `OrderBy`, `State` | `ListJobDefinitionsOrderBy`, `ListJobRunsOrderBy`, `JobRunState` |
+  | Kubernetes | `PoolConfig` | `CreateClusterRequestPoolConfig` |
+  | Kubernetes | `PoolConfigContainerRuntime`, `PoolConfigRootVolumeType`, `PoolConfigUpgradePolicy` | `ClusterPoolConfigContainerRuntime`, `ClusterPoolConfigRootVolumeType`, `ClusterPoolConfigUpgradePolicy` |
+  | Managed Databases | `Type` | `VolumeType` |
+
+  The `OrderBy` merges were the same defect: one type stood in for several operations' `order_by` enums, so all but
+  one list operation offered the wrong values.
+
+- A field whose OpenAPI 3.1 `type` is a list (`[string, "null"]`, Scaleway's way of marking it nullable) now
+  generates its non-null type. Such fields previously failed generation, which surfaced with the Load Balancer schema
+  (every timestamp); no existing generated field changes.
+
 - `BREAKING:` a schema field typed `number` now generates `double?` (and `double[]?`) instead of `long?`. JSON
   Schema's `number` is a real, not a whole number, so any fractional value threw at the deserializer instead of
   binding — found live, where Kapsule returns `scale_down_utilization_threshold: 0.5` and `CreateCluster` failed
   after the cluster had already been created. Two generated fields change type; `integer` is unaffected.
 
 ### Changed
+
+- Every generated resource group is claimed at `StructurallyConformant` in the manifest and the README's coverage
+  table. Twelve groups (IAM, VPC, Secret Manager, Serverless Containers, Managed Databases, Redis, Registry
+  namespaces) claimed `RoundTripValidated` on the strength of a deploy-simulation test that this repository does
+  not carry. A group is raised again only together with the test that verifies it.
 
 - The package declares a version for the first time: **0.1.0-preview**, where it previously took .NET's implicit
   `1.0.0`. The assembly version moves with it, and the version is now consumer-visible in the `User-Agent`. The
