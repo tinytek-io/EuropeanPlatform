@@ -1,5 +1,11 @@
 using System.Text;
+using System.Xml.Linq;
 using FluentAssertions;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using SharedKernel.Configuration;
 using SharedKernel.Integrations.BlobStorage;
@@ -16,6 +22,40 @@ public sealed class BlobStorageDataProtectionRepositoryTests
     {
         // Arrange
         var repository = CreateRepository(KeyXml($"""<encryptedSecret decryptorType="{typeof(AesGcmXmlDecryptor).AssemblyQualifiedName}"><encryptedKey /></encryptedSecret>"""));
+
+        // Act
+        var elements = repository.GetAllElements();
+
+        // Assert
+        elements.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void GetAllElements_WhenTheFrameworkWroteTheKeyWithThePlatformEncryptor_ShouldLoadIt()
+    {
+        // Arrange: Data Protection itself creates and encrypts the key, as the ring's owner does in
+        // cloud. The framework writes <encryptedSecret> in its own XML namespace, which hand-written
+        // key XML does not reproduce (found live: every API refused the owner's first key).
+        var keyStore = new InMemoryXmlRepository();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [DataProtectionEncryptionKey.SecretName] = Convert.ToBase64String(new byte[32]) })
+            .Build();
+        var encryptionKey = DataProtectionEncryptionKey.FromConfiguration(configuration);
+        var services = new ServiceCollection();
+        services.AddSingleton(encryptionKey);
+        services.AddDataProtection();
+        services.Configure<KeyManagementOptions>(options =>
+            {
+                options.XmlRepository = keyStore;
+                options.XmlEncryptor = new AesGcmXmlEncryptor(encryptionKey);
+            }
+        );
+        using (var serviceProvider = services.BuildServiceProvider())
+        {
+            serviceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("test").Protect([0]);
+        }
+
+        var repository = CreateRepository(keyStore.GetAllElements().Single().ToString());
 
         // Act
         var elements = repository.GetAllElements();
@@ -75,5 +115,20 @@ public sealed class BlobStorageDataProtectionRepositoryTests
         blobStorageClient.DownloadAsync(BlobStorageDataProtectionRepository.BucketName, BlobName, Arg.Any<CancellationToken>())
             .Returns(((Stream, string)?)(new MemoryStream(Encoding.UTF8.GetBytes(blobXml)), "application/xml"));
         return new BlobStorageDataProtectionRepository(blobStorageClient);
+    }
+
+    private sealed class InMemoryXmlRepository : IXmlRepository
+    {
+        private readonly List<XElement> _elements = [];
+
+        public IReadOnlyCollection<XElement> GetAllElements()
+        {
+            return _elements;
+        }
+
+        public void StoreElement(XElement element, string friendlyName)
+        {
+            _elements.Add(element);
+        }
     }
 }

@@ -55,10 +55,12 @@ public sealed class BlobStorageDataProtectionRepository(IBlobStorageClient blobS
         if (element.Name.LocalName != "key") return;
 
         var platformDecryptorPrefix = $"{typeof(AesGcmXmlDecryptor).FullName},";
-        var encryptedSecrets = element.Descendants("encryptedSecret").ToArray();
+        // Matched by local name: the framework writes <encryptedSecret> in its own XML namespace
+        // (http://schemas.asp.net/2015/03/dataProtection), so a plain XName finds none.
+        var encryptedSecrets = element.Descendants().Where(descendant => descendant.Name.LocalName == "encryptedSecret").ToArray();
         var encryptedByPlatform = encryptedSecrets.Length > 0 &&
                                   encryptedSecrets.All(secret => secret.Attribute("decryptorType")?.Value.StartsWith(platformDecryptorPrefix, StringComparison.Ordinal) == true) &&
-                                  !element.Descendants("masterKey").Any();
+                                  element.Descendants().All(descendant => descendant.Name.LocalName != "masterKey");
         if (!encryptedByPlatform)
         {
             throw new InvalidOperationException($"The Data Protection key '{blobName}' is not encrypted with the platform keyring key, so the keyring is not loaded.");
