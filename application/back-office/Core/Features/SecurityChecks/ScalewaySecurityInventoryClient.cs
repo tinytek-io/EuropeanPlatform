@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Scaleway.Sdk;
+using ScwLb = Scaleway.Sdk.Lb.V1;
 
 namespace BackOffice.Features.SecurityChecks;
 
@@ -18,13 +19,17 @@ public sealed class SecurityChecksOptions
 
 /// <summary>
 ///     Reads the <see cref="SecurityInventory" /> from the Scaleway API with the worker's own key, which holds the
-///     read-only Load Balancer and Edge Services permission sets only. The SDK's generated clients do not cover those
-///     two APIs, so the reads go through its transport, which still owns paging and error classification.
+///     read-only Load Balancer and Edge Services permission sets only. Load Balancers, frontends and ACLs come from the
+///     SDK's generated Load Balancer client. Edge Services is not generated yet, so its reads go through the SDK's
+///     transport, which still owns paging and error classification.
 /// </summary>
 public sealed class ScalewaySecurityInventoryClient(HttpClient httpClient, IOptions<SecurityChecksOptions> options)
 {
     // Load Balancers are zonal; a region has these three zones (fr-par, nl-ams and pl-waw alike).
     private static readonly int[] ZoneNumbers = [1, 2, 3];
+
+    // No request scope: a scope needs the organization, which the worker is not given. Listing names the project.
+    private readonly ScwLb.LbApi _loadBalancers = new(new ScalewayApiClient(httpClient));
 
     private readonly string _projectId = Environment.GetEnvironmentVariable("SCW_DEFAULT_PROJECT_ID")
                                          ?? throw new InvalidOperationException("SCW_DEFAULT_PROJECT_ID environment variable is not configured.");
@@ -53,12 +58,12 @@ public sealed class ScalewaySecurityInventoryClient(HttpClient httpClient, IOpti
 
     private async Task<LoadBalancerSnapshot[]> ReadLoadBalancersAsync(string zone, CancellationToken cancellationToken)
     {
-        var loadBalancers = await _scaleway.ListResourcesAsync($"lb/v1/zones/{zone}/lbs", _region, [new KeyValuePair<string, string>("project_id", _projectId)], cancellationToken);
+        var loadBalancers = await _loadBalancers.ListLbsAsync(new ScwLb.ListLbsRequest { ProjectId = _projectId }, zone, cancellationToken);
 
         return loadBalancers.Select(loadBalancer => new LoadBalancerSnapshot(
-                $"{zone}/{loadBalancer.GetProperty("id").GetString()}",
-                loadBalancer.GetProperty("name").GetString()!,
-                ReadArray(loadBalancer, "ip").Select(ip => ip.GetProperty("ip_address").GetString()!).ToArray()
+                $"{zone}/{loadBalancer.Id}",
+                loadBalancer.Name!,
+                (loadBalancer.Ip ?? []).Select(ip => ip.IpAddress!).ToArray()
             )
         ).ToArray();
     }
@@ -66,29 +71,27 @@ public sealed class ScalewaySecurityInventoryClient(HttpClient httpClient, IOpti
     private async Task<FrontendSnapshot[]> ReadFrontendsAsync(string zoneQualifiedLoadBalancerId, CancellationToken cancellationToken)
     {
         var (zone, loadBalancerId) = SplitZoneQualifiedId(zoneQualifiedLoadBalancerId);
-        var frontends = await _scaleway.ListResourcesAsync($"lb/v1/zones/{zone}/lbs/{loadBalancerId}/frontends", _region, null, cancellationToken);
+        var frontends = await _loadBalancers.ListFrontendsAsync(loadBalancerId, zone: zone, cancellationToken: cancellationToken);
 
         var snapshots = new List<FrontendSnapshot>();
         foreach (var frontend in frontends)
         {
-            var frontendId = frontend.GetProperty("id").GetString()!;
-            var acls = await _scaleway.ListResourcesAsync($"lb/v1/zones/{zone}/frontends/{frontendId}/acls", _region, null, cancellationToken);
-            snapshots.Add(new FrontendSnapshot(frontendId, frontend.GetProperty("name").GetString()!, frontend.GetProperty("inbound_port").GetInt32(), acls.Select(ToAclSnapshot).ToArray()));
+            var acls = await _loadBalancers.ListAclsAsync(frontend.Id!, zone: zone, cancellationToken: cancellationToken);
+            snapshots.Add(new FrontendSnapshot(frontend.Id!, frontend.Name!, (int)frontend.InboundPort!.Value, acls.Select(ToAclSnapshot).ToArray()));
         }
 
         return snapshots.ToArray();
     }
 
-    private static AclSnapshot ToAclSnapshot(JsonElement acl)
+    private static AclSnapshot ToAclSnapshot(ScwLb.Acl acl)
     {
-        var match = acl.GetProperty("match");
         return new AclSnapshot(
-            acl.GetProperty("name").GetString()!,
-            acl.GetProperty("index").GetInt32(),
-            acl.GetProperty("action").GetProperty("type").GetString()!,
-            match.TryGetProperty("ips_edge_services", out var edgeServices) && edgeServices.GetBoolean(),
-            match.TryGetProperty("invert", out var invert) && invert.GetBoolean(),
-            ReadArray(match, "ip_subnet").Select(subnet => subnet.GetString()!).ToArray()
+            acl.Name!,
+            (int)acl.Index!.Value,
+            acl.Action!.Type!.Value.Value,
+            acl.Match?.IpsEdgeServices == true,
+            acl.Match?.Invert == true,
+            acl.Match?.IpSubnet ?? []
         );
     }
 
