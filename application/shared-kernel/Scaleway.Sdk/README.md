@@ -74,11 +74,12 @@ upward on its own is the failure this package went out of its way to make imposs
 
 <!-- coverage:start — generated from Generated/manifest.json; do not edit by hand -->
 
-**12 services, 25 resource groups, 116 operations** — 110 on resource groups plus 6 declared actions.
+**13 services, 32 resource groups, 147 operations** — 141 on resource groups plus 6 declared actions.
 
 | Service | API version | Namespace | Entry point | Actions |
 |---|---|---|---|---|
 | `account` | `v3` | `Scaleway.Sdk.Account.V3` | `ScalewayClient.Projects` | — |
+| `edge_services` | `v1beta1` | `Scaleway.Sdk.EdgeServices.V1Beta1` | `ScalewayProjectClient.EdgeServices` | — |
 | `iam` | `v1alpha1` | `Scaleway.Sdk.Iam.V1Alpha1` | `ScalewayClient.Iam` | — |
 | `k8s` | `v1` | `Scaleway.Sdk.K8s.V1` | `ScalewayProjectClient.Kubernetes` | `GetClusterKubeConfig` |
 | `lb` | `v1` | `Scaleway.Sdk.Lb.V1` | `ScalewayProjectClient.LoadBalancers` | — |
@@ -94,6 +95,13 @@ upward on its own is the failure this package went out of its way to make imposs
 | Service | Resource group | Tier | Operations |
 |---|---|---|---|
 | `account` | `Project` | StructurallyConformant | `ListProjects`, `CreateProject`, `GetProject`, `UpdateProject`, `DeleteProject` |
+| `edge_services` | `Pipeline` | StructurallyConformant | `ListPipelines`, `CreatePipeline`, `GetPipeline`, `UpdatePipeline`, `DeletePipeline` |
+| `edge_services` | `DNSStage` | StructurallyConformant | `GetDNSStage`, `UpdateDNSStage`, `DeleteDNSStage`, `ListDNSStages`, `CreateDNSStage` |
+| `edge_services` | `TLSStage` | StructurallyConformant | `ListTLSStages`, `CreateTLSStage`, `GetTLSStage`, `UpdateTLSStage`, `DeleteTLSStage` |
+| `edge_services` | `CacheStage` | StructurallyConformant | `GetCacheStage`, `UpdateCacheStage`, `DeleteCacheStage`, `ListCacheStages`, `CreateCacheStage` |
+| `edge_services` | `WafStage` | StructurallyConformant | `ListWafStages`, `CreateWafStage`, `GetWafStage`, `UpdateWafStage`, `DeleteWafStage` |
+| `edge_services` | `BackendStage` | StructurallyConformant | `GetBackendStage`, `UpdateBackendStage`, `DeleteBackendStage`, `ListBackendStages`, `CreateBackendStage` |
+| `edge_services` | `HeadStage` | StructurallyConformant | `ListHeadStages` |
 | `iam` | `Application` | StructurallyConformant | `ListApplications`, `CreateApplication`, `GetApplication`, `UpdateApplication`, `DeleteApplication` |
 | `iam` | `Policy` | StructurallyConformant | `ListPolicies`, `CreatePolicy`, `GetPolicy`, `UpdatePolicy`, `DeletePolicy` |
 | `iam` | `APIKey` | StructurallyConformant | `ListAPIKeys`, `CreateAPIKey`, `GetAPIKey`, `UpdateAPIKey`, `DeleteAPIKey` |

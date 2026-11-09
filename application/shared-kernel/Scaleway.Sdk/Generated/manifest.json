@@ -24,6 +24,103 @@
       "actions": []
     },
     {
+      "service": "edge_services",
+      "slug": "edge-services",
+      "namespace": "Scaleway.Sdk.EdgeServices.V1Beta1",
+      "apiVersion": "V1Beta1",
+      "entryPoint": "ScalewayProjectClient.EdgeServices",
+      "resourceGroups": [
+        {
+          "name": "Pipeline",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines",
+          "itemPath": "edge-services/v1beta1/pipelines",
+          "operations": [
+            "ListPipelines",
+            "CreatePipeline",
+            "GetPipeline",
+            "UpdatePipeline",
+            "DeletePipeline"
+          ]
+        },
+        {
+          "name": "DNSStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/dns-stages",
+          "itemPath": "edge-services/v1beta1/dns-stages",
+          "operations": [
+            "GetDNSStage",
+            "UpdateDNSStage",
+            "DeleteDNSStage",
+            "ListDNSStages",
+            "CreateDNSStage"
+          ]
+        },
+        {
+          "name": "TLSStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/tls-stages",
+          "itemPath": "edge-services/v1beta1/tls-stages",
+          "operations": [
+            "ListTLSStages",
+            "CreateTLSStage",
+            "GetTLSStage",
+            "UpdateTLSStage",
+            "DeleteTLSStage"
+          ]
+        },
+        {
+          "name": "CacheStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/cache-stages",
+          "itemPath": "edge-services/v1beta1/cache-stages",
+          "operations": [
+            "GetCacheStage",
+            "UpdateCacheStage",
+            "DeleteCacheStage",
+            "ListCacheStages",
+            "CreateCacheStage"
+          ]
+        },
+        {
+          "name": "WafStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/waf-stages",
+          "itemPath": "edge-services/v1beta1/waf-stages",
+          "operations": [
+            "ListWafStages",
+            "CreateWafStage",
+            "GetWafStage",
+            "UpdateWafStage",
+            "DeleteWafStage"
+          ]
+        },
+        {
+          "name": "BackendStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/backend-stages",
+          "itemPath": "edge-services/v1beta1/backend-stages",
+          "operations": [
+            "GetBackendStage",
+            "UpdateBackendStage",
+            "DeleteBackendStage",
+            "ListBackendStages",
+            "CreateBackendStage"
+          ]
+        },
+        {
+          "name": "HeadStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/head-stages",
+          "itemPath": "edge-services/v1beta1/pipelines/{pipeline_id}/head-stages",
+          "operations": [
+            "ListHeadStages"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
       "service": "iam",
       "slug": "iam",
       "namespace": "Scaleway.Sdk.Iam.V1Alpha1",

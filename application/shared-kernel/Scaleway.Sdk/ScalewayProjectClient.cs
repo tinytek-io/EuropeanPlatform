@@ -1,4 +1,5 @@
 using ScwContainers = Scaleway.Sdk.ServerlessContainer.V1;
+using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
 using ScwJobs = Scaleway.Sdk.Jobs.V1Alpha2;
 using ScwK8s = Scaleway.Sdk.K8s.V1;
 using ScwLb = Scaleway.Sdk.Lb.V1;
@@ -30,6 +31,7 @@ public sealed class ScalewayProjectClient
         // so region-scoped calls need no region argument either.
         var scope = new ScalewayRequestScope(account.OrganizationId.Value, projectId.Value, account.DefaultRegion.ToApiString());
         Containers = new ScwContainers.ServerlessContainerApi(Transport, scope);
+        EdgeServices = new ScwEdge.EdgeServicesApi(Transport, scope);
         Jobs = new ScwJobs.JobsApi(Transport, scope);
         Kubernetes = new ScwK8s.K8sApi(Transport, scope);
         LoadBalancers = new ScwLb.LbApi(Transport, scope);
@@ -55,6 +57,12 @@ public sealed class ScalewayProjectClient
 
     /// <summary>Serverless Containers — the namespaces, containers and custom domains the deploy provisions.</summary>
     public ScwContainers.ServerlessContainerApi Containers { get; }
+
+    /// <summary>
+    ///     Edge Services pipelines and their stages. The API is global (no region or zone); listing pipelines fills
+    ///     <c>project_id</c> from this scope, while stages are listed by their pipeline's id.
+    /// </summary>
+    public ScwEdge.EdgeServicesApi EdgeServices { get; }
 
     /// <summary>
     ///     Serverless Jobs — job definitions and the runs they produce. A run is created by starting a definition,

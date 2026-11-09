@@ -57,7 +57,8 @@ public static class SchemaPins
         new("serverless-databases", "v1alpha1", "Current published version; Scaleway publishes no newer document."),
         new("kubernetes", "v1", "Current published version; Scaleway publishes no newer document."),
         new("load-balancer/zoned", "v1", "The zoned API, which the gateway Load Balancer, its frontends, backends and ACLs live under; v1 is the version Scaleway documents. Not yet probed for a newer version."),
-        new("account/project", "v3", "Projects live in Account v3; v2 is retired. Not yet probed for a newer version.")
+        new("account/project", "v3", "Projects live in Account v3; v2 is retired. Not yet probed for a newer version."),
+        new("edge-services", "v1beta1", "The version Scaleway documents (downloaded through a browser, since the bot protection rejects scripted downloads). Not yet probed for a newer version.")
     ];
 
     /// <summary>

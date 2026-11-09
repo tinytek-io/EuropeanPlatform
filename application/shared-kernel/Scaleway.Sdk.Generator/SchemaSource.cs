@@ -45,6 +45,7 @@ public static class SchemaSource
             "kubernetes" => "k8s",
             "load-balancer-zoned" => "lb",
             "account-project" => "account",
+            "edge-services" => "edge_services",
             _ => slug // registry, vpc, iam already match
         };
     }
@@ -85,6 +86,15 @@ public static class SchemaSource
             "lb" => [("Lb", "Lbs"), ("Frontend", "Frontends"), ("Acl", "Acls")],
             // Account v3 projects: resolving an environment's project by name and its organization by id.
             "account" => [("Project", "Projects")],
+            // Edge Services pipelines and the stages chained behind them, which the deploy and edge-health read.
+            // Each stage kind is listed and created under its pipeline but addressed at its own top-level path
+            // (split paths, like Kubernetes pools). Head stages are list-only upstream: a pipeline's head is set
+            // through SetHeadStage, not created.
+            "edge_services" =>
+            [
+                ("Pipeline", "Pipelines"), ("DNSStage", "DNSStages"), ("TLSStage", "TLSStages"), ("CacheStage", "CacheStages"),
+                ("WafStage", "WafStages"), ("BackendStage", "BackendStages"), ("HeadStage", "HeadStages")
+            ],
             _ => []
         };
     }
@@ -140,6 +150,7 @@ public static class SchemaSource
             "account" => ("ScalewayClient", "Projects"),
             // Project-scoped. The property is the product's common name rather than the schema slug.
             "container" => ("ScalewayProjectClient", "Containers"),
+            "edge_services" => ("ScalewayProjectClient", "EdgeServices"),
             "jobs" => ("ScalewayProjectClient", "Jobs"),
             "k8s" => ("ScalewayProjectClient", "Kubernetes"),
             "lb" => ("ScalewayProjectClient", "LoadBalancers"),
