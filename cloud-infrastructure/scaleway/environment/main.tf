@@ -831,11 +831,16 @@ locals {
     # The dedicated migrator workloads (pre-upgrade Jobs): the SAME logical connection name as
     # the application, but their own Secret Manager path resolves it as the structure-owner
     # migrator role. The runtime workloads above resolve the same name as the readwrite app user.
+    # The migrator owns every table it creates, so it also grants the app user access to them
+    # (Database__ApplicationUser): the readwrite privilege covers only tables that existed when
+    # it was set, which on a new environment is none.
     account-migrator = {
       ConnectionStrings__account-database = local.account_migrator_connection_string
+      Database__ApplicationUser           = scaleway_rdb_user.app.name
     }
     main-migrator = {
       ConnectionStrings__main-database = local.main_migrator_connection_string
+      Database__ApplicationUser        = scaleway_rdb_user.app.name
     }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key

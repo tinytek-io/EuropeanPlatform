@@ -1,4 +1,5 @@
 using Main.Database;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SharedKernel.Database;
@@ -15,6 +16,14 @@ using var scope = host.Services.CreateScope();
 
 var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService<MainDbContext>>();
 migrationService.ApplyMigrations();
+
+// Deployed environments run the application as a separate readwrite user; local development
+// migrates and runs as the same user, so there is nothing to grant.
+var applicationUser = host.Services.GetRequiredService<IConfiguration>()["Database:ApplicationUser"];
+if (applicationUser is not null)
+{
+    migrationService.GrantApplicationUserAccess(applicationUser);
+}
 
 var dataMigrationRunner = scope.ServiceProvider.GetRequiredService<DataMigrationRunner<MainDbContext>>();
 await dataMigrationRunner.RunMigrationsAsync(CancellationToken.None);
