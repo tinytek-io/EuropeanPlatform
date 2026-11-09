@@ -32,7 +32,7 @@
       "resourceGroups": [
         {
           "name": "Application",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "iam/v1alpha1/applications",
           "itemPath": "iam/v1alpha1/applications",
           "operations": [
@@ -45,7 +45,7 @@
         },
         {
           "name": "Policy",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "iam/v1alpha1/policies",
           "itemPath": "iam/v1alpha1/policies",
           "operations": [
@@ -58,7 +58,7 @@
         },
         {
           "name": "APIKey",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "iam/v1alpha1/api-keys",
           "itemPath": "iam/v1alpha1/api-keys",
           "operations": [
@@ -162,7 +162,7 @@
       "resourceGroups": [
         {
           "name": "Instance",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "rdb/v1/regions/{region}/instances",
           "itemPath": "rdb/v1/regions/{region}/instances",
           "operations": [
@@ -187,7 +187,7 @@
       "resourceGroups": [
         {
           "name": "Cluster",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "redis/v1/zones/{zone}/clusters",
           "itemPath": "redis/v1/zones/{zone}/clusters",
           "operations": [
@@ -210,7 +210,7 @@
       "resourceGroups": [
         {
           "name": "Namespace",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "registry/v1/regions/{region}/namespaces",
           "itemPath": "registry/v1/regions/{region}/namespaces",
           "operations": [
@@ -256,7 +256,7 @@
       "resourceGroups": [
         {
           "name": "Secret",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "secret-manager/v1beta1/regions/{region}/secrets",
           "itemPath": "secret-manager/v1beta1/regions/{region}/secrets",
           "operations": [
@@ -269,7 +269,7 @@
         },
         {
           "name": "SecretVersion",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "secret-manager/v1beta1/regions/{region}/secrets/{secret_id}/versions",
           "itemPath": "secret-manager/v1beta1/regions/{region}/secrets/{secret_id}/versions",
           "operations": [
@@ -294,7 +294,7 @@
       "resourceGroups": [
         {
           "name": "Container",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "containers/v1/regions/{region}/containers",
           "itemPath": "containers/v1/regions/{region}/containers",
           "operations": [
@@ -307,7 +307,7 @@
         },
         {
           "name": "Namespace",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "containers/v1/regions/{region}/namespaces",
           "itemPath": "containers/v1/regions/{region}/namespaces",
           "operations": [
@@ -414,7 +414,7 @@
       "resourceGroups": [
         {
           "name": "PrivateNetwork",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "vpc/v2/regions/{region}/private-networks",
           "itemPath": "vpc/v2/regions/{region}/private-networks",
           "operations": [
@@ -427,7 +427,7 @@
         },
         {
           "name": "VPC",
-          "tier": "RoundTripValidated",
+          "tier": "StructurallyConformant",
           "collectionPath": "vpc/v2/regions/{region}/vpcs",
           "itemPath": "vpc/v2/regions/{region}/vpcs",
           "operations": [

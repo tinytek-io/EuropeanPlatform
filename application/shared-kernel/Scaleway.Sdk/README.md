@@ -94,30 +94,30 @@ upward on its own is the failure this package went out of its way to make imposs
 | Service | Resource group | Tier | Operations |
 |---|---|---|---|
 | `account` | `Project` | StructurallyConformant | `ListProjects`, `CreateProject`, `GetProject`, `UpdateProject`, `DeleteProject` |
-| `iam` | `Application` | RoundTripValidated | `ListApplications`, `CreateApplication`, `GetApplication`, `UpdateApplication`, `DeleteApplication` |
-| `iam` | `Policy` | RoundTripValidated | `ListPolicies`, `CreatePolicy`, `GetPolicy`, `UpdatePolicy`, `DeletePolicy` |
-| `iam` | `APIKey` | RoundTripValidated | `ListAPIKeys`, `CreateAPIKey`, `GetAPIKey`, `UpdateAPIKey`, `DeleteAPIKey` |
+| `iam` | `Application` | StructurallyConformant | `ListApplications`, `CreateApplication`, `GetApplication`, `UpdateApplication`, `DeleteApplication` |
+| `iam` | `Policy` | StructurallyConformant | `ListPolicies`, `CreatePolicy`, `GetPolicy`, `UpdatePolicy`, `DeletePolicy` |
+| `iam` | `APIKey` | StructurallyConformant | `ListAPIKeys`, `CreateAPIKey`, `GetAPIKey`, `UpdateAPIKey`, `DeleteAPIKey` |
 | `k8s` | `Cluster` | StructurallyConformant | `ListClusters`, `CreateCluster`, `GetCluster`, `UpdateCluster`, `DeleteCluster` |
 | `k8s` | `Version` | StructurallyConformant | `ListVersions`, `GetVersion` |
 | `lb` | `Lb` | StructurallyConformant | `ListLbs`, `CreateLb`, `GetLb`, `DeleteLb` |
 | `lb` | `Frontend` | StructurallyConformant | `GetFrontend`, `DeleteFrontend`, `ListFrontends`, `CreateFrontend` |
 | `lb` | `Acl` | StructurallyConformant | `GetAcl`, `DeleteAcl`, `ListAcls`, `CreateAcl` |
-| `rdb` | `Instance` | RoundTripValidated | `ListInstances`, `CreateInstance`, `GetInstance`, `UpdateInstance`, `DeleteInstance` |
-| `redis` | `Cluster` | RoundTripValidated | `ListClusters`, `CreateCluster`, `GetCluster`, `UpdateCluster`, `DeleteCluster` |
-| `registry` | `Namespace` | RoundTripValidated | `ListNamespaces`, `CreateNamespace`, `GetNamespace`, `UpdateNamespace`, `DeleteNamespace` |
+| `rdb` | `Instance` | StructurallyConformant | `ListInstances`, `CreateInstance`, `GetInstance`, `UpdateInstance`, `DeleteInstance` |
+| `redis` | `Cluster` | StructurallyConformant | `ListClusters`, `CreateCluster`, `GetCluster`, `UpdateCluster`, `DeleteCluster` |
+| `registry` | `Namespace` | StructurallyConformant | `ListNamespaces`, `CreateNamespace`, `GetNamespace`, `UpdateNamespace`, `DeleteNamespace` |
 | `registry` | `Image` | StructurallyConformant | `ListImages`, `GetImage`, `UpdateImage`, `DeleteImage` |
 | `registry` | `Tag` | StructurallyConformant | `ListTags`, `GetTag`, `DeleteTag` |
-| `secret` | `Secret` | RoundTripValidated | `ListSecrets`, `CreateSecret`, `GetSecret`, `UpdateSecret`, `DeleteSecret` |
-| `secret` | `SecretVersion` | RoundTripValidated | `ListSecretVersions`, `CreateSecretVersion`, `GetSecretVersion`, `UpdateSecretVersion`, `DeleteSecretVersion` |
-| `container` | `Container` | RoundTripValidated | `ListContainers`, `CreateContainer`, `GetContainer`, `UpdateContainer`, `DeleteContainer` |
-| `container` | `Namespace` | RoundTripValidated | `ListNamespaces`, `CreateNamespace`, `GetNamespace`, `UpdateNamespace`, `DeleteNamespace` |
+| `secret` | `Secret` | StructurallyConformant | `ListSecrets`, `CreateSecret`, `GetSecret`, `UpdateSecret`, `DeleteSecret` |
+| `secret` | `SecretVersion` | StructurallyConformant | `ListSecretVersions`, `CreateSecretVersion`, `GetSecretVersion`, `UpdateSecretVersion`, `DeleteSecretVersion` |
+| `container` | `Container` | StructurallyConformant | `ListContainers`, `CreateContainer`, `GetContainer`, `UpdateContainer`, `DeleteContainer` |
+| `container` | `Namespace` | StructurallyConformant | `ListNamespaces`, `CreateNamespace`, `GetNamespace`, `UpdateNamespace`, `DeleteNamespace` |
 | `container` | `Domain` | StructurallyConformant | `ListDomains`, `CreateDomain`, `GetDomain`, `UpdateDomain`, `DeleteDomain` |
 | `jobs` | `JobDefinition` | StructurallyConformant | `ListJobDefinitions`, `CreateJobDefinition`, `GetJobDefinition`, `UpdateJobDefinition`, `DeleteJobDefinition` |
 | `jobs` | `JobRun` | StructurallyConformant | `ListJobRuns`, `GetJobRun` |
 | `tem` | `Domain` | StructurallyConformant | `ListDomains`, `CreateDomain`, `GetDomain`, `UpdateDomain` |
 | `tem` | `Email` | StructurallyConformant | `ListEmails`, `CreateEmail`, `GetEmail` |
-| `vpc` | `PrivateNetwork` | RoundTripValidated | `ListPrivateNetworks`, `CreatePrivateNetwork`, `GetPrivateNetwork`, `UpdatePrivateNetwork`, `DeletePrivateNetwork` |
-| `vpc` | `VPC` | RoundTripValidated | `ListVPCs`, `CreateVPC`, `GetVPC`, `UpdateVPC`, `DeleteVPC` |
+| `vpc` | `PrivateNetwork` | StructurallyConformant | `ListPrivateNetworks`, `CreatePrivateNetwork`, `GetPrivateNetwork`, `UpdatePrivateNetwork`, `DeletePrivateNetwork` |
+| `vpc` | `VPC` | StructurallyConformant | `ListVPCs`, `CreateVPC`, `GetVPC`, `UpdateVPC`, `DeleteVPC` |
 
 <!-- coverage:end -->
 

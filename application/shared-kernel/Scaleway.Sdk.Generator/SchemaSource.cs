@@ -160,31 +160,17 @@ public static class SchemaSource
     /// <summary>
     ///     How thoroughly each generated resource group has actually been checked, rendered into the manifest.
     ///     <para>
-    ///         Deliberately conservative, and deliberately not inferred from "the deploy calls it": a tier is a claim
-    ///         about verification, and the failure mode this whole manifest exists to stop is a coverage claim that
-    ///         drifts upward on its own. <see cref="ValidationTier.RoundTripValidated" /> is declared only where the
-    ///         group appears in <c>DeploySimulationTests.Simulation_ExercisesEveryDeployedResourceUnderFaults</c>'s
-    ///         asserted resource list — a list a test already enforces, so the claim has an owner that fails loudly.
-    ///     </para>
-    ///     <para>
-    ///         Everything else is <see cref="ValidationTier.StructurallyConformant" />, including groups the deploy
-    ///         does touch (TEM's Domain is created by a real deploy). Understating is the safe direction; generated
-    ///         live probes would be what raise a group to <see cref="ValidationTier.LiveReadOnly" />, and no
-    ///         group is claimed at that tier until those exist.
+    ///         A tier is a claim about verification, never about intent, and the failure mode this manifest exists to
+    ///         stop is a coverage claim that drifts upward on its own. No test in this repository exercises a group's
+    ///         create, update and delete against a simulation, or its answers against live Scaleway, so every group is
+    ///         claimed at <see cref="ValidationTier.StructurallyConformant" />: the floor generation itself enforces.
+    ///         Raise a group only in the same change that adds the test which verifies it.
     ///     </para>
     /// </summary>
+    /// <param name="service">The generator's service name.</param>
+    /// <param name="resourceGroup">The resource group's singular name.</param>
     public static ValidationTier ValidationTierFor(string service, string resourceGroup)
     {
-        return (service, resourceGroup) switch
-        {
-            ("container", "Container") or ("container", "Namespace") => ValidationTier.RoundTripValidated,
-            ("registry", "Namespace") => ValidationTier.RoundTripValidated,
-            ("rdb", "Instance") => ValidationTier.RoundTripValidated,
-            ("redis", "Cluster") => ValidationTier.RoundTripValidated,
-            ("vpc", "VPC") or ("vpc", "PrivateNetwork") => ValidationTier.RoundTripValidated,
-            ("secret", "Secret") or ("secret", "SecretVersion") => ValidationTier.RoundTripValidated,
-            ("iam", "Application") or ("iam", "Policy") or ("iam", "APIKey") => ValidationTier.RoundTripValidated,
-            _ => ValidationTier.StructurallyConformant
-        };
+        return ValidationTier.StructurallyConformant;
     }
 }
