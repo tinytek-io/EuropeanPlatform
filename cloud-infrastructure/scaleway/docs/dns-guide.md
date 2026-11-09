@@ -12,7 +12,9 @@ The `dns-check` command derives every record below from the Terraform state (nev
 resolves each one against live DNS, and prints a table with ok/missing/mismatch per record. Every
 `deploy` runs it first and stops on a missing or mismatched record, before anything is built; an
 environment's first bring-up, whose records are still being created, passes `--skip-dns-check`.
-Fix whatever it reports here in the DNS console.
+It acts with the environment's operator key, the scw profile the bootstrap writes, so nothing needs
+exporting: `dotnet run --project developer-cli -- dns-check -e staging`. Fix whatever it reports
+here in the DNS console.
 
 ## 1. Web traffic: point the staging hostnames at the Edge Services pipelines
 
@@ -82,7 +84,7 @@ resource.
 
 ```bash
 # Full read-only health check of the edge pipelines and both public endpoints:
-SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
+dotnet run --project developer-cli -- edge-health -e staging
 
 # Record-by-record:
 dig +short app.staging.europeanplatform.net         # should chain to the pipeline endpoint IPs

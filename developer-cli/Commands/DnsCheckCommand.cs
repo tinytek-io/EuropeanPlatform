@@ -25,14 +25,24 @@ public sealed partial class DnsCheckCommand : Command
 {
     public DnsCheckCommand() : base(
         "dns-check",
-        "Print and verify the DNS records the environment expects its hosting zone to carry (read-only; requires the Terraform environment variables)."
+        "Print and verify the DNS records the environment expects its hosting zone to carry (read-only; acts with the environment's operator scw profile)."
     )
     {
-        SetAction(_ => RunAsync().GetAwaiter().GetResult());
+        var environmentOption = new Option<string>("--environment", "-e")
+        {
+            Description = "The environment to check (staging)",
+            DefaultValueFactory = _ => "staging"
+        };
+        Options.Add(environmentOption);
+
+        SetAction(parseResult => RunAsync(parseResult.GetValue(environmentOption)!).GetAwaiter().GetResult());
     }
 
-    private static async Task RunAsync()
+    private static async Task RunAsync(string environment)
     {
+        Prerequisite.Ensure(Prerequisite.Terraform);
+
+        await ScalewayEnvironment.ConnectAsync(environment);
         var mismatches = await PrintDnsReportAsync();
         if (mismatches > 0)
         {
@@ -41,7 +51,8 @@ public sealed partial class DnsCheckCommand : Command
     }
 
     // Shared with DeployCommand, which runs the same report before building and stops on drift
-    // (unless --skip-dns-check); standalone runs exit non-zero on drift.
+    // (unless --skip-dns-check); standalone runs exit non-zero on drift. Both connect to the
+    // environment first (ScalewayEnvironment.ConnectAsync), so the state is readable.
     public static async Task<int> PrintDnsReportAsync()
     {
         var environmentModuleFolder = Path.Combine(Configuration.SourceCodeFolder, "cloud-infrastructure", "scaleway", "environment");
@@ -51,13 +62,11 @@ public sealed partial class DnsCheckCommand : Command
             return 1;
         }
 
-        // terraform show reads the remote state; the state-bucket credentials are the same ones the
-        // deploy pipeline exports (see cloud-infrastructure/scaleway/environment/main.tf backend block).
         // The full state carries every secret, so it is captured in memory only (never logged).
         var stateResult = await ProcessHelper.ExecuteSensitiveAsync("terraform show -json", environmentModuleFolder);
         if (!stateResult.Success)
         {
-            AnsiConsole.MarkupLine("[red]Could not read the Terraform state.[/] Export the Scaleway and state-bucket credentials (see cloud-infrastructure/scaleway/environment) and try again.");
+            AnsiConsole.MarkupLine("[red]Could not read the Terraform state:[/] {Markup.Escape(stateResult.StdErr.Trim())}");
             return 1;
         }
 

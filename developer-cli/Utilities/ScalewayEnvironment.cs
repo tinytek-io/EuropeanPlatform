@@ -11,6 +11,8 @@ namespace DeveloperCli.Utilities;
 
 public sealed record ScalewayCredentials(string AccessKey, string SecretKey, string Source);
 
+public sealed record ResolvedEnvironment(string TerraformEnvironment, string ProjectName, string OrganizationId, string ProjectId, ScalewayCredentials Credentials);
+
 /// <summary>
 ///     Resolves a Scaleway environment from its name and an API key alone: the prefix comes from the
 ///     committed tier file, the project is found by name (&lt;prefix&gt;-&lt;environment&gt;), and the
@@ -79,6 +81,43 @@ public static partial class ScalewayEnvironment
         AnsiConsole.MarkupLine($"[red]{Markup.Escape(tierFile)} sets no prefix.[/] Add a line like prefix = \"pp\" (2-6 lowercase letters or digits).");
         Environment.Exit(1);
         return null!;
+    }
+
+    /// <summary>
+    ///     Resolves the environment's key and project from its name alone. The key is the environment's
+    ///     operator (the scw profile the bootstrap command writes) unless SCW_ACCESS_KEY/SCW_SECRET_KEY
+    ///     are exported, as in CI.
+    /// </summary>
+    public static async Task<ResolvedEnvironment> ResolveAsync(string environment)
+    {
+        var terraformEnvironment = TerraformNameOf(environment);
+        var projectName = $"{ReadPrefix(terraformEnvironment)}-{terraformEnvironment}";
+        var credentials = await ReadCredentialsAsync(projectName);
+        var apiKey = await GetApiKeyAsync(credentials);
+        var organizationId = await GetOrganizationIdAsync(credentials, apiKey.DefaultProjectId);
+        var projectId = await FindProjectIdAsync(credentials, organizationId, projectName);
+        if (projectId is null)
+        {
+            AnsiConsole.MarkupLine($"[red]No Scaleway project named '{projectName}' exists.[/] Create the environment first: dotnet run --project developer-cli -- bootstrap -e {environment}");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"Acting with the key from {Markup.Escape(credentials.Source)} in project [cyan]{projectName}[/].");
+        return new ResolvedEnvironment(terraformEnvironment, projectName, organizationId, projectId, credentials);
+    }
+
+    /// <summary>
+    ///     Resolves the environment, hands its key to Terraform, and initializes the environment
+    ///     module's remote state, so any command can read or change the environment with nothing exported.
+    /// </summary>
+    public static async Task<ResolvedEnvironment> ConnectAsync(string environment)
+    {
+        var resolved = await ResolveAsync(environment);
+        ExportForTerraform(resolved.Credentials, resolved.OrganizationId, resolved.ProjectId);
+
+        var backendConfiguration = BackendConfigurationOf(resolved.TerraformEnvironment);
+        await TerraformHelper.RunSensitiveAsync(EnvironmentModuleFolder, $"init -reconfigure -input=false -no-color -backend-config={backendConfiguration}", "initialize the environment module's remote state (has the bootstrap run, and may this key read the state bucket?)");
+        return resolved;
     }
 
     /// <summary>

@@ -22,7 +22,9 @@ namespace DeveloperCli.Commands;
 /// <remarks>
 ///     Uses the raw edge-services HTTP API rather than the generated SDK: the endpoints needed
 ///     (head-stages in particular) are not cherry-picked into Scaleway.Sdk yet, and scw has no
-///     head-stage command at all. Authentication comes from the SCW_SECRET_KEY environment variable.
+///     head-stage command at all. It acts with the environment's operator key (the scw profile the
+///     bootstrap command writes, or SCW_ACCESS_KEY/SCW_SECRET_KEY when exported) and checks only the
+///     environment's own project.
 /// </remarks>
 public sealed class EdgeHealthCommand : Command
 {
@@ -35,27 +37,27 @@ public sealed class EdgeHealthCommand : Command
 
     public EdgeHealthCommand() : base(
         "edge-health",
-        "Verify the Scaleway Edge Services pipelines, their stage chains, and the public HTTPS endpoints (read-only). Requires SCW_SECRET_KEY."
+        "Verify the Scaleway Edge Services pipelines, their stage chains, and the public HTTPS endpoints (read-only; acts with the environment's operator scw profile)."
     )
     {
-        SetAction(_ => ExecuteAsync().GetAwaiter().GetResult());
+        var environmentOption = new Option<string>("--environment", "-e")
+        {
+            Description = "The environment to check (staging)",
+            DefaultValueFactory = _ => "staging"
+        };
+        Options.Add(environmentOption);
+
+        SetAction(parseResult => ExecuteAsync(parseResult.GetValue(environmentOption)!).GetAwaiter().GetResult());
     }
 
-    private static async Task ExecuteAsync()
+    private static async Task ExecuteAsync(string environment)
     {
-        var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
-        if (string.IsNullOrWhiteSpace(secretKey))
-        {
-            AnsiConsole.MarkupLine("[red]Error:[/] SCW_SECRET_KEY is not set. Export it before running (see cloud-infrastructure/scaleway/environment).");
-            Environment.Exit(1);
-        }
-
-        var projectFilter = Environment.GetEnvironmentVariable("SCW_DEFAULT_PROJECT_ID");
+        var resolved = await ScalewayEnvironment.ResolveAsync(environment);
 
         using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
+        httpClient.DefaultRequestHeaders.Add("X-Auth-Token", resolved.Credentials.SecretKey);
 
-        var pipelines = await ListPipelinesAsync(httpClient, projectFilter);
+        var pipelines = await ListPipelinesAsync(httpClient, resolved.ProjectId);
         if (pipelines.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]Error:[/] no Edge Services pipelines found.");
@@ -116,9 +118,9 @@ public sealed class EdgeHealthCommand : Command
         AnsiConsole.MarkupLine("[green]All edge health checks passed.[/]");
     }
 
-    private static async Task<List<(string Id, string Name)>> ListPipelinesAsync(HttpClient httpClient, string? projectFilter)
+    private static async Task<List<(string Id, string Name)>> ListPipelinesAsync(HttpClient httpClient, string projectId)
     {
-        var url = $"{ApiBaseUrl}/pipelines?page_size=100" + (projectFilter is null ? "" : $"&project_id={projectFilter}");
+        var url = $"{ApiBaseUrl}/pipelines?page_size=100&project_id={projectId}";
         var pipelines = await ReadJsonArrayAsync(httpClient, url, "pipelines");
         return pipelines
             .Select(node => (node["id"]!.GetValue<string>(), node["name"]?.GetValue<string>() ?? node["id"]!.GetValue<string>()))

@@ -85,34 +85,13 @@ public sealed partial class DeployCommand : Command
     {
         Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
 
-        var terraformEnvironment = ScalewayEnvironment.TerraformNameOf(aspireEnvironment);
         var repositoryRoot = Configuration.SourceCodeFolder;
         var environmentModuleFolder = ScalewayEnvironment.EnvironmentModuleFolder;
         var applicationFolder = Path.Combine(repositoryRoot, "application");
 
         PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
 
-        // Everything else derives from the environment name and the API key: the prefix from the
-        // committed tier file, the project by name, the organization from the project. The key is
-        // the environment's operator (the scw profile the bootstrap command writes) unless
-        // SCW_ACCESS_KEY/SCW_SECRET_KEY are exported, as in CI.
-        var prefix = ScalewayEnvironment.ReadPrefix(terraformEnvironment);
-        var backendConfiguration = ScalewayEnvironment.BackendConfigurationOf(terraformEnvironment);
-        var projectName = $"{prefix}-{terraformEnvironment}";
-        var credentials = await ScalewayEnvironment.ReadCredentialsAsync(projectName);
-        var apiKey = await ScalewayEnvironment.GetApiKeyAsync(credentials);
-        var organizationId = await ScalewayEnvironment.GetOrganizationIdAsync(credentials, apiKey.DefaultProjectId);
-        var projectId = await ScalewayEnvironment.FindProjectIdAsync(credentials, organizationId, projectName);
-        if (projectId is null)
-        {
-            AnsiConsole.MarkupLine($"[red]No Scaleway project named '{projectName}' exists.[/] Create the environment first: dotnet run --project developer-cli -- bootstrap -e {aspireEnvironment}");
-            Environment.Exit(1);
-        }
-
-        ScalewayEnvironment.ExportForTerraform(credentials, organizationId, projectId);
-        AnsiConsole.MarkupLine($"Acting with the key from {Markup.Escape(credentials.Source)} in project [cyan]{projectName}[/].");
-
-        await TerraformHelper.RunSensitiveAsync(environmentModuleFolder, $"init -reconfigure -input=false -no-color -backend-config={backendConfiguration}", "initialize the environment module's remote state (has the bootstrap run, and may this key read the state bucket?)");
+        var (terraformEnvironment, _, _, projectId, credentials) = await ScalewayEnvironment.ConnectAsync(aspireEnvironment);
 
         if (!skipPlanCheck)
         {
@@ -329,7 +308,7 @@ public sealed partial class DeployCommand : Command
             await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "The rollout succeeded, but these changes are not applied; a gateway frontend the rollout created stays open until they are.");
         }
 
-        AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]edge-health[/] for a read-only health check of the edge and the public endpoints.");
+        AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]dotnet run --project developer-cli -- edge-health -e {aspireEnvironment}[/] for a read-only health check of the edge and the public endpoints.");
     }
 
     /// <summary>

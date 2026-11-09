@@ -34,7 +34,7 @@ edge-side head drop NOT caused by Terraform is invisible to `terraform plan` —
 `edge-health` command (developer-cli) is the check that catches it:
 
 ```bash
-SCW_SECRET_KEY=<key> dotnet run --project developer-cli -- edge-health
+dotnet run --project developer-cli -- edge-health -e staging
 ```
 
 ## Backend stages — live-derived API quirks (all found the hard way)
