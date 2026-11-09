@@ -53,6 +53,7 @@ public sealed partial class DeployCommand : Command
 
     private static readonly TimeSpan EdgeCertificateIssuanceTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan EdgeCertificatePollInterval = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan StaleChallengeMinimumAge = TimeSpan.FromMinutes(10);
 
     public DeployCommand() : base(
         "deploy",
@@ -240,6 +241,7 @@ public sealed partial class DeployCommand : Command
         ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
         AdoptHandAppliedNetworkPolicies(kubeconfigPath, repositoryRoot);
         AdmitMigrationJobsUnderTheLivePolicy(kubeconfigPath, repositoryRoot);
+        ClearStaleCertificateChallenges(kubeconfigPath);
         LogInToRegistry(registryHost, credentials);
 
         PrintHeader("Running the Aspire deploy pipeline");
@@ -881,6 +883,50 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine($"  [green]✓[/] {policyName} now admits every migration Job by its workload-role label");
+    }
+
+    // cert-manager owns a Challenge by its issuer, not by its Order, so a Challenge outlives the Order it
+    // was created for (a Certificate whose hostnames changed gets a new Order; found live: a removed
+    // hostname's challenge kept retrying its self-check, with a solver pod and HTTPRoute, long after
+    // the certificate was issued). A Challenge whose ACME URL no live Order lists belongs to nothing,
+    // whatever the certificate or issuer; deleting it lets cert-manager's finalizer remove its solver.
+    // The age floor keeps the check clear of an Order still being populated.
+    private static void ClearStaleCertificateChallenges(string kubeconfigPath)
+    {
+        var kubectl = $"kubectl --kubeconfig {kubeconfigPath}";
+        var orders = ProcessHelper.ExecuteQuietly($"{kubectl} get orders.acme.cert-manager.io --all-namespaces -o json");
+        var challenges = ProcessHelper.ExecuteQuietly($"{kubectl} get challenges.acme.cert-manager.io --all-namespaces -o json");
+
+        // A cluster without cert-manager (yet) has neither resource type, so nothing can be stale.
+        if (!orders.Success && orders.StdErr.Contains("the server doesn't have a resource type"))
+        {
+            return;
+        }
+
+        ExitOnFailure(orders, "Reading the cert-manager Orders");
+        ExitOnFailure(challenges, "Reading the cert-manager Challenges");
+
+        var listedChallengeUrls = JsonNode.Parse(orders.StdOut)!["items"]!.AsArray()
+            .SelectMany(order => order?["status"]?["authorizations"]?.AsArray() ?? [])
+            .SelectMany(authorization => authorization?["challenges"]?.AsArray() ?? [])
+            .Select(challenge => challenge?["url"]?.GetValue<string>())
+            .OfType<string>()
+            .ToHashSet();
+
+        var staleBefore = DateTimeOffset.UtcNow - StaleChallengeMinimumAge;
+        var staleChallenges = JsonNode.Parse(challenges.StdOut)!["items"]!.AsArray()
+            .OfType<JsonNode>()
+            .Where(challenge => !listedChallengeUrls.Contains(challenge["spec"]?["url"]?.GetValue<string>() ?? ""))
+            .Where(challenge => DateTimeOffset.Parse(challenge["metadata"]!["creationTimestamp"]!.GetValue<string>()) < staleBefore)
+            .Select(challenge => (Namespace: challenge["metadata"]!["namespace"]!.GetValue<string>(), Name: challenge["metadata"]!["name"]!.GetValue<string>(), Hostname: challenge["spec"]?["dnsName"]?.GetValue<string>()))
+            .ToArray();
+
+        foreach (var (challengeNamespace, name, hostname) in staleChallenges)
+        {
+            // --wait=false: cert-manager's finalizer removes the solver first, then releases the Challenge.
+            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} delete challenges.acme.cert-manager.io {name} --namespace {challengeNamespace} --wait=false"), $"Deleting the stale challenge {name}");
+            AnsiConsole.MarkupLine($"  [green]✓[/] Deleted the stale certificate challenge for {Markup.Escape(hostname ?? name)} (its order no longer exists)");
+        }
     }
 
     private static void PrintHeader(string title)
