@@ -625,9 +625,10 @@ public sealed partial class DeployCommand : Command
     // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
     // exists on disk only in the owner-only temp manifest, only for the duration of the apply.
     // Kapsule ships Cilium with its Gateway API controller off and without the Gateway API and Envoy
-    // CRDs, and the release's Gateway, HTTPRoutes, and BackendTLSPolicies need all of them. Every step
-    // is idempotent, so the deploy converges a fresh cluster and re-converges one after a Kapsule
-    // upgrade (which may revert cilium-config). Cilium is restarted only when something changed.
+    // CRDs, and the release's Gateway, HTTPRoutes, and BackendTLSPolicies need all of them; it also pins
+    // Cilium's MTU below the Private Network's (see the mtu setting). Every step is idempotent, so the
+    // deploy converges a fresh cluster and re-converges one after a Kapsule upgrade (which may revert
+    // cilium-config). Cilium is restarted only when something changed.
     private static void PrepareClusterForGateway(string kubeconfigPath, string repositoryRoot)
     {
         PrintHeader("Preparing the cluster for the Gateway API");
@@ -643,17 +644,28 @@ public sealed partial class DeployCommand : Command
 
         var configuration = ProcessHelper.ExecuteQuietly($"{kubectl} get configmap cilium-config -n kube-system -o jsonpath={{.data}}");
         ExitOnFailure(configuration, "Reading cilium-config");
-        var gatewaySettings = JsonSerializer.Deserialize<Dictionary<string, string>>(configuration.StdOut)!;
-        string[] requiredSettings = ["enable-gateway-api", "enable-gateway-api-secrets-sync", "enable-envoy-config"];
-        if (requiredSettings.Any(setting => gatewaySettings.GetValueOrDefault(setting) != "true"))
+        var currentSettings = JsonSerializer.Deserialize<Dictionary<string, string>>(configuration.StdOut)!;
+        var requiredSettings = new Dictionary<string, string>
+        {
+            ["enable-gateway-api"] = "true",
+            ["enable-gateway-api-secrets-sync"] = "true",
+            ["enable-envoy-config"] = "true",
+            // Cilium treats `mtu` as the underlying network's MTU and subtracts the VXLAN overhead itself for
+            // pod routes. Kapsule pins it to 1450, which sizes cilium_host/cilium_net at 1450 while the Private
+            // Network carries 1500. Envoy receives the Load Balancer's traffic through those devices, so full
+            // 1500-byte packets were dropped silently and requests just over one packet hung until the edge's
+            // 60-second timeout. 1500 is the Private Network's real MTU, and tunnel routes become 1450.
+            ["mtu"] = "1500"
+        };
+        if (requiredSettings.Any(setting => currentSettings.GetValueOrDefault(setting.Key) != setting.Value))
         {
             // A patch file, not -p: the process runs without a shell, so a quoted JSON argument
             // would not survive argument parsing.
             var patchFile = Path.Combine(Path.GetTempPath(), $"pp-cilium-config-patch-{Guid.NewGuid():N}.json");
-            File.WriteAllText(patchFile, JsonSerializer.Serialize(new { data = requiredSettings.ToDictionary(setting => setting, _ => "true") }));
+            File.WriteAllText(patchFile, JsonSerializer.Serialize(new { data = requiredSettings }));
             var patchResult = ProcessHelper.ExecuteQuietly($"{kubectl} patch configmap cilium-config -n kube-system --type merge --patch-file {patchFile}");
             File.Delete(patchFile);
-            ExitOnFailure(patchResult, "Enabling Cilium's Gateway API controller");
+            ExitOnFailure(patchResult, "Configuring Cilium's Gateway API controller and MTU");
             changed = true;
         }
 
