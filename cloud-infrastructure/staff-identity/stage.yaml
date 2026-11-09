@@ -1,0 +1,4 @@
+# Staging staff identity: who may sign in to the back-office, and which tools may sign them in.
+# See README.md for the format. Nobody has a password; sign-in is by an emailed one-time code.
+staff: []
+clients: []

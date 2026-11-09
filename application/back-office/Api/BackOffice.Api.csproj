@@ -46,4 +46,15 @@
         </Content>
     </ItemGroup>
 
+    <!-- Every environment's staff identity file ships with the back-office (staff-identity/<environment>.yaml
+    in the publish output), and StaffIdentity:File selects the deployed environment's one: who may sign in is
+    committed configuration, so it changes with a deploy. Local development points at the AppHost's
+    development file instead. -->
+    <ItemGroup>
+        <Content Include="..\..\..\cloud-infrastructure\staff-identity\*.yaml">
+            <Link>staff-identity\%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+
 </Project>
