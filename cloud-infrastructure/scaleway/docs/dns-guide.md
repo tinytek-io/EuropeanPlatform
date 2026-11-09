@@ -70,11 +70,8 @@ Create three records in the DNS console for the `staging` zone:
 | TXT  | `<project-id>._domainkey.staging` | the `dkim_config` value from the command above (the selector is the domain's `project_id`) |
 | TXT  | `_dmarc.staging`         | `v=DMARC1; p=none; rua=mailto:ops@europeanplatform.net` |
 
-Then ask Scaleway to re-check the records:
-
-```bash
-scw tem domain check domain-id=<id>
-```
+Then run `dotnet run --project developer-cli -- dns-check`: once the records resolve it asks Scaleway to
+validate the domain and reports the outcome (the deploy does the same before it builds).
 
 The domain shows all records verified once DNS propagates. Subscription to the `essential`
 plan (300 emails/month included) stays a one-time console action — the plan has no Terraform

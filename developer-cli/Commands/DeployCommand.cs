@@ -106,7 +106,7 @@ public sealed partial class DeployCommand : Command
 
         PrintHeader($"Deploying {aspireEnvironment} to Scaleway");
 
-        var (terraformEnvironment, _, _, projectId, credentials) = await ScalewayEnvironment.ConnectAsync(aspireEnvironment);
+        var (terraformEnvironment, _, organizationId, projectId, credentials) = await ScalewayEnvironment.ConnectAsync(aspireEnvironment);
 
         if (!skipPlanCheck)
         {
@@ -122,7 +122,7 @@ public sealed partial class DeployCommand : Command
         if (!skipDnsCheck)
         {
             PrintHeader("Verifying the DNS records");
-            if (await DnsCheckCommand.PrintDnsReportAsync() > 0)
+            if (await DnsCheckCommand.PrintDnsReportAsync(credentials, organizationId) > 0)
             {
                 AnsiConsole.MarkupLine("[red]The DNS records do not match the environment.[/] Fix them first (the table above has the exact values), or pass --skip-dns-check to deploy anyway.");
                 Environment.Exit(1);
