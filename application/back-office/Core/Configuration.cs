@@ -97,7 +97,7 @@ public static class Configuration
             );
 
             // Request-scoped staff identity: handlers read this instead of the raw principal,
-            // whether the identity came from the mock EasyAuth selector or a staff OIDC provider.
+            // whether the identity came from the mock identity picker or a staff OIDC provider.
             services.AddScoped<IStaffExecutionContext, StaffExecutionContext>();
 
             return services.AddSharedServices<BackOfficeDbContext>([Assembly]);

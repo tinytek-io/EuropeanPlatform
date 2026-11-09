@@ -4,7 +4,7 @@ namespace Account.Tests.BackOffice;
 // machinery (including the mock login picker) is owned by the back-office system, so these local
 // stand-ins mirror its admin/user identities without coupling the account tests to that system:
 // the internal API only ever sees the delegation token built from these claims.
-public sealed record TestStaffIdentity(string Id, string Name, string Email, string ObjectId, string[] Groups);
+public sealed record TestStaffIdentity(string Id, string Name, string Email, string SubjectId, string[] Groups);
 
 public static class TestStaffIdentities
 {

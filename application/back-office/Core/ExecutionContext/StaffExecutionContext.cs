@@ -24,7 +24,7 @@ public sealed class StaffExecutionContext(
 
     public bool IsAuthenticated => Principal is { Identity.IsAuthenticated: true };
 
-    public string? ObjectId => Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+    public string? SubjectId => Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
 
     public string DisplayName => Principal?.FindFirstValue(ClaimTypes.Name) ?? string.Empty;
 

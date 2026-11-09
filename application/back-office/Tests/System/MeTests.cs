@@ -50,7 +50,7 @@ public sealed class MeTests(BackOfficeWebApplicationFactory factory)
         using var client = CreateAnonymousClient();
         var forgedPrincipal = Convert.ToBase64String("""{"claims":[{"typ":"groups","val":"BackOfficeAdmins"}]}"""u8.ToArray());
         client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-NAME", "attacker");
-        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-ID", AdminIdentity.ObjectId);
+        client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL-ID", AdminIdentity.SubjectId);
         client.DefaultRequestHeaders.Add("X-MS-CLIENT-PRINCIPAL", forgedPrincipal);
 
         var response = await client.GetAsync("/api/back-office/me");

@@ -608,7 +608,7 @@ EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 └─ developer-cli         # A .NET CLI tool for automating common developer tasks
 ```
 
-** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The `back-office` SCS is the staff surface for operations and support on its own hostname — a backend-for-frontend over the feature systems' internal APIs, with its own staff identity: it signs staff in from the committed staff identity file and is the OIDC provider other tools sign staff in through (MockEasyAuth stands in during development).
+** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The `back-office` SCS is the staff surface for operations and support on its own hostname — a backend-for-frontend over the feature systems' internal APIs, with its own staff identity: it signs staff in from the committed staff identity file and is the OIDC provider other tools sign staff in through (a mock identity picker stands in during development).
 
 # Technologies
 

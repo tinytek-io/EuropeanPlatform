@@ -113,7 +113,7 @@ export declare global {
     /**
      * Whether the mock identity selector is available (local development and opted-in environments)
      **/
-    PUBLIC_MOCK_EASY_AUTH_ENABLED: string;
+    PUBLIC_MOCK_STAFF_IDENTITY_ENABLED: string;
     /**
      * "true" when the back-office signs staff in itself (a staff identity file is configured).
      * Set by the back-office host only; takes precedence over the mock identity selector.

@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using AppHost;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using BackOffice.StaffIdentity;
 using Microsoft.Extensions.Configuration;
 using Projects;
@@ -115,7 +115,7 @@ var staffIdentityFile = isPublishMode
 // The staff group whose members get the back-office admin capability: the staff identity file's
 // admins group wherever the back-office signs staff in itself, and the mock admin identity's group
 // behind the mock login picker.
-var backOfficeAdminsGroupId = staffSignInEnabled ? StaffGroups.Admins : MockEasyAuthIdentities.MockAdminsGroupId;
+var backOfficeAdminsGroupId = staffSignInEnabled ? StaffGroups.Admins : MockStaffIdentities.MockAdminsGroupId;
 
 // cert-manager contact email for the Let's Encrypt issuer (publish mode only).
 var acmeEmail = isPublishMode
@@ -387,7 +387,7 @@ if (isPublishMode)
         .WithHttpsEndpoint(8443, 8443, "https")
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live")
         // Deployed environments always sign staff in themselves: the mock login picker never runs there.
-        .WithEnvironment("MockEasyAuth__Enabled", "false")
+        .WithEnvironment("MockStaffIdentity__Enabled", "false")
         // The BFF calls account's internal API (/internal-api/back-office/*) over in-cluster TLS,
         // carrying the signed-in staff member's delegation token.
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));

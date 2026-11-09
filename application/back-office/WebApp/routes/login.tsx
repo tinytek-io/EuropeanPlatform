@@ -24,10 +24,10 @@ export const Route = createFileRoute("/login")({
   beforeLoad: () => {
     // Gated by the server-provided runtime flags, not the build type: the back-office signs staff
     // in itself wherever a staff identity file is configured, and otherwise offers the mock
-    // identity selector where the environment opts in (MockEasyAuth:Enabled, local development).
+    // identity selector where the environment opts in (MockStaffIdentity:Enabled, local development).
     if (
       import.meta.runtime_env.PUBLIC_STAFF_SIGN_IN_ENABLED !== "true" &&
-      import.meta.runtime_env.PUBLIC_MOCK_EASY_AUTH_ENABLED !== "true"
+      import.meta.runtime_env.PUBLIC_MOCK_STAFF_IDENTITY_ENABLED !== "true"
     ) {
       throw new NotFoundError();
     }
@@ -65,7 +65,7 @@ function MockLoginPage() {
           event.preventDefault();
           setIsPending(true);
           const encodedReturnPath = encodeURIComponent(returnPath);
-          globalThis.location.href = `/.auth/login/aad/callback?identity=${selectedId}&post_login_redirect_uri=${encodedReturnPath}`;
+          globalThis.location.href = `/auth/login/callback?identity=${selectedId}&post_login_redirect_uri=${encodedReturnPath}`;
         }}
         className="flex w-full max-w-[22rem] flex-col items-center gap-4 pt-8 pb-4"
       >

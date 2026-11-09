@@ -1,6 +1,6 @@
 using System.Net;
 using BackOffice.Authentication;
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using FluentAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,13 +13,13 @@ using Xunit;
 
 namespace BackOffice.Tests.Authentication;
 
-public sealed class MockEasyAuthMiddlewareTests
+public sealed class MockStaffIdentityMiddlewareTests
 {
     [Fact]
     public async Task Invoke_WhenLoginPathRequested_ShouldRedirectToMockLoginPage()
     {
         // Arrange
-        var middleware = new MockEasyAuthMiddleware(_ => Task.CompletedTask);
+        var middleware = new MockStaffIdentityMiddleware(_ => Task.CompletedTask);
         var context = new DefaultHttpContext
         {
             Request =
@@ -42,7 +42,7 @@ public sealed class MockEasyAuthMiddlewareTests
     public async Task Invoke_WhenLoginPathRedirectTargetIsPickerItself_ShouldRedirectHome()
     {
         // Arrange
-        var middleware = new MockEasyAuthMiddleware(_ => Task.CompletedTask);
+        var middleware = new MockStaffIdentityMiddleware(_ => Task.CompletedTask);
         var context = new DefaultHttpContext
         {
             Request =
@@ -65,7 +65,7 @@ public sealed class MockEasyAuthMiddlewareTests
     public async Task Invoke_WhenCallbackHitWithKnownIdentity_ShouldSetCookieAndRedirect()
     {
         // Arrange
-        var middleware = new MockEasyAuthMiddleware(_ => Task.CompletedTask);
+        var middleware = new MockStaffIdentityMiddleware(_ => Task.CompletedTask);
         var context = new DefaultHttpContext
         {
             Request =
@@ -83,14 +83,14 @@ public sealed class MockEasyAuthMiddlewareTests
         context.Response.StatusCode.Should().Be((int)HttpStatusCode.Redirect);
         context.Response.Headers.Location.ToString().Should().Be("/dashboard");
         var setCookie = context.Response.Headers.SetCookie.ToString();
-        setCookie.Should().Contain($"{MockEasyAuthCookie.CookieName}=admin");
+        setCookie.Should().Contain($"{MockStaffIdentityCookie.CookieName}=admin");
     }
 
     [Fact]
     public async Task Invoke_WhenCallbackHitWithUnknownIdentity_ShouldReturnBadRequest()
     {
         // Arrange
-        var middleware = new MockEasyAuthMiddleware(_ => Task.CompletedTask);
+        var middleware = new MockStaffIdentityMiddleware(_ => Task.CompletedTask);
         var context = new DefaultHttpContext
         {
             Request =
@@ -112,7 +112,7 @@ public sealed class MockEasyAuthMiddlewareTests
     public async Task Invoke_WhenLogoutHit_ShouldClearCookieAndRedirect()
     {
         // Arrange
-        var middleware = new MockEasyAuthMiddleware(_ => Task.CompletedTask);
+        var middleware = new MockStaffIdentityMiddleware(_ => Task.CompletedTask);
         var context = new DefaultHttpContext
         {
             Request =
@@ -127,7 +127,7 @@ public sealed class MockEasyAuthMiddlewareTests
 
         // Assert
         context.Response.StatusCode.Should().Be((int)HttpStatusCode.Redirect);
-        context.Response.Headers.SetCookie.ToString().Should().Contain($"{MockEasyAuthCookie.CookieName}=");
+        context.Response.Headers.SetCookie.ToString().Should().Contain($"{MockStaffIdentityCookie.CookieName}=");
         context.Response.Headers.SetCookie.ToString().Should().Contain("expires=");
     }
 
@@ -135,22 +135,22 @@ public sealed class MockEasyAuthMiddlewareTests
     public async Task Invoke_WhenCookieCarriesKnownIdentity_ShouldAttachIdentity()
     {
         // Arrange
-        MockEasyAuthIdentity? observed = null;
-        var middleware = new MockEasyAuthMiddleware(ctx =>
+        MockStaffIdentity? observed = null;
+        var middleware = new MockStaffIdentityMiddleware(ctx =>
             {
-                observed = MockEasyAuthIdentities.GetAttached(ctx);
+                observed = MockStaffIdentities.GetAttached(ctx);
                 return Task.CompletedTask;
             }
         );
 
-        var admin = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var admin = MockStaffIdentities.Default.Single(i => i.Id == "admin");
         var context = new DefaultHttpContext
         {
             Request =
             {
                 Path = "/api/back-office/me",
                 Method = HttpMethods.Get,
-                Headers = { Cookie = $"{MockEasyAuthCookie.CookieName}={admin.Id}" }
+                Headers = { Cookie = $"{MockStaffIdentityCookie.CookieName}={admin.Id}" }
             }
         };
 
@@ -167,15 +167,15 @@ public sealed class MockEasyAuthMiddlewareTests
     public async Task Invoke_WhenCookieMissingOrUnknown_ShouldNotAttachIdentity(string? cookieValue)
     {
         // Arrange
-        MockEasyAuthIdentity? observed = null;
-        var middleware = new MockEasyAuthMiddleware(ctx =>
+        MockStaffIdentity? observed = null;
+        var middleware = new MockStaffIdentityMiddleware(ctx =>
             {
-                observed = MockEasyAuthIdentities.GetAttached(ctx);
+                observed = MockStaffIdentities.GetAttached(ctx);
                 return Task.CompletedTask;
             }
         );
         var context = new DefaultHttpContext { Request = { Path = "/api/back-office/me", Method = HttpMethods.Get } };
-        if (cookieValue is not null) context.Request.Headers.Cookie = $"{MockEasyAuthCookie.CookieName}={cookieValue}";
+        if (cookieValue is not null) context.Request.Headers.Cookie = $"{MockStaffIdentityCookie.CookieName}={cookieValue}";
 
         // Act
         await middleware.InvokeAsync(context);
@@ -185,7 +185,7 @@ public sealed class MockEasyAuthMiddlewareTests
     }
 
     [Fact]
-    public async Task UseMockEasyAuthWhenEnabled_WhenStaffSignInIsConfigured_ShouldNotRegisterTheMiddleware()
+    public async Task UseMockStaffIdentityWhenEnabled_WhenStaffSignInIsConfigured_ShouldNotRegisterTheMiddleware()
     {
         // Arrange: a configured staff identity file, even in the development environment — the
         // mock would otherwise intercept the login path the real sign-in maps.
@@ -201,7 +201,7 @@ public sealed class MockEasyAuthMiddlewareTests
     }
 
     [Fact]
-    public async Task UseMockEasyAuthWhenEnabled_WhenNoProviderInDevelopment_ShouldRegisterTheMiddleware()
+    public async Task UseMockStaffIdentityWhenEnabled_WhenNoProviderInDevelopment_ShouldRegisterTheMiddleware()
     {
         // Arrange
         var (pipeline, context) = BuildPipeline(false);
@@ -216,7 +216,7 @@ public sealed class MockEasyAuthMiddlewareTests
 
     // A minimal pipeline host — configuration (optionally with a fully configured OIDC provider),
     // a development environment, and a terminal handler — invoked on the login path, enough to
-    // observe whether UseMockEasyAuthWhenEnabled registered the mock selector.
+    // observe whether UseMockStaffIdentityWhenEnabled registered the mock selector.
     private static (RequestDelegate Pipeline, HttpContext Context) BuildPipeline(bool staffSignInConfigured)
     {
         var settings = new Dictionary<string, string?>
@@ -236,7 +236,7 @@ public sealed class MockEasyAuthMiddlewareTests
         var provider = services.BuildServiceProvider();
 
         var app = new ApplicationBuilder(provider);
-        app.UseMockEasyAuthWhenEnabled();
+        app.UseMockStaffIdentityWhenEnabled();
         app.Run(_ => Task.CompletedTask);
 
         var context = new DefaultHttpContext

@@ -1,4 +1,4 @@
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace BackOffice.Tests.System;
@@ -20,9 +20,9 @@ public abstract class BackOfficeEndpointBaseTest
 
     protected BackOfficeWebApplicationFactory Factory { get; }
 
-    protected static MockEasyAuthIdentity AdminIdentity { get; } = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+    protected static MockStaffIdentity AdminIdentity { get; } = MockStaffIdentities.Default.Single(i => i.Id == "admin");
 
-    protected static MockEasyAuthIdentity UserIdentity { get; } = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+    protected static MockStaffIdentity UserIdentity { get; } = MockStaffIdentities.Default.Single(i => i.Id == "user");
 
     protected HttpClient CreateAnonymousClient()
     {
@@ -31,11 +31,11 @@ public abstract class BackOfficeEndpointBaseTest
         return client;
     }
 
-    protected HttpClient CreateStaffClient(MockEasyAuthIdentity identity)
+    protected HttpClient CreateStaffClient(MockStaffIdentity identity)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Host = BackOfficeWebApplicationFactory.BackOfficeHost;
-        client.DefaultRequestHeaders.Add("Cookie", $"{MockEasyAuthCookie.CookieName}={identity.Id}");
+        client.DefaultRequestHeaders.Add("Cookie", $"{MockStaffIdentityCookie.CookieName}={identity.Id}");
         return client;
     }
 

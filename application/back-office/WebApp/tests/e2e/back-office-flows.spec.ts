@@ -10,7 +10,7 @@ const BASE_URL = getBaseUrl();
 
 test.describe("@smoke", () => {
   /**
-   * Canonical back-office golden path: log in as Admin via MockEasyAuth, verify the dashboard renders with
+   * Canonical back-office golden path: log in as Admin via the mock identity picker, verify the dashboard renders with
    * KPI tiles and trend cards, navigate to the accounts list, open an account, and verify the tenant detail
    * page loads with the MRR KPI and Owners section visible. Touches the auth boundary, the dashboard route,
    * the accounts route, and the tenant detail route in one journey so any regression to the back-office
@@ -24,7 +24,7 @@ test.describe("@smoke", () => {
     const page = await backOfficeContext.newPage();
     createTestContext(page);
 
-    await step("Log in as Admin via MockEasyAuth & verify redirect to back-office dashboard")(async () => {
+    await step("Log in as Admin via the mock identity picker & verify redirect to back-office dashboard")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/`);
 
       await logInAsAdmin(page, `${BACK_OFFICE_BASE_URL}/`);
@@ -90,7 +90,7 @@ test.describe("@comprehensive", () => {
       });
     });
 
-    await step("Log in as Admin via MockEasyAuth & verify dashboard loads")(async () => {
+    await step("Log in as Admin via the mock identity picker & verify dashboard loads")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/`);
 
       await logInAsAdmin(page, `${BACK_OFFICE_BASE_URL}/`);

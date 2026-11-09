@@ -96,7 +96,7 @@ export function BackOfficeAvatarMenu() {
   };
 
   const handleLogout = () => {
-    globalThis.location.href = "/.auth/logout";
+    globalThis.location.href = "/auth/logout";
   };
 
   const themeIcon = renderThemeIcon(theme, resolvedTheme);

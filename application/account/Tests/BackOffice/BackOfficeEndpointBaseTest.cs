@@ -24,8 +24,8 @@ namespace Account.Tests.BackOffice;
 //
 // The routes under test are the INTERNAL API the back-office BFF consumes: every request
 // authenticates with a short-lived delegation token minted from a staff principal (the same
-// mechanism the BFF's delegation handler uses), not with the EasyAuth-style headers of the
-// former staff-facing routes.
+// mechanism the BFF's delegation handler uses), not with the staff session the back-office's
+// own routes authenticate with.
 public abstract class BackOfficeEndpointBaseTest : IDisposable
 {
     protected const string BackOfficeHost = BackOfficeWebApplicationFactory.BackOfficeHost;
@@ -156,7 +156,7 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
         {
             new(BackOfficeDelegationDefaults.NameClaimType, identity.Name),
             new(ClaimTypes.Email, identity.Email),
-            new(ClaimTypes.NameIdentifier, identity.ObjectId)
+            new(ClaimTypes.NameIdentifier, identity.SubjectId)
         };
         claims.AddRange(identity.Groups.Select(group => new Claim(BackOfficeDelegationDefaults.GroupsClaimType, group)));
 

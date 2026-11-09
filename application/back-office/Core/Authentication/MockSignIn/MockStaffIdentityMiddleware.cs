@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SharedKernel.OpenIdConnect;
 
-namespace BackOffice.Authentication.MockEasyAuth;
+namespace BackOffice.Authentication.MockSignIn;
 
-public sealed class MockEasyAuthMiddleware(RequestDelegate next)
+public sealed class MockStaffIdentityMiddleware(RequestDelegate next)
 {
     private const string MockLoginPath = "/login";
 
@@ -43,11 +43,11 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
 
     private static void AttachCookieIdentity(HttpContext context)
     {
-        if (!context.Request.Cookies.TryGetValue(MockEasyAuthCookie.CookieName, out var identityId)) return;
-        var identity = MockEasyAuthIdentities.Find(identityId);
+        if (!context.Request.Cookies.TryGetValue(MockStaffIdentityCookie.CookieName, out var identityId)) return;
+        var identity = MockStaffIdentities.Find(identityId);
         if (identity is null) return;
 
-        MockEasyAuthIdentities.Attach(context, identity);
+        MockStaffIdentities.Attach(context, identity);
     }
 
     private static void RedirectToMockLoginPage(HttpContext context)
@@ -72,14 +72,14 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
         var identityId = context.Request.Query["identity"].ToString();
         var redirect = SafeRelativeRedirect(context.Request.Query["post_login_redirect_uri"].ToString());
 
-        var identity = MockEasyAuthIdentities.Find(identityId);
+        var identity = MockStaffIdentities.Find(identityId);
         if (identity is null)
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             return;
         }
 
-        context.Response.Cookies.Append(MockEasyAuthCookie.CookieName, identity.Id, new CookieOptions
+        context.Response.Cookies.Append(MockStaffIdentityCookie.CookieName, identity.Id, new CookieOptions
             {
                 HttpOnly = true,
                 Secure = true,
@@ -92,7 +92,7 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
 
     private static void HandleLogout(HttpContext context)
     {
-        context.Response.Cookies.Delete(MockEasyAuthCookie.CookieName, new CookieOptions { Secure = true, Path = "/" });
+        context.Response.Cookies.Delete(MockStaffIdentityCookie.CookieName, new CookieOptions { Secure = true, Path = "/" });
         var redirect = SafeRelativeRedirect(context.Request.Query["post_logout_redirect_uri"].ToString());
         context.Response.Redirect(redirect);
     }
@@ -110,26 +110,26 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
     }
 }
 
-public static class MockEasyAuthMiddlewareExtensions
+public static class MockStaffIdentityMiddlewareExtensions
 {
     // The single decision for whether the mock identity selector is active. The real staff sign-in
     // (a configured staff identity file) always wins: the mock would otherwise intercept the login
     // path, offering a bypass around the real sign-in. Otherwise it is on during local development,
-    // and MockEasyAuth:Enabled turns it on explicitly for other environments; it must NEVER be
+    // and MockStaffIdentity:Enabled turns it on explicitly for other environments; it must NEVER be
     // enabled in production.
-    public static bool IsMockEasyAuthEnabled(IConfiguration configuration, IHostEnvironment environment)
+    public static bool IsMockStaffIdentityEnabled(IConfiguration configuration, IHostEnvironment environment)
     {
         if (configuration.IsStaffSignInEnabled()) return false;
-        return environment.IsDevelopment() || configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
+        return environment.IsDevelopment() || configuration.GetSection("MockStaffIdentity:Enabled").Get<bool>();
     }
 
     extension(IApplicationBuilder app)
     {
-        public IApplicationBuilder UseMockEasyAuthWhenEnabled()
+        public IApplicationBuilder UseMockStaffIdentityWhenEnabled()
         {
             var configuration = app.ApplicationServices.GetRequiredService<IConfiguration>();
             var environment = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>();
-            return IsMockEasyAuthEnabled(configuration, environment) ? app.UseMiddleware<MockEasyAuthMiddleware>() : app;
+            return IsMockStaffIdentityEnabled(configuration, environment) ? app.UseMiddleware<MockStaffIdentityMiddleware>() : app;
         }
     }
 }

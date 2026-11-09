@@ -1,7 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,7 +46,7 @@ public sealed class BackOfficeIdentityHandler(
     // staff session cookie authenticates. Any client-supplied identity header is ignored.
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var mockIdentity = MockEasyAuthIdentities.GetAttached(Context);
+        var mockIdentity = MockStaffIdentities.GetAttached(Context);
         if (mockIdentity is not null)
         {
             return AuthenticateResult.Success(new AuthenticationTicket(BuildMockPrincipal(mockIdentity), Scheme.Name));
@@ -77,12 +77,12 @@ public sealed class BackOfficeIdentityHandler(
             : AuthenticateResult.NoResult();
     }
 
-    private static ClaimsPrincipal BuildMockPrincipal(MockEasyAuthIdentity identity)
+    private static ClaimsPrincipal BuildMockPrincipal(MockStaffIdentity identity)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, identity.Name),
-            new(ClaimTypes.NameIdentifier, identity.ObjectId),
+            new(ClaimTypes.NameIdentifier, identity.SubjectId),
             new(ClaimTypes.Email, identity.Email)
         };
         claims.AddRange(identity.Groups.Select(group => new Claim(BackOfficeIdentityDefaults.GroupsClaimType, group)));

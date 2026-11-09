@@ -1,7 +1,7 @@
 using BackOffice;
 using BackOffice.Api;
 using BackOffice.Authentication;
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using BackOffice.ExecutionContext;
 using BackOffice.StaffIdentity;
 using Microsoft.Extensions.Options;
@@ -31,7 +31,7 @@ builder.Services
 
 // Back-office staff identity: with a staff identity file (StaffIdentity:File) the back-office signs
 // staff in itself with an emailed one-time code; the mock identity selector applies only without one
-// (local development and environments that explicitly opt in through MockEasyAuth:Enabled).
+// (local development and environments that explicitly opt in through MockStaffIdentity:Enabled).
 builder.Services.AddStaffSession();
 
 // The staff OIDC provider other tools sign staff in through (its endpoints are mapped below, with the sign-in).
@@ -53,21 +53,21 @@ var backOfficePublicUrl =
     ?? $"https://{backOfficeHostname}";
 var backOfficeCdnUrl = Environment.GetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey) ?? backOfficePublicUrl;
 
-// The /login picker belongs to the MockEasyAuth identity selector; the same decision registers its
-// middleware below (see MockEasyAuthMiddlewareExtensions.IsMockEasyAuthEnabled).
-var mockEasyAuthEnabled = MockEasyAuthMiddlewareExtensions.IsMockEasyAuthEnabled(app.Configuration, app.Environment);
+// The /login picker belongs to the mock identity picker; the same decision registers its
+// middleware below (see MockStaffIdentityMiddlewareExtensions.IsMockStaffIdentityEnabled).
+var mockStaffIdentityEnabled = MockStaffIdentityMiddlewareExtensions.IsMockStaffIdentityEnabled(app.Configuration, app.Environment);
 
 // Runtime feature flags injected into the SPA HTML so the React shell can branch on capability
 // without a preview API call (same keys account's folded back-office hosting injected).
 var runtimeEnvironment = new Dictionary<string, string>
 {
     ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false",
-    ["PUBLIC_MOCK_EASY_AUTH_ENABLED"] = mockEasyAuthEnabled ? "true" : "false",
+    ["PUBLIC_MOCK_STAFF_IDENTITY_ENABLED"] = mockStaffIdentityEnabled ? "true" : "false",
     ["PUBLIC_STAFF_SIGN_IN_ENABLED"] = staffSignInEnabled ? "true" : "false"
 };
 
 // The sign-in page (the real one or the mock picker) is the one SPA route served without a session.
-string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled || staffSignInEnabled ? ["/login"] : [];
+string[] backOfficeUnauthenticatedPaths = mockStaffIdentityEnabled || staffSignInEnabled ? ["/login"] : [];
 
 if (staffSignInEnabled)
 {
@@ -75,7 +75,7 @@ if (staffSignInEnabled)
     app.MapStaffIdentityProviderEndpoints(backOfficeHostname);
 }
 
-if (!mockEasyAuthEnabled && !staffSignInEnabled)
+if (!mockStaffIdentityEnabled && !staffSignInEnabled)
 {
     // Neither sign-in is configured: reject the sign-in page instead of pretending one exists.
     app.MapGet("/login", Results.Unauthorized).RequireHost(backOfficeHostname);
@@ -84,9 +84,9 @@ if (!mockEasyAuthEnabled && !staffSignInEnabled)
 // Dev-only; short-circuits before the auth-gated SPA fallback (see AddBackOfficeDevStaticProxy).
 app.UseBackOfficeDevStaticProxy(backOfficeHostname);
 
-// The MockEasyAuth selector resolves the staff identity from its dev cookie; must run before
+// The mock identity picker resolves the staff identity from its dev cookie; must run before
 // authentication.
-app.UseMockEasyAuthWhenEnabled();
+app.UseMockStaffIdentityWhenEnabled();
 
 app.UseApiServices(); // Add common configuration for all APIs like Swagger, HSTS, and DeveloperExceptionPage.
 

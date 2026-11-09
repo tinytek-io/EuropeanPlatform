@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using BackOffice.Authentication;
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
@@ -31,8 +31,8 @@ public sealed class BackOfficeIdentityHandlerTests
     public async Task HandleAuthenticate_WhenMockIdentityAttached_ShouldReturnSuccessWithClaims()
     {
         // Arrange
-        var admin = MockEasyAuthIdentities.Default.Single(identity => identity.Id == "admin");
-        var (handler, _) = await CreateHandlerAsync(context => MockEasyAuthIdentities.Attach(context, admin));
+        var admin = MockStaffIdentities.Default.Single(identity => identity.Id == "admin");
+        var (handler, _) = await CreateHandlerAsync(context => MockStaffIdentities.Attach(context, admin));
 
         // Act
         var result = await handler.AuthenticateAsync();
@@ -41,13 +41,13 @@ public sealed class BackOfficeIdentityHandlerTests
         result.Succeeded.Should().BeTrue();
         var principal = result.Principal!;
         principal.FindFirstValue(ClaimTypes.Name).Should().Be(admin.Name);
-        principal.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be(admin.ObjectId);
+        principal.FindFirstValue(ClaimTypes.NameIdentifier).Should().Be(admin.SubjectId);
         principal.FindFirstValue(ClaimTypes.Email).Should().Be(admin.Email);
-        principal.Claims.Should().Contain(c => c.Type == BackOfficeIdentityDefaults.GroupsClaimType && c.Value == MockEasyAuthIdentities.MockAdminsGroupId);
+        principal.Claims.Should().Contain(c => c.Type == BackOfficeIdentityDefaults.GroupsClaimType && c.Value == MockStaffIdentities.MockAdminsGroupId);
     }
 
     [Fact]
-    public async Task HandleAuthenticate_WhenOnlyEasyAuthHeadersPresent_ShouldReturnNoResult()
+    public async Task HandleAuthenticate_WhenOnlyForgedIdentityHeadersPresent_ShouldReturnNoResult()
     {
         // Arrange
         var forgedPrincipal = Convert.ToBase64String("""{"claims":[{"typ":"groups","val":"BackOfficeAdmins"}]}"""u8.ToArray());

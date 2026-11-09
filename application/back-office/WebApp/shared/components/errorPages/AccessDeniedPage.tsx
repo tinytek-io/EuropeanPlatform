@@ -19,7 +19,7 @@ function AccessDeniedNavigation() {
           variant="outline"
           aria-label={t`Log out`}
           onClick={() => {
-            globalThis.location.href = "/.auth/logout";
+            globalThis.location.href = "/auth/logout";
           }}
         >
           <LogOutIcon size={16} />

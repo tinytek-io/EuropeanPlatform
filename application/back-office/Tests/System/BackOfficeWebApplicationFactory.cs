@@ -1,4 +1,4 @@
-using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.Authentication.MockSignIn;
 using BackOffice.Database;
 using BackOffice.Integrations.Account;
 using Microsoft.AspNetCore.Hosting;
@@ -71,7 +71,7 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                         // Match the AppHost wiring: the mock admin identity carries this group id,
                         // so the BackOfficeAdmin policy and MeResponse.IsAdmin resolve admin status
                         // the same way they do in development.
-                        ["BackOffice:AdminsGroupId"] = MockEasyAuthIdentities.MockAdminsGroupId,
+                        ["BackOffice:AdminsGroupId"] = MockStaffIdentities.MockAdminsGroupId,
                         // The delegation handler signs every forwarded request with the back-office key.
                         [BackOfficeDelegationDefaults.SigningKeyConfigurationKey] = TestBackOfficeDelegationKeys.SigningKeyPem
                     }

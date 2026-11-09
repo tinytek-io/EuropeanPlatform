@@ -29,11 +29,11 @@ public static class BackOfficeIdentityDefaults
     // OIDC `name` claim — the friendly display name.
     public const string NameClaimType = BackOfficeDelegationDefaults.NameClaimType;
 
-    public const string LoginPath = "/.auth/login/aad";
+    public const string LoginPath = "/auth/login";
 
-    public const string CallbackPath = "/.auth/login/aad/callback";
+    public const string CallbackPath = "/auth/login/callback";
 
-    public const string LogoutPath = "/.auth/logout";
+    public const string LogoutPath = "/auth/logout";
 
     public const string AccessDeniedPath = "/access-denied";
 }
