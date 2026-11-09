@@ -1,6 +1,29 @@
 {
   "services": [
     {
+      "service": "account",
+      "slug": "account-project",
+      "namespace": "Scaleway.Sdk.Account.V3",
+      "apiVersion": "V3",
+      "entryPoint": "ScalewayClient.Projects",
+      "resourceGroups": [
+        {
+          "name": "Project",
+          "tier": "StructurallyConformant",
+          "collectionPath": "account/v3/projects",
+          "itemPath": "account/v3/projects",
+          "operations": [
+            "ListProjects",
+            "CreateProject",
+            "GetProject",
+            "UpdateProject",
+            "DeleteProject"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
       "service": "iam",
       "slug": "iam",
       "namespace": "Scaleway.Sdk.Iam.V1Alpha1",
@@ -85,6 +108,52 @@
       ]
     },
     {
+      "service": "lb",
+      "slug": "load-balancer-zoned",
+      "namespace": "Scaleway.Sdk.Lb.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.LoadBalancers",
+      "resourceGroups": [
+        {
+          "name": "Lb",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/lbs",
+          "itemPath": "lb/v1/zones/{zone}/lbs",
+          "operations": [
+            "ListLbs",
+            "CreateLb",
+            "GetLb",
+            "DeleteLb"
+          ]
+        },
+        {
+          "name": "Frontend",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/lbs/{lb_id}/frontends",
+          "itemPath": "lb/v1/zones/{zone}/frontends",
+          "operations": [
+            "GetFrontend",
+            "DeleteFrontend",
+            "ListFrontends",
+            "CreateFrontend"
+          ]
+        },
+        {
+          "name": "Acl",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/frontends/{frontend_id}/acls",
+          "itemPath": "lb/v1/zones/{zone}/acls",
+          "operations": [
+            "GetAcl",
+            "DeleteAcl",
+            "ListAcls",
+            "CreateAcl"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
       "service": "rdb",
       "slug": "managed-database-postgre-mysql",
       "namespace": "Scaleway.Sdk.Rdb.V1",
@@ -150,6 +219,29 @@
             "GetNamespace",
             "UpdateNamespace",
             "DeleteNamespace"
+          ]
+        },
+        {
+          "name": "Image",
+          "tier": "StructurallyConformant",
+          "collectionPath": "registry/v1/regions/{region}/images",
+          "itemPath": "registry/v1/regions/{region}/images",
+          "operations": [
+            "ListImages",
+            "GetImage",
+            "UpdateImage",
+            "DeleteImage"
+          ]
+        },
+        {
+          "name": "Tag",
+          "tier": "StructurallyConformant",
+          "collectionPath": "registry/v1/regions/{region}/images/{image_id}/tags",
+          "itemPath": "registry/v1/regions/{region}/tags",
+          "operations": [
+            "ListTags",
+            "GetTag",
+            "DeleteTag"
           ]
         }
       ],

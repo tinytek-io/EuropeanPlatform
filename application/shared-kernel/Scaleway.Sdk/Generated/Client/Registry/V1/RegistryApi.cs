@@ -103,4 +103,124 @@ public sealed class RegistryApi(IScalewayApiClient client, ScalewayRequestScope?
         region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
         return client.DeleteResourceAsync($"registry/v1/regions/{region}/namespaces", region, namespaceId, cancellationToken);
     }
+
+    /// <summary>Collection path for <c>Image</c> — <c>registry/v1/regions/{region}/images</c>.</summary>
+    /// <param name="region">The region to build the path for.</param>
+    public static string ImageCollectionPath(string region)
+    {
+        return $"registry/v1/regions/{region}/images";
+    }
+
+    /// <summary>List images</summary>
+    /// <param name="query">Filters and paging. An unset property is omitted, and passing none lets the transport page to the end of the collection.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>ListImages</c> — <c>GET /registry/v1/regions/{region}/images</c> (V1).
+    /// </remarks>
+    public async Task<IReadOnlyList<Image>> ListImagesAsync(ListImagesRequest? query = null, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        if (scope is not null)
+        {
+            query ??= new ListImagesRequest();
+            query = scope?.ApplyProject(query) ?? query;
+            query = scope?.ApplyOrganization(query) ?? query;
+        }
+
+        var items = await client.ListResourcesAsync($"registry/v1/regions/{region}/images", region, query?.ToQueryParameters(), cancellationToken);
+        return items.Select(item => item.Deserialize<Image>(JsonOptions)!).ToList();
+    }
+
+    /// <summary>Get an image</summary>
+    /// <param name="imageId">Scaleway ID of the Image to address. The transport appends it to <c>registry/v1/regions/{region}/images</c>.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>GetImage</c> — <c>GET /registry/v1/regions/{region}/images/{id}</c> (V1).
+    /// </remarks>
+    public async Task<Image?> GetImageAsync(string imageId, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        var response = await client.GetResourceAsync($"registry/v1/regions/{region}/images", region, imageId, cancellationToken);
+        return response?.Deserialize<Image>(JsonOptions);
+    }
+
+    /// <summary>Update an image</summary>
+    /// <param name="imageId">Scaleway ID of the Image to address. The transport appends it to <c>registry/v1/regions/{region}/images</c>.</param>
+    /// <param name="request">The request body, serialized with the snake_case field names Scaleway declares.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>UpdateImage</c> — <c>PATCH /registry/v1/regions/{region}/images/{id}</c> (V1).
+    /// </remarks>
+    public async Task<Image> UpdateImageAsync(string imageId, UpdateImageRequest request, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        var response = await client.UpdateResourceAsync($"registry/v1/regions/{region}/images", region, imageId, request, cancellationToken);
+        return response.Deserialize<Image>(JsonOptions)!;
+    }
+
+    /// <summary>Delete an image</summary>
+    /// <param name="imageId">Scaleway ID of the Image to address. The transport appends it to <c>registry/v1/regions/{region}/images</c>.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>DeleteImage</c> — <c>DELETE /registry/v1/regions/{region}/images/{id}</c> (V1).
+    /// </remarks>
+    public Task DeleteImageAsync(string imageId, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        return client.DeleteResourceAsync($"registry/v1/regions/{region}/images", region, imageId, cancellationToken);
+    }
+
+    /// <summary>Collection path for <c>Tag</c> — <c>registry/v1/regions/{region}/images/{image_id}/tags</c>.</summary>
+    /// <param name="imageId">Binds the <c>{image_id}</c> segment of the path.</param>
+    /// <param name="region">The region to build the path for.</param>
+    public static string TagCollectionPath(string imageId, string region)
+    {
+        return $"registry/v1/regions/{region}/images/{imageId}/tags";
+    }
+
+    /// <summary>List tags</summary>
+    /// <param name="imageId">Binds the <c>{image_id}</c> segment of the path.</param>
+    /// <param name="query">Filters and paging. An unset property is omitted, and passing none lets the transport page to the end of the collection.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>ListTags</c> — <c>GET /registry/v1/regions/{region}/images/{image_id}/tags</c> (V1).
+    /// </remarks>
+    public async Task<IReadOnlyList<Tag>> ListTagsAsync(string imageId, ListTagsRequest? query = null, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        var items = await client.ListResourcesAsync($"registry/v1/regions/{region}/images/{imageId}/tags", region, query?.ToQueryParameters(), cancellationToken);
+        return items.Select(item => item.Deserialize<Tag>(JsonOptions)!).ToList();
+    }
+
+    /// <summary>Get a tag</summary>
+    /// <param name="tagId">Scaleway ID of the Tag to address. The transport appends it to <c>registry/v1/regions/{region}/tags</c>.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>GetTag</c> — <c>GET /registry/v1/regions/{region}/tags/{id}</c> (V1).
+    /// </remarks>
+    public async Task<Tag?> GetTagAsync(string tagId, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        var response = await client.GetResourceAsync($"registry/v1/regions/{region}/tags", region, tagId, cancellationToken);
+        return response?.Deserialize<Tag>(JsonOptions);
+    }
+
+    /// <summary>Delete a tag</summary>
+    /// <param name="tagId">Scaleway ID of the Tag to address. The transport appends it to <c>registry/v1/regions/{region}/tags</c>.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>DeleteTag</c> — <c>DELETE /registry/v1/regions/{region}/tags/{id}</c> (V1).
+    /// </remarks>
+    public Task DeleteTagAsync(string tagId, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        return client.DeleteResourceAsync($"registry/v1/regions/{region}/tags", region, tagId, cancellationToken);
+    }
 }

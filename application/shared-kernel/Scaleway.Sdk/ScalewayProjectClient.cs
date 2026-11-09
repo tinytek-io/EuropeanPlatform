@@ -1,6 +1,7 @@
 using ScwContainers = Scaleway.Sdk.ServerlessContainer.V1;
 using ScwJobs = Scaleway.Sdk.Jobs.V1Alpha2;
 using ScwK8s = Scaleway.Sdk.K8s.V1;
+using ScwLb = Scaleway.Sdk.Lb.V1;
 using ScwRdb = Scaleway.Sdk.Rdb.V1;
 using ScwRedis = Scaleway.Sdk.Redis.V1;
 using ScwRegistry = Scaleway.Sdk.Registry.V1;
@@ -31,6 +32,7 @@ public sealed class ScalewayProjectClient
         Containers = new ScwContainers.ServerlessContainerApi(Transport, scope);
         Jobs = new ScwJobs.JobsApi(Transport, scope);
         Kubernetes = new ScwK8s.K8sApi(Transport, scope);
+        LoadBalancers = new ScwLb.LbApi(Transport, scope);
         Databases = new ScwRdb.RdbApi(Transport, scope);
         Redis = new ScwRedis.RedisApi(Transport, scope);
         Registry = new ScwRegistry.RegistryApi(Transport, scope);
@@ -67,6 +69,12 @@ public sealed class ScalewayProjectClient
     ///     through a pool API — see the note on the <c>k8s</c> entry in the generator's resource allow-list.
     /// </summary>
     public ScwK8s.K8sApi Kubernetes { get; }
+
+    /// <summary>
+    ///     Load Balancers, their frontends and ACLs (the zoned API). The scope carries no default zone, so zoned calls
+    ///     pass the zone; listing fills <c>project_id</c> from this scope.
+    /// </summary>
+    public ScwLb.LbApi LoadBalancers { get; }
 
     /// <summary>Managed PostgreSQL and MySQL instances (Scaleway's <c>rdb</c>).</summary>
     public ScwRdb.RdbApi Databases { get; }

@@ -43,6 +43,16 @@ public sealed class EnumResolutionTests
         api.Enums.Single(parsedEnum => parsedEnum.Name == "EmailStatus").Values.Should().Contain("sending").And.NotContain("checked");
     }
 
+    [Fact]
+    public void AListTypedNullableField_ResolvesToItsNonNullType()
+    {
+        // OpenAPI 3.1 marks a field nullable with a type list ([string, "null"]); the Load Balancer schema does so for
+        // every timestamp.
+        var api = SchemaSource.ParseClientApi("load-balancer-zoned", File.ReadAllText(SchemaFiles.SchemaPath("load-balancer-zoned")))!;
+
+        FieldType(api, "Acl", "created_at").Should().Be("DateTimeOffset?");
+    }
+
     [Theory]
     [InlineData("""{ "type": "string", "enum": [] }""")]
     [InlineData("""{ "type": "string", "enum": [1, 2] }""")]

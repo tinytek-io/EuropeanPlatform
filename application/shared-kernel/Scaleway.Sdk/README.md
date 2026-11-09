@@ -74,12 +74,14 @@ upward on its own is the failure this package went out of its way to make imposs
 
 <!-- coverage:start — generated from Generated/manifest.json; do not edit by hand -->
 
-**10 services, 19 resource groups, 92 operations** — 86 on resource groups plus 6 declared actions.
+**12 services, 25 resource groups, 116 operations** — 110 on resource groups plus 6 declared actions.
 
 | Service | API version | Namespace | Entry point | Actions |
 |---|---|---|---|---|
+| `account` | `v3` | `Scaleway.Sdk.Account.V3` | `ScalewayClient.Projects` | — |
 | `iam` | `v1alpha1` | `Scaleway.Sdk.Iam.V1Alpha1` | `ScalewayClient.Iam` | — |
 | `k8s` | `v1` | `Scaleway.Sdk.K8s.V1` | `ScalewayProjectClient.Kubernetes` | `GetClusterKubeConfig` |
+| `lb` | `v1` | `Scaleway.Sdk.Lb.V1` | `ScalewayProjectClient.LoadBalancers` | — |
 | `rdb` | `v1` | `Scaleway.Sdk.Rdb.V1` | `ScalewayProjectClient.Databases` | `GetInstanceCertificate` |
 | `redis` | `v1` | `Scaleway.Sdk.Redis.V1` | `ScalewayProjectClient.Redis` | — |
 | `registry` | `v1` | `Scaleway.Sdk.Registry.V1` | `ScalewayProjectClient.Registry` | — |
@@ -91,14 +93,20 @@ upward on its own is the failure this package went out of its way to make imposs
 
 | Service | Resource group | Tier | Operations |
 |---|---|---|---|
+| `account` | `Project` | StructurallyConformant | `ListProjects`, `CreateProject`, `GetProject`, `UpdateProject`, `DeleteProject` |
 | `iam` | `Application` | RoundTripValidated | `ListApplications`, `CreateApplication`, `GetApplication`, `UpdateApplication`, `DeleteApplication` |
 | `iam` | `Policy` | RoundTripValidated | `ListPolicies`, `CreatePolicy`, `GetPolicy`, `UpdatePolicy`, `DeletePolicy` |
 | `iam` | `APIKey` | RoundTripValidated | `ListAPIKeys`, `CreateAPIKey`, `GetAPIKey`, `UpdateAPIKey`, `DeleteAPIKey` |
 | `k8s` | `Cluster` | StructurallyConformant | `ListClusters`, `CreateCluster`, `GetCluster`, `UpdateCluster`, `DeleteCluster` |
 | `k8s` | `Version` | StructurallyConformant | `ListVersions`, `GetVersion` |
+| `lb` | `Lb` | StructurallyConformant | `ListLbs`, `CreateLb`, `GetLb`, `DeleteLb` |
+| `lb` | `Frontend` | StructurallyConformant | `GetFrontend`, `DeleteFrontend`, `ListFrontends`, `CreateFrontend` |
+| `lb` | `Acl` | StructurallyConformant | `GetAcl`, `DeleteAcl`, `ListAcls`, `CreateAcl` |
 | `rdb` | `Instance` | RoundTripValidated | `ListInstances`, `CreateInstance`, `GetInstance`, `UpdateInstance`, `DeleteInstance` |
 | `redis` | `Cluster` | RoundTripValidated | `ListClusters`, `CreateCluster`, `GetCluster`, `UpdateCluster`, `DeleteCluster` |
 | `registry` | `Namespace` | RoundTripValidated | `ListNamespaces`, `CreateNamespace`, `GetNamespace`, `UpdateNamespace`, `DeleteNamespace` |
+| `registry` | `Image` | StructurallyConformant | `ListImages`, `GetImage`, `UpdateImage`, `DeleteImage` |
+| `registry` | `Tag` | StructurallyConformant | `ListTags`, `GetTag`, `DeleteTag` |
 | `secret` | `Secret` | RoundTripValidated | `ListSecrets`, `CreateSecret`, `GetSecret`, `UpdateSecret`, `DeleteSecret` |
 | `secret` | `SecretVersion` | RoundTripValidated | `ListSecretVersions`, `CreateSecretVersion`, `GetSecretVersion`, `UpdateSecretVersion`, `DeleteSecretVersion` |
 | `container` | `Container` | RoundTripValidated | `ListContainers`, `CreateContainer`, `GetContainer`, `UpdateContainer`, `DeleteContainer` |

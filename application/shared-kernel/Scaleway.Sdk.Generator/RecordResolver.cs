@@ -56,8 +56,8 @@ internal sealed class RecordResolver
 
         foreach (var property in properties.EnumerateObject())
         {
-            if (property.Value.TryGetProperty("type", out var type) && type.GetString() == "array"
-                                                                    && property.Value.TryGetProperty("items", out var items) && items.TryGetProperty("$ref", out var itemRef))
+            if (SchemaType(property.Value) == "array"
+                && property.Value.TryGetProperty("items", out var items) && items.TryGetProperty("$ref", out var itemRef))
             {
                 var elementName = OpenApiClientParser.ShortName(itemRef.GetString()!);
                 EnsureComponentRecord(elementName);
@@ -187,7 +187,7 @@ internal sealed class RecordResolver
             return "unresolved $ref";
         }
 
-        var type = schema.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
+        var type = SchemaType(schema);
         return type switch
         {
             // The tcp/probe class: an object with no properties (Scaleway documents it in prose, not schema).
@@ -231,7 +231,7 @@ internal sealed class RecordResolver
             return RegisterEnum(contextName, inlineValues);
         }
 
-        var type = element.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
+        var type = SchemaType(element);
         var format = element.TryGetProperty("format", out var formatElement) ? formatElement.GetString() : null;
 
         switch (type)
@@ -396,10 +396,22 @@ internal sealed class RecordResolver
         return string.Concat(segments);
     }
 
+    /// <summary>
+    ///     A schema's <c>type</c>. OpenAPI 3.1 also allows a list, which Scaleway uses to mark a field nullable
+    ///     (<c>[string, "null"]</c>); every generated field is already nullable, so the non-null member is the type.
+    /// </summary>
+    private static string? SchemaType(JsonElement schema)
+    {
+        if (!schema.TryGetProperty("type", out var type)) return null;
+
+        return type.ValueKind == JsonValueKind.Array
+            ? type.EnumerateArray().Select(member => member.GetString()).FirstOrDefault(member => member is not null and not "null")
+            : type.GetString();
+    }
+
     private static string? ResolveArrayItemScalar(JsonElement items)
     {
-        var itemType = items.TryGetProperty("type", out var type) ? type.GetString() : null;
-        return itemType switch
+        return SchemaType(items) switch
         {
             "string" => "string[]?",
             "integer" => "long[]?",

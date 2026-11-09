@@ -43,6 +43,8 @@ public static class SchemaSource
             "serverless-databases" => "serverless_sqldb",
             "transactional-email" => "tem",
             "kubernetes" => "k8s",
+            "load-balancer-zoned" => "lb",
+            "account-project" => "account",
             _ => slug // registry, vpc, iam already match
         };
     }
@@ -57,7 +59,9 @@ public static class SchemaSource
             "rdb" => [("Instance", "Instances")],
             "redis" => [("Cluster", "Clusters")],
             "vpc" => [("PrivateNetwork", "PrivateNetworks"), ("VPC", "VPCs")],
-            "registry" => [("Namespace", "Namespaces")],
+            // Image and Tag serve the deploy's registry prune: list a namespace's images, list each image's tags,
+            // delete the stale ones.
+            "registry" => [("Namespace", "Namespaces"), ("Image", "Images"), ("Tag", "Tags")],
             "secret" => [("Secret", "Secrets"), ("SecretVersion", "SecretVersions")],
             "iam" => [("Application", "Applications"), ("Policy", "Policies"), ("APIKey", "APIKeys")],
             "tem" => [("Domain", "Domains"), ("Email", "Emails")],
@@ -76,6 +80,11 @@ public static class SchemaSource
             // the CRUD matcher leaves the group without a Create rather than failing — visible in the manifest, but
             // it is a decision to take rather than to discover.
             "jobs" => [("JobDefinition", "JobDefinitions"), ("JobRun", "JobRuns")],
+            // The zoned Load Balancer API. Frontends are listed under their Load Balancer and ACLs under their
+            // frontend (split paths, like Kubernetes pools); the back-office security checks read all three.
+            "lb" => [("Lb", "Lbs"), ("Frontend", "Frontends"), ("Acl", "Acls")],
+            // Account v3 projects: resolving an environment's project by name and its organization by id.
+            "account" => [("Project", "Projects")],
             _ => []
         };
     }
@@ -126,10 +135,14 @@ public static class SchemaSource
         {
             // Organization-scoped: IAM identities belong to the organization, not to a project.
             "iam" => ("ScalewayClient", "Iam"),
+            // Organization-scoped too: projects belong to the organization. Named for what it holds, since a project
+            // client's Account property is already the way back to this client.
+            "account" => ("ScalewayClient", "Projects"),
             // Project-scoped. The property is the product's common name rather than the schema slug.
             "container" => ("ScalewayProjectClient", "Containers"),
             "jobs" => ("ScalewayProjectClient", "Jobs"),
             "k8s" => ("ScalewayProjectClient", "Kubernetes"),
+            "lb" => ("ScalewayProjectClient", "LoadBalancers"),
             "rdb" => ("ScalewayProjectClient", "Databases"),
             "redis" => ("ScalewayProjectClient", "Redis"),
             "registry" => ("ScalewayProjectClient", "Registry"),

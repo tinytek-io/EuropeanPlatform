@@ -1,3 +1,4 @@
+using ScwAccount = Scaleway.Sdk.Account.V3;
 using ScwIam = Scaleway.Sdk.Iam.V1Alpha1;
 
 namespace Scaleway.Sdk;
@@ -31,7 +32,9 @@ public sealed class ScalewayClient : IDisposable
         DefaultRegion = defaultRegion;
         // The account scope has no project, so it fills organization_id only. IAM is organization-global, so the
         // region default never reaches a URL from here, but it flows into project scopes narrowed from this client.
-        Iam = new ScwIam.IamApi(transport, new ScalewayRequestScope(organizationId.Value, region: defaultRegion.ToApiString()));
+        var scope = new ScalewayRequestScope(organizationId.Value, region: defaultRegion.ToApiString());
+        Iam = new ScwIam.IamApi(transport, scope);
+        Projects = new ScwAccount.AccountApi(transport, scope);
     }
 
     internal IScalewayApiClient Transport { get; }
@@ -47,6 +50,12 @@ public sealed class ScalewayClient : IDisposable
     ///     declare <c>organization_id</c> have it filled from this client's organization automatically.
     /// </summary>
     public ScwIam.IamApi Iam { get; }
+
+    /// <summary>
+    ///     The organization's projects (Account v3). Listing fills <c>organization_id</c> from this client, so it
+    ///     returns this organization's projects only.
+    /// </summary>
+    public ScwAccount.AccountApi Projects { get; }
 
     /// <summary>Closes the transport when this client built it. A client given one shares it and leaves it open.</summary>
     public void Dispose()
