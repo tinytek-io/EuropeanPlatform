@@ -31,4 +31,9 @@
         <Compile Include="..\application\shared-kernel\SharedKernel\Configuration\PortAllocation.cs" Link="Utilities\PortAllocation.cs" />
         <Compile Include="..\application\shared-kernel\SharedKernel\Configuration\DockerVolumeNaming.cs" Link="Utilities\DockerVolumeNaming.cs" />
     </ItemGroup>
+    <ItemGroup>
+        <!-- Scaleway.Sdk has no package dependencies (it is built to stand alone), so referencing it keeps the
+             CLI isolated from shared-kernel's dependency closure while sharing one Scaleway client. -->
+        <ProjectReference Include="..\application\shared-kernel\Scaleway.Sdk\Scaleway.Sdk.csproj" />
+    </ItemGroup>
 </Project>

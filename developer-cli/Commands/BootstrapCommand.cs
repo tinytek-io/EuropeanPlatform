@@ -1,6 +1,7 @@
 using System.CommandLine;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
+using Scaleway.Sdk;
 using Spectre.Console;
 
 namespace DeveloperCli.Commands;
@@ -53,7 +54,7 @@ public sealed class BootstrapCommand : Command
 
         AnsiConsole.Write(new Rule($"[bold] Bootstrapping {environment} ({projectName}) [/]"));
 
-        var administrator = await ScalewayEnvironment.ReadCredentialsAsync(null);
+        var administrator = ScalewayEnvironment.ReadCredentials(null);
         var administratorKey = await ScalewayEnvironment.GetApiKeyAsync(administrator);
         if (administratorKey.UserId is null)
         {
@@ -158,27 +159,29 @@ public sealed class BootstrapCommand : Command
     /// <summary>
     ///     Writes the operator's key into the scw profile the deploy command reads, so day-to-day
     ///     deploys never use the administrator's key. Rewritten only when the key changed (a rotation).
+    ///     The profile lives in the Scaleway config file the scw CLI and Terraform share, written
+    ///     directly, so the bootstrap needs no scw binary.
     /// </summary>
     private static async Task WriteOperatorProfileAsync(string moduleFolder, string profile, string organizationId, string projectId)
     {
         var accessKey = await TerraformHelper.OutputAsync(moduleFolder, "operator_access_key");
-        var current = await ProcessHelper.ExecuteSensitiveAsync($"scw -p {profile} config get access-key");
-        if (current.Success && current.StdOut.Trim() == accessKey)
+        if (ScalewayConfigFile.ReadProfile(profile)?.AccessKey == accessKey)
         {
             AnsiConsole.MarkupLine($"[green]The scw profile '{profile}' already holds the operator's key.[/]");
             return;
         }
 
         var secretKey = await TerraformHelper.OutputAsync(moduleFolder, "operator_secret_key");
-        var result = await ProcessHelper.ExecuteSensitiveAsync(
-            $"scw -p {profile} config set access-key={accessKey} secret-key={secretKey} default-organization-id={organizationId} default-project-id={projectId} default-region={ScalewayEnvironment.Region} default-zone={ScalewayEnvironment.Region}-1"
-        );
-        if (!result.Success)
+        try
         {
-            AnsiConsole.MarkupLine($"[red]Could not write the scw profile '{profile}':[/] {Markup.Escape(result.StdErr.Trim())} Is the scw CLI installed?");
+            ScalewayConfigFile.WriteProfile(profile, new ScalewayProfile(accessKey, secretKey, organizationId, projectId, ScalewayEnvironment.Region, $"{ScalewayEnvironment.Region}-1"));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            AnsiConsole.MarkupLine($"[red]Could not write the scw profile '{profile}' to {Markup.Escape(ScalewayConfigFile.DefaultPath)}:[/] {Markup.Escape(exception.Message)}");
             Environment.Exit(1);
         }
 
-        AnsiConsole.MarkupLine($"[green]The scw profile '{profile}' now holds the operator's key;[/] deploys use it automatically.");
+        AnsiConsole.MarkupLine($"[green]The scw profile '{profile}' in {Markup.Escape(ScalewayConfigFile.DefaultPath)} now holds the operator's key;[/] deploys use it automatically.");
     }
 }

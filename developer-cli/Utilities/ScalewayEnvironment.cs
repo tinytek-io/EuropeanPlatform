@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using JetBrains.Annotations;
+using Scaleway.Sdk;
 using Spectre.Console;
 
 namespace DeveloperCli.Utilities;
@@ -92,7 +93,7 @@ public static partial class ScalewayEnvironment
     {
         var terraformEnvironment = TerraformNameOf(environment);
         var projectName = $"{ReadPrefix(terraformEnvironment)}-{terraformEnvironment}";
-        var credentials = await ReadCredentialsAsync(projectName);
+        var credentials = ReadCredentials(projectName);
         var apiKey = await GetApiKeyAsync(credentials);
         var organizationId = await GetOrganizationIdAsync(credentials, apiKey.DefaultProjectId);
         var projectId = await FindProjectIdAsync(credentials, organizationId, projectName);
@@ -122,9 +123,10 @@ public static partial class ScalewayEnvironment
 
     /// <summary>
     ///     The API key to act with: SCW_ACCESS_KEY/SCW_SECRET_KEY when exported (CI), otherwise the
-    ///     named scw CLI profile, or the active one when <paramref name="profile" /> is null.
+    ///     named profile in the Scaleway config file (the one scw and Terraform read), or the active one
+    ///     when <paramref name="profile" /> is null.
     /// </summary>
-    public static async Task<ScalewayCredentials> ReadCredentialsAsync(string? profile)
+    public static ScalewayCredentials ReadCredentials(string? profile)
     {
         var accessKey = Environment.GetEnvironmentVariable("SCW_ACCESS_KEY");
         var secretKey = Environment.GetEnvironmentVariable("SCW_SECRET_KEY");
@@ -133,18 +135,16 @@ public static partial class ScalewayEnvironment
             return new ScalewayCredentials(accessKey, secretKey, "SCW_ACCESS_KEY/SCW_SECRET_KEY");
         }
 
-        var profileArgument = profile is null ? "" : $"-p {profile} ";
-        var profileAccessKey = await ProcessHelper.ExecuteSensitiveAsync($"scw {profileArgument}config get access-key");
-        var profileSecretKey = await ProcessHelper.ExecuteSensitiveAsync($"scw {profileArgument}config get secret-key");
-        if (profileAccessKey.Success && profileSecretKey.Success && profileAccessKey.StdOut.Trim().StartsWith("SCW") && profileSecretKey.StdOut.Trim().Length > 0)
+        var profileKey = ScalewayConfigFile.ReadProfile(profile);
+        if (profileKey?.AccessKey?.StartsWith("SCW") == true && !string.IsNullOrWhiteSpace(profileKey.SecretKey))
         {
-            return new ScalewayCredentials(profileAccessKey.StdOut.Trim(), profileSecretKey.StdOut.Trim(), profile is null ? "the active scw profile" : $"the scw profile '{profile}'");
+            return new ScalewayCredentials(profileKey.AccessKey, profileKey.SecretKey, profile is null ? "the active scw profile" : $"the scw profile '{profile}'");
         }
 
         var hint = profile is null
-            ? "Export SCW_ACCESS_KEY and SCW_SECRET_KEY, or configure the scw CLI (scw init)."
-            : $"Export SCW_ACCESS_KEY and SCW_SECRET_KEY, or run the bootstrap command, which writes the '{profile}' scw profile.";
-        AnsiConsole.MarkupLine($"[red]No Scaleway API key found.[/] {hint}");
+            ? $"Export SCW_ACCESS_KEY and SCW_SECRET_KEY, or add an API key to {ScalewayConfigFile.DefaultPath} (scw init writes one)."
+            : $"Export SCW_ACCESS_KEY and SCW_SECRET_KEY, or run the bootstrap command, which writes the '{profile}' profile to {ScalewayConfigFile.DefaultPath}.";
+        AnsiConsole.MarkupLine($"[red]No Scaleway API key found.[/] {Markup.Escape(hint)}");
         Environment.Exit(1);
         return null!;
     }
