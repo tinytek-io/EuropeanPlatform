@@ -1135,6 +1135,14 @@ resource "scaleway_edge_services_tls_stage" "gateway" {
   pipeline_id         = scaleway_edge_services_pipeline.gateway[each.key].id
   managed_certificate = true
   cache_stage_id      = scaleway_edge_services_cache_stage.gateway[each.key].id
+
+  # A failed managed certificate is never retried, so the deploy requests a new one by replacing
+  # this stage. The DNS stage still links the old stage, and the API refuses to delete a linked
+  # stage (found live: a bare HTTP 500), so the replacement is created first, the DNS stage moves
+  # to it in place, and only then is the old stage deleted.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "scaleway_edge_services_dns_stage" "gateway_custom" {

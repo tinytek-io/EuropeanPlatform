@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
@@ -34,10 +35,15 @@ public sealed partial class DeployCommand : Command
     /// </summary>
     private const int RegistryTagsToKeep = 3;
 
+    private const string EdgeServicesApiUrl = "https://api.scaleway.com/edge-services/v1beta1";
+
     // The Gateway API CRDs and the Cilium version whose Envoy CRDs the cluster gets; bump the Cilium
     // one with Kapsule's Cilium version.
     private const string GatewayApiVersion = "v1.6.1";
     private const string CiliumVersion = "v1.20.2";
+
+    private static readonly TimeSpan EdgeCertificateIssuanceTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan EdgeCertificatePollInterval = TimeSpan.FromSeconds(20);
 
     public DeployCommand() : base(
         "deploy",
@@ -306,6 +312,9 @@ public sealed partial class DeployCommand : Command
         {
             PrintHeader("Applying infrastructure changes the rollout caused");
             await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "The rollout succeeded, but these changes are not applied; a gateway frontend the rollout created stays open until they are.");
+
+            PrintHeader("Checking the edge certificates");
+            await ReissueFailedEdgeCertificatesAsync(terraformEnvironment, projectId, credentials, autoApprove);
         }
 
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]dotnet run --project developer-cli -- edge-health -e {aspireEnvironment}[/] for a read-only health check of the edge and the public endpoints.");
@@ -452,7 +461,7 @@ public sealed partial class DeployCommand : Command
     ///     configuration contract; an operator's git-ignored &lt;environment&gt;.local.tfvars (a test
     ///     domain, say) is layered on top of it, and Terraform lets the later var file win.
     /// </summary>
-    private static async Task ApplyEnvironmentChangesAsync(string terraformEnvironment, string projectId, bool autoApprove, string declinedMessage)
+    private static async Task ApplyEnvironmentChangesAsync(string terraformEnvironment, string projectId, bool autoApprove, string declinedMessage, string additionalPlanArguments = "")
     {
         var varFiles = $"-var-file={ScalewayEnvironment.TierFileOf(terraformEnvironment)}";
         var localOverrides = Path.Combine(ScalewayEnvironment.EnvironmentModuleFolder, "environments", $"{terraformEnvironment}.local.tfvars");
@@ -464,10 +473,119 @@ public sealed partial class DeployCommand : Command
 
         await TerraformHelper.ApplyChangesAsync(
             ScalewayEnvironment.EnvironmentModuleFolder,
-            $"{varFiles} -var environment={terraformEnvironment} -var project_id={projectId}",
+            $"{varFiles} -var environment={terraformEnvironment} -var project_id={projectId} {additionalPlanArguments}".TrimEnd(),
             autoApprove,
             $"{declinedMessage} Run the deploy again to apply them, or pass --skip-plan-check to deploy without them."
         );
+    }
+
+    /// <summary>
+    ///     Requests a new managed certificate for every edge pipeline whose issuance failed. Scaleway
+    ///     never retries a failed issuance (found live: tls_managed_internal after the CNAME pointed at
+    ///     an old project; the stage stays "active" with no certificate), and recreating the TLS stage
+    ///     is the only way to request a new one. A stage qualifies only when it has no certificate at
+    ///     all and its hostname's CNAME already points at the pipeline — otherwise the new request
+    ///     fails the same way. A stage that serves a certificate is never recreated, even when its
+    ///     renewal fails: that would drop the working certificate before it expires, so edge-health's
+    ///     expiry threshold flags that case for a person instead.
+    /// </summary>
+    private static async Task ReissueFailedEdgeCertificatesAsync(string terraformEnvironment, string projectId, ScalewayCredentials credentials, bool autoApprove)
+    {
+        using var edgeHttpClient = new HttpClient();
+        edgeHttpClient.DefaultRequestHeaders.Add("X-Auth-Token", credentials.SecretKey);
+        edgeHttpClient.Timeout = TimeSpan.FromSeconds(30);
+
+        var failedTlsStages = new List<(string PipelineId, string TlsStageId, string Hostname)>();
+        var pipelines = await GetEdgeArrayAsync(edgeHttpClient, $"pipelines?page_size=100&project_id={projectId}", "pipelines");
+        foreach (var pipeline in pipelines)
+        {
+            var pipelineId = pipeline["id"]!.GetValue<string>();
+            var issuanceFailed = pipeline["errors"]?.AsArray().Any(error => error?["code"]?.GetValue<string>() == "tls_managed_internal") == true;
+            if (!issuanceFailed) continue;
+
+            var tlsStage = (await GetEdgeArrayAsync(edgeHttpClient, $"pipelines/{pipelineId}/tls-stages", "stages")).FirstOrDefault();
+            var hasCertificate = tlsStage?["secrets"]?.AsArray().Count > 0;
+            if (tlsStage?["managed_certificate"]?.GetValue<bool>() != true || hasCertificate) continue;
+
+            var customDnsStage = (await GetEdgeArrayAsync(edgeHttpClient, $"pipelines/{pipelineId}/dns-stages", "stages"))
+                .FirstOrDefault(stage => stage["type"]?.GetValue<string>() == "custom");
+            var hostname = customDnsStage?["fqdns"]?.AsArray().FirstOrDefault()?.GetValue<string>();
+            var pipelineEndpoint = customDnsStage?["default_fqdn"]?.GetValue<string>().TrimEnd('.');
+            if (hostname is null || pipelineEndpoint is null) continue;
+
+            var cname = (await ProcessHelper.ExecuteQuietlyAsync($"dig +short CNAME {hostname}")).StdOut.Trim().TrimEnd('.');
+            if (!string.Equals(cname, pipelineEndpoint, StringComparison.OrdinalIgnoreCase))
+            {
+                AnsiConsole.MarkupLine($"[yellow]The certificate for {hostname} did not issue, and its CNAME does not point at the pipeline ({pipelineEndpoint}) yet.[/] Fix the record (dns-check lists it) and deploy again; the deploy then requests a new certificate.");
+                continue;
+            }
+
+            failedTlsStages.Add((pipelineId, tlsStage["id"]!.GetValue<string>(), hostname));
+        }
+
+        if (failedTlsStages.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[green]No edge certificate needs a new request.[/]");
+            return;
+        }
+
+        // The Terraform address of each failed stage comes from the state (edge stage ids carry no
+        // region prefix today; the bare uuid is compared in case they ever do).
+        var stateJson = await TerraformHelper.RunSensitiveAsync(ScalewayEnvironment.EnvironmentModuleFolder, "show -json", "read the Terraform state");
+        using var state = JsonDocument.Parse(stateJson);
+        var tlsStageAddresses = state.RootElement.GetProperty("values").GetProperty("root_module").GetProperty("resources").EnumerateArray()
+            .Where(resource => resource.GetProperty("type").GetString() == "scaleway_edge_services_tls_stage")
+            .ToDictionary(resource => resource.GetProperty("values").GetProperty("id").GetString()!.Split('/').Last(), resource => resource.GetProperty("address").GetString()!);
+
+        var replaceArguments = new List<string>();
+        foreach (var (_, tlsStageId, hostname) in failedTlsStages)
+        {
+            if (!tlsStageAddresses.TryGetValue(tlsStageId.Split('/').Last(), out var address))
+            {
+                AnsiConsole.MarkupLine($"[red]The TLS stage of {hostname} ({tlsStageId}) is not in the Terraform state.[/] Recreate it by hand in the Scaleway console.");
+                Environment.Exit(1);
+            }
+
+            AnsiConsole.MarkupLine($"[yellow]The certificate for {hostname} did not issue[/] (tls_managed_internal) although its CNAME points at the pipeline; recreating its TLS stage requests a new one.");
+            // The address carries quotes (gateway["back-office"]); escaped for the argument parser.
+            replaceArguments.Add($"\"-replace={address.Replace("\"", "\\\"")}\"");
+        }
+
+        await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "The rollout succeeded, but the failed edge certificates are not requested again.", string.Join(' ', replaceArguments));
+        await WaitForEdgeCertificatesAsync(edgeHttpClient, failedTlsStages);
+    }
+
+    private static async Task WaitForEdgeCertificatesAsync(HttpClient edgeHttpClient, List<(string PipelineId, string TlsStageId, string Hostname)> requestedTlsStages)
+    {
+        var pending = requestedTlsStages.ToList();
+        var stopwatch = Stopwatch.StartNew();
+        AnsiConsole.MarkupLine($"Waiting up to {EdgeCertificateIssuanceTimeout.TotalMinutes:F0} minutes for the new certificate(s)...");
+        while (pending.Count > 0 && stopwatch.Elapsed < EdgeCertificateIssuanceTimeout)
+        {
+            await Task.Delay(EdgeCertificatePollInterval);
+            foreach (var requested in pending.ToList())
+            {
+                var tlsStage = (await GetEdgeArrayAsync(edgeHttpClient, $"pipelines/{requested.PipelineId}/tls-stages", "stages")).FirstOrDefault();
+                if (tlsStage?["secrets"]?.AsArray().Count > 0)
+                {
+                    AnsiConsole.MarkupLine($"[green]The certificate for {requested.Hostname} is issued.[/]");
+                    pending.Remove(requested);
+                }
+            }
+        }
+
+        if (pending.Count == 0) return;
+
+        AnsiConsole.MarkupLine($"[red]The rollout succeeded, but the certificate for {string.Join(", ", pending.Select(requested => requested.Hostname))} is still not issued after {EdgeCertificateIssuanceTimeout.TotalMinutes:F0} minutes.[/] Check the pipeline's errors in the Scaleway console; edge-health shows the current state.");
+        Environment.Exit(1);
+    }
+
+    private static async Task<List<JsonNode>> GetEdgeArrayAsync(HttpClient edgeHttpClient, string path, string propertyName)
+    {
+        using var response = await edgeHttpClient.GetAsync($"{EdgeServicesApiUrl}/{path}");
+        response.EnsureSuccessStatusCode();
+        var node = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+        return node?[propertyName]?.AsArray().OfType<JsonNode>().ToList() ?? [];
     }
 
     // Aspire pushes the images with the local Docker credentials, so the deploy logs Docker in with
