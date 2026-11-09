@@ -51,7 +51,7 @@ internal sealed class RefreshScalewaySchemasCommand : Command
         {
             foreach (var pin in SchemaPins.All)
             {
-                var targetPath = Path.Combine(schemasDirectory, $"{pin.Slug}.yml");
+                var targetPath = Path.Combine(schemasDirectory, $"{pin.FileName}.yml");
 
                 var yaml = await HttpClient.GetStringAsync(SchemaPins.SchemaUrl(pin.Slug, pin.Version));
                 await File.WriteAllTextAsync(targetPath, yaml);

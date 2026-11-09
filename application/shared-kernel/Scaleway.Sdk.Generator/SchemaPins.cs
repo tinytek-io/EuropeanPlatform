@@ -14,13 +14,21 @@ namespace Scaleway.Sdk.Generator;
 ///         be, and omitting it does not compile.
 ///     </para>
 /// </summary>
-/// <param name="Slug">The product doc slug, which is also the file name the schema is written to on disk.</param>
+/// <param name="Slug">
+///     The product doc path Scaleway publishes the schema under, e.g. <c>edge-services</c> or
+///     <c>load-balancer/zoned</c> (a product with several APIs nests them). <see cref="FileName" /> is the flat name
+///     the schema is written to on disk.
+/// </param>
 /// <param name="Version">The API version segment of the published document's URL, e.g. <c>v1beta1</c>.</param>
 /// <param name="Rationale">
 ///     Why this version and not the newest one Scaleway serves. <see cref="SchemaVersionCheck" /> is what keeps
 ///     this honest: it probes upstream and reports a pin the rationale no longer describes.
 /// </param>
-public sealed record SchemaPin(string Slug, string Version, string Rationale);
+public sealed record SchemaPin(string Slug, string Version, string Rationale)
+{
+    /// <summary>The schema's file name in <c>Scaleway.Sdk/Schemas</c>, without extension: the slug, flattened.</summary>
+    public string FileName => Slug.Replace('/', '-');
+}
 
 /// <summary>
 ///     The checked-in schema set, as the pins it was downloaded from. Read by the developer CLI's
@@ -47,7 +55,9 @@ public static class SchemaPins
         new("serverless-functions", "v1beta1", "Current published version; Scaleway has published no v1."),
         new("serverless-jobs", "v1alpha2", "Current published version, bumped from v1alpha1. v1alpha1 is still served — Scaleway freezes superseded documents rather than retiring them, which is why the stale pin broke nothing and prompted nobody."),
         new("serverless-databases", "v1alpha1", "Current published version; Scaleway publishes no newer document."),
-        new("kubernetes", "v1", "Current published version; Scaleway publishes no newer document.")
+        new("kubernetes", "v1", "Current published version; Scaleway publishes no newer document."),
+        new("load-balancer/zoned", "v1", "The zoned API, which the gateway Load Balancer, its frontends, backends and ACLs live under; v1 is the version Scaleway documents. Not yet probed for a newer version."),
+        new("account/project", "v3", "Projects live in Account v3; v2 is retired. Not yet probed for a newer version.")
     ];
 
     /// <summary>

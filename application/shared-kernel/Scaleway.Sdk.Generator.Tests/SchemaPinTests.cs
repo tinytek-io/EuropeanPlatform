@@ -22,7 +22,7 @@ public sealed class SchemaPinTests
     [Fact]
     public void PinnedSlugs_AreExactlyTheCheckedInSchemas()
     {
-        var pinned = SchemaPins.All.Select(pin => pin.Slug).ToHashSet(StringComparer.Ordinal);
+        var pinned = SchemaPins.All.Select(pin => pin.FileName).ToHashSet(StringComparer.Ordinal);
         var onDisk = SchemaFiles.AllSchemas().Keys.ToHashSet(StringComparer.Ordinal);
 
         // Both directions matter: a schema with no pin is a file nobody can refresh or check for staleness, and a
@@ -41,7 +41,7 @@ public sealed class SchemaPinTests
             // for a service with no generated client, which silently skipped serverless-jobs, serverless-functions
             // and serverless-databases — the three pins most in need of checking, since the first of them is the
             // superseded one. Every checked-in document declares exactly one version segment.
-            var declared = VersionSegmentsIn(schemas[pin.Slug]);
+            var declared = VersionSegmentsIn(schemas[pin.FileName]);
 
             // Catches a pin edited without a re-download: the table says v1alpha2 and the bytes are still v1alpha1.
             declared.Should().Equal([pin.Version], $"the pin for '{pin.Slug}' must name the version its checked-in document declares");
