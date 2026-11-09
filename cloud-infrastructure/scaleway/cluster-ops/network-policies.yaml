@@ -269,7 +269,7 @@ spec:
 ---
 # back-office-api (the BFF): served through Envoy and YARP; calls account's internal API;
 # proxies blobs through its keyed storage client; keeps the staff identity state in its own
-# database.
+# database, and signs staff in itself.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

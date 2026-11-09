@@ -3,6 +3,7 @@ using BackOffice.Api;
 using BackOffice.Authentication;
 using BackOffice.Authentication.MockEasyAuth;
 using BackOffice.ExecutionContext;
+using BackOffice.StaffIdentity;
 using Microsoft.Extensions.Options;
 using SharedKernel.Authentication;
 using SharedKernel.Configuration;
@@ -10,8 +11,8 @@ using SharedKernel.SinglePageApp;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// The back-office owns no database: it is a BFF over the feature systems' internal APIs.
-// AddBackOfficeInfrastructure wires telemetry, the Secret Manager configuration provider (a no-op
+// A BFF over the feature systems' internal APIs whose own database holds only the staff identity
+// state. AddBackOfficeInfrastructure wires the database, telemetry, the Secret Manager configuration provider (a no-op
 // locally), the internal-CA trust for account's in-cluster TLS, and the account internal API
 // client. AddDevelopmentPort chains on WebApplicationBuilder (KESTREL_PORT dev listener), so the
 // calls stay unchained.
@@ -28,13 +29,17 @@ builder.Services
     // auth-gated SPA fallback.
     .AddBackOfficeDevStaticProxy();
 
-// Back-office staff identity: a configured OIDC provider (BackOffice:Oidc) takes precedence; the
-// mock identity selector applies only when no provider exists (local development and environments
-// that explicitly opt in through MockEasyAuth:Enabled). Registered before Build.
-var backOfficeOidcConfigured = builder.Configuration.IsBackOfficeOidcConfigured();
-builder.Services.AddBackOfficeOidcIdentity(builder.Configuration);
+// Back-office staff identity: with a staff identity file (StaffIdentity:File) the back-office signs
+// staff in itself with an emailed one-time code; the mock identity selector applies only without one
+// (local development and environments that explicitly opt in through MockEasyAuth:Enabled).
+builder.Services.AddStaffSession();
 
 var app = builder.Build();
+
+// Decided on the built configuration (every source in place), and the file is loaded and validated
+// now, so a missing or invalid staff identity file fails the start rather than the first sign-in.
+var staffSignInEnabled = app.Configuration.IsStaffSignInEnabled();
+app.Services.GetRequiredService<StaffDirectory>();
 
 var backOfficeHostname = app.Services.GetRequiredService<IOptions<BackOfficeHostOptions>>().Value.Host;
 
@@ -54,19 +59,21 @@ var mockEasyAuthEnabled = MockEasyAuthMiddlewareExtensions.IsMockEasyAuthEnabled
 var runtimeEnvironment = new Dictionary<string, string>
 {
     ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false",
-    ["PUBLIC_MOCK_EASY_AUTH_ENABLED"] = mockEasyAuthEnabled ? "true" : "false"
+    ["PUBLIC_MOCK_EASY_AUTH_ENABLED"] = mockEasyAuthEnabled ? "true" : "false",
+    ["PUBLIC_STAFF_SIGN_IN_ENABLED"] = staffSignInEnabled ? "true" : "false"
 };
 
-string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled ? ["/login"] : [];
+// The sign-in page (the real one or the mock picker) is the one SPA route served without a session.
+string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled || staffSignInEnabled ? ["/login"] : [];
 
-if (backOfficeOidcConfigured)
+if (staffSignInEnabled)
 {
-    app.MapBackOfficeOidcEndpoints();
+    app.MapStaffSessionEndpoints(backOfficeHostname);
 }
 
-if (!mockEasyAuthEnabled)
+if (!mockEasyAuthEnabled && !staffSignInEnabled)
 {
-    // No provider and no mock: reject the login picker instead of pretending it is configured.
+    // Neither sign-in is configured: reject the sign-in page instead of pretending one exists.
     app.MapGet("/login", Results.Unauthorized).RequireHost(backOfficeHostname);
 }
 

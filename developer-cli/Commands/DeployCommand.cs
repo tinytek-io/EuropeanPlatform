@@ -267,6 +267,9 @@ public sealed partial class DeployCommand : Command
         environmentVariables.Add(("Hostnames__App", appHostname));
         environmentVariables.Add(("Hostnames__BackOffice", backOfficeHostname));
         environmentVariables.Add(("Email__Sender", $"noreply@{domainName}"));
+        // The back-office signs staff in from the environment's committed staff identity file
+        // (cloud-infrastructure/staff-identity/<environment>.yaml), which ships with it.
+        environmentVariables.Add(("StaffIdentity__Environment", terraformEnvironment));
 
         int exitCode;
         try

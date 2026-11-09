@@ -100,7 +100,7 @@ public static class Configuration
             // whether the identity came from the mock EasyAuth selector or a staff OIDC provider.
             services.AddScoped<IStaffExecutionContext, StaffExecutionContext>();
 
-            return services.AddSharedServices([Assembly]);
+            return services.AddSharedServices<BackOfficeDbContext>([Assembly]);
         }
     }
 }

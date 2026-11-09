@@ -436,6 +436,3 @@ application/playwright.combined.config.ts
 .claude/scheduled_tasks.lock
 .claude/worktrees
 
-# Authelia dev-harness TLS material — generated at startup into obj/authelia (AutheliaTls)
-application/AppHost/Authelia/authelia-tls.key
-application/AppHost/Authelia/authelia-tls.pem

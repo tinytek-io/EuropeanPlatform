@@ -5,6 +5,7 @@ using AppHost;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using BackOffice.Authentication.MockEasyAuth;
+using BackOffice.StaffIdentity;
 using Microsoft.Extensions.Configuration;
 using Projects;
 using SharedKernel.Configuration;
@@ -102,17 +103,19 @@ var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemAp
 // forwards plain HTTP to the workloads.
 var appPublicUrl = $"https://{appPublicHostname}";
 
-// Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff exists;
-// production leaves MockEasyAuth:Enabled unset so the middleware and the /login picker stay off.
-var mockEasyAuthEnabled = isPublishMode && builder.Configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
+// The back-office signs staff in itself, with an emailed one-time code, from the environment's
+// committed staff identity file (cloud-infrastructure/staff-identity/<environment>.yaml, shipped
+// with the back-office). Deployed environments always do; local development opts in with
+// StaffIdentity:Enabled (codes land in Mailpit) and otherwise keeps the mock login picker.
+var staffSignInEnabled = isPublishMode || builder.Configuration.GetSection("StaffIdentity:Enabled").Get<bool>();
+var staffIdentityFile = isPublishMode
+    ? $"staff-identity/{builder.Configuration["StaffIdentity:Environment"] ?? throw new InvalidOperationException("Publish mode requires StaffIdentity:Environment (the Terraform environment name) in AppHost configuration.")}.yaml"
+    : Path.Combine(builder.AppHostDirectory, "StaffIdentity", "development.yaml");
 
-// The staff group whose members get the back-office admin capability. Development uses the mock
-// admin identity's group; deployed environments name it explicitly per tier (the group the staff
-// identity provider emits), so admin gating never silently depends on the public mock constant.
-var backOfficeAdminsGroupId = isPublishMode
-    ? builder.Configuration["BackOffice:AdminsGroupId"]
-      ?? throw new InvalidOperationException("Publish mode requires BackOffice:AdminsGroupId in AppHost configuration.")
-    : MockEasyAuthIdentities.MockAdminsGroupId;
+// The staff group whose members get the back-office admin capability: the staff identity file's
+// admins group wherever the back-office signs staff in itself, and the mock admin identity's group
+// behind the mock login picker.
+var backOfficeAdminsGroupId = staffSignInEnabled ? StaffGroups.Admins : MockEasyAuthIdentities.MockAdminsGroupId;
 
 // cert-manager contact email for the Let's Encrypt issuer (publish mode only).
 var acmeEmail = isPublishMode
@@ -358,6 +361,7 @@ var backOfficeApi = builder
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
     .WithReference(backOfficeDatabase)
     .WaitFor(backOfficeWorkers)
+    .WithEnvironment("StaffIdentity__File", staffSignInEnabled ? staffIdentityFile : string.Empty)
     // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
     // localhost, the gateway hostname in publish mode).
     .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
@@ -379,64 +383,11 @@ if (isPublishMode)
     backOfficeApi
         .WithHttpsEndpoint(8443, 8443, "https")
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live")
-        // Staging runs the MockEasyAuth identity selector until a proper OIDC provider for staff
-        // exists, mirroring account's folded back-office during the migration.
-        .WithEnvironment("MockEasyAuth__Enabled", mockEasyAuthEnabled ? "true" : "false")
+        // Deployed environments always sign staff in themselves: the mock login picker never runs there.
+        .WithEnvironment("MockEasyAuth__Enabled", "false")
         // The BFF calls account's internal API (/internal-api/back-office/*) over in-cluster TLS,
         // carrying the signed-in staff member's delegation token.
         .WithEnvironment("ACCOUNT_API_URL", accountApi.GetEndpoint("https"));
-}
-
-// Back-office OIDC test harness (development only): runs Authelia — a small open-source OIDC
-// provider — and points the back-office staff sign-in at it. This exercises the same generic
-// flow a production provider will use: discovery, authorization code + PKCE, the callback at
-// /.auth/login/aad/callback, and the groups claim for the admin gate. Gated behind
-// Authelia:Enabled so the default dev stack keeps the MockEasyAuth login picker; enable with
-// AUTHELIA__ENABLED=true and run the back-office-oidc e2e spec (BACK_OFFICE_OIDC_ENABLED=true).
-if (!isPublishMode && builder.Configuration.GetSection("Authelia:Enabled").Get<bool>())
-{
-    var autheliaRedis = builder.AddContainer("authelia-redis", "redis:7-alpine");
-
-    // Authelia's client registration needs the back-office callback URL, whose port comes from
-    // .workspace/port.txt — generate the effective configuration (from the template checked in
-    // next to this AppHost) into obj/ at startup, keeping the repo clean of derived files.
-    var autheliaConfigFolder = Path.Combine(builder.AppHostDirectory, "obj", "authelia");
-    Directory.CreateDirectory(autheliaConfigFolder);
-    // The TLS serving key and the OIDC signing key are generated here (dev-only material, never
-    // committed — see AutheliaTls); the template carries a placeholder for the signing key.
-    AutheliaTls.EnsureDevSecrets(autheliaConfigFolder);
-    var autheliaCallbackUrl = $"https://{backOfficeHostname}:{ports.BackOfficeSystemApi}/.auth/login/aad/callback";
-    var autheliaConfiguration = File.ReadAllText(Path.Combine(builder.AppHostDirectory, "Authelia", "configuration.template.yml"))
-        .Replace("REDIRECT_URI_PLACEHOLDER", autheliaCallbackUrl)
-        .Replace("OIDC_JWKS_KEY_PLACEHOLDER", AutheliaTls.GetOidcSigningKeyYamlBlock(autheliaConfigFolder));
-    File.WriteAllText(Path.Combine(autheliaConfigFolder, "configuration.yml"), autheliaConfiguration);
-    foreach (var autheliaFile in new[] { "users_database.yml" })
-    {
-        File.Copy(Path.Combine(builder.AppHostDirectory, "Authelia", autheliaFile), Path.Combine(autheliaConfigFolder, autheliaFile), true);
-    }
-
-    builder
-        .AddContainer("authelia", "authelia/authelia:4.38")
-        .WithHttpEndpoint(9091, 9091, "https")
-        .WithBindMount(autheliaConfigFolder, "/config")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_HOST", "authelia-redis")
-        .WithEnvironment("AUTHELIA_SESSION_REDIS_PORT", "6379")
-        .WaitFor(autheliaRedis);
-
-    backOfficeApi
-        .WithEnvironment("BackOffice__Oidc__Authority", "https://authelia.dev.localhost:9091")
-        .WithEnvironment("BackOffice__Oidc__ClientId", "back-office")
-        .WithEnvironment("BackOffice__Oidc__ClientSecret", "dev-only-back-office-client-secret")
-        // The harness certificate is self-signed: the OIDC backchannel (server-side discovery
-        // and token requests) must tolerate it. Dev-harness only; production providers have
-        // trusted certificates and leave this unset.
-        .WithEnvironment("BackOffice__Oidc__DevAllowUntrustedCertificate", "true")
-        // The harness user's Authelia group (users_database.yml) is both the staff and the admin
-        // group, so the harness exercises the real staff gate and admin capability.
-        .WithEnvironment("BackOffice__Oidc__StaffGroupId", "admins")
-        .WithEnvironment("BackOffice__AdminsGroupId", "admins")
-        // The mock login picker would offer a bypass around the real provider's login screen.
-        .WithEnvironment("PUBLIC_MOCK_EASY_AUTH_ENABLED", "false");
 }
 
 var appGateway = builder

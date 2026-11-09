@@ -925,6 +925,12 @@ msgstr "Enchiladas verdes"
 msgid "Enter kiosk mode"
 msgstr "Enter kiosk mode"
 
+msgid "Enter your sign-in code"
+msgstr "Enter your sign-in code"
+
+msgid "Enter your work email and we will send you a sign-in code"
+msgstr "Enter your work email and we will send you a sign-in code"
+
 msgid "Errors"
 msgstr "Errors"
 
@@ -1092,6 +1098,9 @@ msgstr "Icon-only buttons"
 
 msgid "Icons"
 msgstr "Icons"
+
+msgid "If <0>{email}</0> belongs to a staff member, a sign-in code is on its way. It is valid for 5 minutes."
+msgstr "If <0>{email}</0> belongs to a staff member, a sign-in code is on its way. It is valid for 5 minutes."
 
 msgid "In the real app the sidebar is fixed-positioned, persists its state and width in localStorage (rem-based, not cookies), and exposes a floating chevron to toggle icon collapse plus drag-to-resize between 14rem and 25rem."
 msgstr "In the real app the sidebar is fixed-positioned, persists its state and width in localStorage (rem-based, not cookies), and exposes a floating chevron to toggle icon collapse plus drag-to-resize between 14rem and 25rem."
@@ -2237,6 +2246,12 @@ msgstr "Selected recipes"
 msgid "Send invite"
 msgstr "Send invite"
 
+msgid "Send sign-in code"
+msgstr "Send sign-in code"
+
+msgid "Sending sign-in code..."
+msgstr "Sending sign-in code..."
+
 msgid "Separator"
 msgstr "Separator"
 
@@ -2315,11 +2330,17 @@ msgstr "Sidebar"
 msgid "Sidebar footer"
 msgstr "Sidebar footer"
 
+msgid "Sign in"
+msgstr "Sign in"
+
 msgid "Sign in with a mock identity. Production requires authenticated staff sign-in."
 msgstr "Sign in with a mock identity. Production requires authenticated staff sign-in."
 
 msgid "Sign in without a password using your device."
 msgstr "Sign in without a password using your device."
+
+msgid "Sign-in code"
+msgstr "Sign-in code"
 
 msgid "Signed up"
 msgstr "Signed up"
@@ -2328,6 +2349,9 @@ msgstr "Signed up"
 #. placeholder {1}: formatDate(tenant.createdAt)
 msgid "Signed up <0>{0}</0><1>{1}</1>"
 msgstr "Signed up <0>{0}</0><1>{1}</1>"
+
+msgid "Signing in..."
+msgstr "Signing in..."
 
 msgid "Simulate errors"
 msgstr "Simulate errors"
@@ -2681,6 +2705,9 @@ msgstr "Upload photo"
 msgid "Upload profile picture"
 msgstr "Upload profile picture"
 
+msgid "Use a different email or request a new code"
+msgstr "Use a different email or request a new code"
+
 msgid "Use a horizontal separator to group related sections in a column layout."
 msgstr "Use a horizontal separator to group related sections in a column layout."
 
@@ -2812,6 +2839,9 @@ msgstr "Your profile has been verified"
 
 msgid "Your trial expires in 3 days."
 msgstr "Your trial expires in 3 days."
+
+msgid "yourname@example.com"
+msgstr "yourname@example.com"
 
 msgid "Zoom"
 msgstr "Zoom"

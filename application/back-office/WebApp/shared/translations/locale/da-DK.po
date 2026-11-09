@@ -925,6 +925,12 @@ msgstr "Enchiladas verdes"
 msgid "Enter kiosk mode"
 msgstr "Skift til kiosktilstand"
 
+msgid "Enter your sign-in code"
+msgstr "Indtast din login-kode"
+
+msgid "Enter your work email and we will send you a sign-in code"
+msgstr "Indtast din arbejds-e-mail, så sender vi dig en login-kode"
+
 msgid "Errors"
 msgstr "Fejl"
 
@@ -1092,6 +1098,9 @@ msgstr "Knapper kun med ikon"
 
 msgid "Icons"
 msgstr "Ikoner"
+
+msgid "If <0>{email}</0> belongs to a staff member, a sign-in code is on its way. It is valid for 5 minutes."
+msgstr "Hvis <0>{email}</0> tilhører en medarbejder, er en login-kode på vej. Den er gyldig i 5 minutter."
 
 msgid "In the real app the sidebar is fixed-positioned, persists its state and width in localStorage (rem-based, not cookies), and exposes a floating chevron to toggle icon collapse plus drag-to-resize between 14rem and 25rem."
 msgstr "I selve appen er sidemenuen fixed-positioneret, gemmer sin tilstand og bredde i localStorage (rem-baseret, ikke cookies), og viser en flydende chevron til at skifte til ikon-tilstand samt træk-for-at-ændre-størrelse mellem 14rem og 25rem."
@@ -2237,6 +2246,12 @@ msgstr "Valgte opskrifter"
 msgid "Send invite"
 msgstr "Send invitation"
 
+msgid "Send sign-in code"
+msgstr "Send login-kode"
+
+msgid "Sending sign-in code..."
+msgstr "Sender login-kode..."
+
 msgid "Separator"
 msgstr "Separator"
 
@@ -2315,11 +2330,17 @@ msgstr "Sidemenu"
 msgid "Sidebar footer"
 msgstr "Sidemenu-sidefod"
 
+msgid "Sign in"
+msgstr "Log ind"
+
 msgid "Sign in with a mock identity. Production requires authenticated staff sign-in."
 msgstr "Log ind med en mock-identitet. Produktion kræver autentificeret login for personale."
 
 msgid "Sign in without a password using your device."
 msgstr "Log ind uden adgangskode ved hjælp af din enhed."
+
+msgid "Sign-in code"
+msgstr "Login-kode"
 
 msgid "Signed up"
 msgstr "Tilmeldt"
@@ -2328,6 +2349,9 @@ msgstr "Tilmeldt"
 #. placeholder {1}: formatDate(tenant.createdAt)
 msgid "Signed up <0>{0}</0><1>{1}</1>"
 msgstr "Tilmeldt <0>{0}</0><1>{1}</1>"
+
+msgid "Signing in..."
+msgstr "Logger ind..."
 
 msgid "Simulate errors"
 msgstr "Simuler fejl"
@@ -2681,6 +2705,9 @@ msgstr "Upload foto"
 msgid "Upload profile picture"
 msgstr "Upload profilbillede"
 
+msgid "Use a different email or request a new code"
+msgstr "Brug en anden e-mail, eller bed om en ny kode"
+
 msgid "Use a horizontal separator to group related sections in a column layout."
 msgstr "Brug en vandret separator til at gruppere relaterede sektioner i en kolonnelayout."
 
@@ -2812,6 +2839,9 @@ msgstr "Din profil er blevet bekræftet"
 
 msgid "Your trial expires in 3 days."
 msgstr "Din prøveperiode udløber om 3 dage."
+
+msgid "yourname@example.com"
+msgstr "ditnavn@eksempel.com"
 
 msgid "Zoom"
 msgstr "Zoom"

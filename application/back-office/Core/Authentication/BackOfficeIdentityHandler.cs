@@ -43,7 +43,7 @@ public sealed class BackOfficeIdentityHandler(
 
     // Staff identity never comes from request headers: the mock selector hands its cookie-resolved
     // identity over in-process (HttpContext.Items, unreachable from the network), and otherwise the
-    // OIDC session cookie authenticates. Any client-supplied identity header is ignored.
+    // staff session cookie authenticates. Any client-supplied identity header is ignored.
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var mockIdentity = MockEasyAuthIdentities.GetAttached(Context);
@@ -52,10 +52,10 @@ public sealed class BackOfficeIdentityHandler(
             return AuthenticateResult.Success(new AuthenticationTicket(BuildMockPrincipal(mockIdentity), Scheme.Name));
         }
 
-        return await TryAuthenticateOidcCookieAsync();
+        return await TryAuthenticateStaffSessionAsync();
     }
 
-    private async Task<AuthenticateResult> TryAuthenticateOidcCookieAsync()
+    private async Task<AuthenticateResult> TryAuthenticateStaffSessionAsync()
     {
         // RequestServices is null in bare unit-test contexts (the nullable contract claims
         // otherwise): nothing to fall back to there.
@@ -66,12 +66,12 @@ public sealed class BackOfficeIdentityHandler(
         }
 
         var schemeProvider = services.GetRequiredService<IAuthenticationSchemeProvider>();
-        if (await schemeProvider.GetSchemeAsync(BackOfficeOidcDefaults.CookieScheme) is null)
+        if (await schemeProvider.GetSchemeAsync(StaffSessionDefaults.Scheme) is null)
         {
             return AuthenticateResult.NoResult();
         }
 
-        var result = await Context.AuthenticateAsync(BackOfficeOidcDefaults.CookieScheme);
+        var result = await Context.AuthenticateAsync(StaffSessionDefaults.Scheme);
         return result.Succeeded
             ? AuthenticateResult.Success(new AuthenticationTicket(result.Principal!, Scheme.Name))
             : AuthenticateResult.NoResult();

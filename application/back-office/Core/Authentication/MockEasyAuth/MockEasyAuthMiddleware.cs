@@ -112,15 +112,14 @@ public sealed class MockEasyAuthMiddleware(RequestDelegate next)
 
 public static class MockEasyAuthMiddlewareExtensions
 {
-    // The single decision for whether the mock identity selector is active. A configured OIDC
-    // provider always wins: the mock would otherwise intercept the login path the provider's
-    // challenge endpoint maps, offering a bypass around the real login screen. Otherwise it is on
-    // during local development, and MockEasyAuth:Enabled turns it on explicitly for other
-    // environments (e.g. a staging cluster before a staff OIDC provider exists); it must NEVER be
+    // The single decision for whether the mock identity selector is active. The real staff sign-in
+    // (a configured staff identity file) always wins: the mock would otherwise intercept the login
+    // path, offering a bypass around the real sign-in. Otherwise it is on during local development,
+    // and MockEasyAuth:Enabled turns it on explicitly for other environments; it must NEVER be
     // enabled in production.
     public static bool IsMockEasyAuthEnabled(IConfiguration configuration, IHostEnvironment environment)
     {
-        if (configuration.IsBackOfficeOidcConfigured()) return false;
+        if (configuration.IsStaffSignInEnabled()) return false;
         return environment.IsDevelopment() || configuration.GetSection("MockEasyAuth:Enabled").Get<bool>();
     }
 

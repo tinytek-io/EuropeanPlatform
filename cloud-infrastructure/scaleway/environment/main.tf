@@ -972,10 +972,11 @@ resource "scaleway_iam_policy" "workload" {
     condition            = "resource.name.startsWith(\"/${each.key}\") || !has(resource.id)"
   }
 
-  # The account workloads send transactional email through the TEM HTTP API with this same
-  # key (the SMTP credentials are console-only). EmailFullAccess is send-only: no domain admin.
+  # The account workloads (user sign-in and notifications) and the back-office API (the staff
+  # sign-in codes) send transactional email through the TEM HTTP API with this same key (the SMTP
+  # credentials are console-only). EmailFullAccess is send-only: no domain admin.
   dynamic "rule" {
-    for_each = startswith(each.key, "account-") ? [1] : []
+    for_each = startswith(each.key, "account-") || each.key == "back-office-api" ? [1] : []
     content {
       permission_set_names = ["TransactionalEmailEmailFullAccess"]
       project_ids          = [var.project_id]

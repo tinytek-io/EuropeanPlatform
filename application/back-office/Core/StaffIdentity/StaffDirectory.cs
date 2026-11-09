@@ -49,6 +49,9 @@ public sealed partial class StaffDirectory
         _clientsById = clients.ToDictionary(client => client.ClientId);
     }
 
+    /// <summary>Nobody: what the back-office holds when it does not sign staff in itself (the mock selector does).</summary>
+    public static StaffDirectory Empty { get; } = new([], []);
+
     public StaffMember[] Staff { get; }
 
     public StaffIdentityClient[] Clients { get; }

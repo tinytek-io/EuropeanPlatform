@@ -13,9 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- The OIDC handler for staff sign-in (the package does not ship with the framework
-             reference; SharedKernel pins the version in Directory.Packages.props). -->
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"/>
         <!-- The committed staff identity file (cloud-infrastructure/staff-identity) is YAML. -->
         <PackageReference Include="YamlDotNet"/>
     </ItemGroup>

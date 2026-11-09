@@ -185,10 +185,10 @@ public sealed class MockEasyAuthMiddlewareTests
     }
 
     [Fact]
-    public async Task UseMockEasyAuthWhenEnabled_WhenOidcProviderIsConfigured_ShouldNotRegisterTheMiddleware()
+    public async Task UseMockEasyAuthWhenEnabled_WhenStaffSignInIsConfigured_ShouldNotRegisterTheMiddleware()
     {
-        // Arrange: a fully configured OIDC provider, even in the development environment — the
-        // mock would otherwise intercept the login path the provider's challenge endpoint maps.
+        // Arrange: a configured staff identity file, even in the development environment — the
+        // mock would otherwise intercept the login path the real sign-in maps.
         var (pipeline, context) = BuildPipeline(true);
 
         // Act
@@ -217,18 +217,16 @@ public sealed class MockEasyAuthMiddlewareTests
     // A minimal pipeline host — configuration (optionally with a fully configured OIDC provider),
     // a development environment, and a terminal handler — invoked on the login path, enough to
     // observe whether UseMockEasyAuthWhenEnabled registered the mock selector.
-    private static (RequestDelegate Pipeline, HttpContext Context) BuildPipeline(bool oidcConfigured)
+    private static (RequestDelegate Pipeline, HttpContext Context) BuildPipeline(bool staffSignInConfigured)
     {
         var settings = new Dictionary<string, string?>
         {
             ["BackOffice:Host"] = "back-office.test.localhost",
             ["BackOffice:AdminsGroupId"] = "BackOfficeAdmins"
         };
-        if (oidcConfigured)
+        if (staffSignInConfigured)
         {
-            settings["BackOffice:Oidc:Authority"] = "https://login.example.com";
-            settings["BackOffice:Oidc:ClientId"] = "client-id";
-            settings["BackOffice:Oidc:ClientSecret"] = "secret";
+            settings["StaffIdentity:File"] = "staff-identity/test.yaml";
         }
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();

@@ -11,6 +11,8 @@ import { useState } from "react";
 
 import { HorizontalHeroLayout } from "@/shared/layouts/HorizontalHeroLayout";
 
+import { StaffSignInForm } from "./-components/StaffSignInForm";
+
 const MOCK_IDENTITY_IDS = ["admin", "user"] as const;
 
 interface MockLoginSearch {
@@ -18,11 +20,15 @@ interface MockLoginSearch {
 }
 
 export const Route = createFileRoute("/login")({
-  staticData: { trackingTitle: "Mock login" },
+  staticData: { trackingTitle: "Sign in" },
   beforeLoad: () => {
-    // Gated by the server-provided runtime flag, not the build type: staging runs a production
-    // build yet still offers the mock identity selector (MockEasyAuth:Enabled opts in).
-    if (import.meta.runtime_env.PUBLIC_MOCK_EASY_AUTH_ENABLED !== "true") {
+    // Gated by the server-provided runtime flags, not the build type: the back-office signs staff
+    // in itself wherever a staff identity file is configured, and otherwise offers the mock
+    // identity selector where the environment opts in (MockEasyAuth:Enabled, local development).
+    if (
+      import.meta.runtime_env.PUBLIC_STAFF_SIGN_IN_ENABLED !== "true" &&
+      import.meta.runtime_env.PUBLIC_MOCK_EASY_AUTH_ENABLED !== "true"
+    ) {
       throw new NotFoundError();
     }
   },
@@ -31,8 +37,21 @@ export const Route = createFileRoute("/login")({
     const returnPath = typeof raw === "string" && raw.startsWith("/") ? raw : "/";
     return { returnPath };
   },
-  component: MockLoginPage
+  component: LoginPage
 });
+
+function LoginPage() {
+  const { returnPath } = Route.useSearch();
+  if (import.meta.runtime_env.PUBLIC_STAFF_SIGN_IN_ENABLED === "true") {
+    return (
+      <HorizontalHeroLayout>
+        <StaffSignInForm returnPath={returnPath} />
+      </HorizontalHeroLayout>
+    );
+  }
+
+  return <MockLoginPage />;
+}
 
 function MockLoginPage() {
   const { returnPath } = Route.useSearch();
