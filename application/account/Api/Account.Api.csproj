@@ -57,6 +57,12 @@
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </Content>
     </ItemGroup>
+    <ItemGroup Condition="Exists('..\WebApp\emails\dist')">
+        <Content Include="..\WebApp\emails\dist\**\*">
+            <Link>WebApp\emails\dist\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
     <!--
         Emit the feature flag manifest JSON for the frontend codegen step. Runs after Build by
         invoking Account.Api.dll with the emit-feature-flags-manifest argument. The frontend script
