@@ -302,11 +302,19 @@ resource "scaleway_rdb_user" "migrator" {
   is_admin    = false
 }
 
+# The preset grants the app user access to the database; the table-level grants are the migrator's
+# (it owns the tables and grants the app user on them, including default privileges for tables
+# later migrations create). Scaleway then reads the privilege back as "custom", so the permission
+# is ignored after creation instead of resetting the preset on every apply.
 resource "scaleway_rdb_privilege" "app_account" {
   instance_id   = scaleway_rdb_instance.main.id
   database_name = scaleway_rdb_database.account.name
   user_name     = scaleway_rdb_user.app.name
   permission    = "readwrite"
+
+  lifecycle {
+    ignore_changes = [permission]
+  }
 }
 
 resource "scaleway_rdb_privilege" "app_main" {
@@ -314,6 +322,10 @@ resource "scaleway_rdb_privilege" "app_main" {
   database_name = scaleway_rdb_database.main.name
   user_name     = scaleway_rdb_user.app.name
   permission    = "readwrite"
+
+  lifecycle {
+    ignore_changes = [permission]
+  }
 }
 
 resource "scaleway_rdb_privilege" "migrator_account" {
