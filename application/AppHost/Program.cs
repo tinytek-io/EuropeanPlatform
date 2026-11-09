@@ -679,6 +679,7 @@ async Task PatchGeneratedChart(PipelineStepContext context)
     await PatchRolloutStrategyAsync(templatesFolder);
     await AddMigrationJobsAsync(templatesFolder);
     PatchGatewayRoutesForwardedProto(templatesFolder);
+    PatchGatewayLoadBalancer(templatesFolder);
     AddInternalTlsManifests(templatesFolder);
     AddNetworkPolicyManifests(templatesFolder);
     PatchWorkloadsForInternalTls(templatesFolder);
@@ -910,6 +911,32 @@ void PatchWorkloadImagePullSecrets(string templatesFolder)
 // refuses requests that do not present as SSL (found live: crash-loop on SecurePolicy.Always).
 // The rewrite is honest: every request reaching the Gateway terminated TLS at its https listener,
 // and the Gateway is not reachable from inside the cluster.
+// The gateway Service Cilium creates for the Gateway must run on the Terraform-owned Load Balancer
+// (stable flexible IP, edge-only ACLs, and the edge's backend stages), not on a new one the Kapsule
+// CCM would create for it. Cilium copies spec.infrastructure.annotations onto that Service, so the
+// adoption holds from the Service's first moment: externally-managed keeps the CCM from ever
+// deleting the LB, and protocol-http makes the :80 backend HTTP-typed (its failover host needs it).
+void PatchGatewayLoadBalancer(string templatesFolder)
+{
+    var gatewayPath = Path.Combine(templatesFolder, "public-gateway", "public-gateway.yaml");
+    var yaml = File.ReadAllText(gatewayPath);
+    const string gatewayClassLine = "  gatewayClassName: \"cilium\"\n";
+    if (!yaml.Contains(gatewayClassLine) || yaml.Contains("  infrastructure:"))
+    {
+        throw new InvalidOperationException($"'{gatewayPath}' has no gatewayClassName line or already has an infrastructure block — the generated chart layout changed, update the gateway load balancer patch.");
+    }
+
+    var infrastructure = $"""
+                            infrastructure:
+                              annotations:
+                                service.beta.kubernetes.io/scw-loadbalancer-id: "{RequireDeploySetting("Gateway:LoadBalancerId")}"
+                                service.beta.kubernetes.io/scw-loadbalancer-externally-managed: "true"
+                                service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "80"
+
+                          """;
+    File.WriteAllText(gatewayPath, yaml.Replace(gatewayClassLine, gatewayClassLine + infrastructure));
+}
+
 void PatchGatewayRoutesForwardedProto(string templatesFolder)
 {
     var gatewayRoutesFolder = Path.Combine(templatesFolder, "public-gateway");

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
@@ -19,6 +20,8 @@ public sealed record ScalewayCredentials(string AccessKey, string SecretKey, str
 public static partial class ScalewayEnvironment
 {
     public const string Region = "fr-par";
+
+    private const string EmailOffer = "essential";
 
     // Aspire environment name -> Terraform environment name (cloud-infrastructure/scaleway).
     // Production is added here when that environment is provisioned.
@@ -126,6 +129,25 @@ public static partial class ScalewayEnvironment
     }
 
     /// <summary>
+    ///     Subscribes the project to Transactional Email's free Essential offer when it has no offer
+    ///     yet; email domains are refused without one ("No active offer subscription for the
+    ///     project"), and no Terraform resource manages it. An existing offer is never changed.
+    /// </summary>
+    public static async Task EnsureEmailOfferAsync(ScalewayCredentials credentials, string projectId)
+    {
+        var offersPath = $"transactional-email/v1alpha1/regions/{Region}/offer-subscriptions";
+        var subscriptions = await SendAsync<OfferSubscriptionPage>(credentials, HttpMethod.Get, $"{offersPath}?project_id={projectId}", null, "read the project's Transactional Email offer");
+        if (subscriptions.TotalCount > 0)
+        {
+            AnsiConsole.MarkupLine("[green]The project already has a Transactional Email offer.[/]");
+            return;
+        }
+
+        await SendAsync<JsonElement>(credentials, HttpMethod.Patch, offersPath, new { project_id = projectId, name = EmailOffer }, "subscribe the project to Transactional Email's Essential offer");
+        AnsiConsole.MarkupLine($"[green]Subscribed the project to Transactional Email's '{EmailOffer}' offer[/] (free tier, no commitment).");
+    }
+
+    /// <summary>
     ///     Hands the key to every Terraform process this command starts: the Scaleway provider reads
     ///     SCW_*, and the S3 state backend reads AWS_*. Object Storage acts in the key's preferred
     ///     project unless the access key carries "@&lt;project-id&gt;", which points it at the
@@ -142,14 +164,21 @@ public static partial class ScalewayEnvironment
         Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", credentials.SecretKey);
     }
 
-    private static async Task<T> GetAsync<T>(ScalewayCredentials credentials, string path, string action)
+    private static Task<T> GetAsync<T>(ScalewayCredentials credentials, string path, string action)
+    {
+        return SendAsync<T>(credentials, HttpMethod.Get, path, null, action);
+    }
+
+    private static async Task<T> SendAsync<T>(ScalewayCredentials credentials, HttpMethod method, string path, object? body, string action)
     {
         using var httpClient = new HttpClient();
         httpClient.BaseAddress = new Uri("https://api.scaleway.com/");
         httpClient.Timeout = TimeSpan.FromSeconds(30);
         httpClient.DefaultRequestHeaders.Add("X-Auth-Token", credentials.SecretKey);
 
-        var response = await httpClient.GetAsync(path);
+        using var request = new HttpRequestMessage(method, path);
+        if (body is not null) request.Content = JsonContent.Create(body);
+        var response = await httpClient.SendAsync(request);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             var hint = credentials.Source.StartsWith("SCW_")
@@ -183,6 +212,12 @@ public static partial class ScalewayEnvironment
         [property: JsonPropertyName("name")] string Name,
         [property: JsonPropertyName("organization_id")]
         string OrganizationId
+    );
+
+    [UsedImplicitly]
+    private sealed record OfferSubscriptionPage(
+        [property: JsonPropertyName("total_count")]
+        int TotalCount
     );
 
     [UsedImplicitly]

@@ -550,9 +550,16 @@ resource "scaleway_cockpit_source" "telemetry" {
   }
 }
 
+# Scaleway creates a project's Grafana on its first access, and the sync is refused until then
+# ("Grafana does not exist, cannot synchronize data sources"). Reading it here is that access,
+# and the sync takes its project from the read so it always runs after it.
+data "scaleway_cockpit_grafana" "main" {
+  project_id = var.project_id
+}
+
 action "scaleway_cockpit_grafana_sync_data_sources" "sync" {
   config {
-    project_id = var.project_id
+    project_id = data.scaleway_cockpit_grafana.main.project_id
   }
 }
 
@@ -982,7 +989,7 @@ locals {
 }
 
 resource "scaleway_lb_frontend" "edge_origin" {
-  for_each     = local.dedicated_origin_ports
+  for_each     = local.gateway_ready ? local.dedicated_origin_ports : {}
   lb_id        = scaleway_lb.gateway.id
   name         = "${var.prefix}-${var.environment}-${each.key}-https"
   inbound_port = each.value
@@ -1013,29 +1020,44 @@ moved {
 # from the Service's loadBalancerSourceRanges), so these Terraform-owned ACLs survive its
 # reconciliation. But setting loadBalancerSourceRanges on the gateway Service makes the CCM replace
 # ALL ACLs on that frontend, these included. Never set it.
+#
+# The LB is looked up by name, not through scaleway_lb.gateway.id: on an environment's first plan
+# the LB does not exist yet, and an unknown id would leave every frontend (and every for_each over
+# them) unknown. By name, the first plan sees no LB and so no frontends.
+data "scaleway_lbs" "gateway" {
+  name       = "${var.prefix}-${var.environment}-gateway"
+  zone       = local.zone
+  project_id = var.project_id
+}
+
 data "scaleway_lb_frontends" "gateway" {
-  lb_id = scaleway_lb.gateway.id
-  zone  = local.zone # the API call's zone comes from this argument, not from the zoned lb_id
+  for_each = toset([for lb in data.scaleway_lbs.gateway.lbs : lb.id if lb.name == "${var.prefix}-${var.environment}-gateway"])
+  lb_id    = each.value
+  zone     = local.zone # the API call's zone comes from this argument, not from the zoned lb_id
 }
 
 locals {
   gateway_listener_ports = { https = 443, http = 80 }
+  gateway_frontends      = flatten([for lb_frontends in data.scaleway_lb_frontends.gateway : lb_frontends.frontends])
 
   edge_only_frontend_ids = merge(
     { for key, frontend in scaleway_lb_frontend.edge_origin : key => frontend.id },
     {
       for listener, port in local.gateway_listener_ports : "gateway-${listener}" => one([
-        for frontend in data.scaleway_lb_frontends.gateway.frontends : frontend.id if frontend.inbound_port == port
-      ])
+        for frontend in local.gateway_frontends : frontend.id if frontend.inbound_port == port
+      ]) if anytrue([for frontend in local.gateway_frontends : frontend.inbound_port == port])
     }
   )
 
   # The CCM's 443 frontend carries the app pipeline, and the Envoy TCP backend behind it also
   # serves the Terraform-owned edge frontends. Both are read from the LB instead of captured by
-  # hand, so they exist only after the environment's first deploy created the gateway Service.
-  # The data source returns the backend id bare, while frontends take it zone-qualified.
-  gateway_app_frontend     = one([for frontend in data.scaleway_lb_frontends.gateway.frontends : frontend if frontend.inbound_port == 443])
-  gateway_envoy_backend_id = "${local.zone}/${local.gateway_app_frontend.backend_id}"
+  # hand, so they exist only after the environment's first rollout created the gateway Service.
+  # Until then the edge pipelines exist without stages, and the deploy's pass after the rollout
+  # adds them. The data source returns the backend id bare, while frontends take it zone-qualified.
+  gateway_app_frontend     = one([for frontend in local.gateway_frontends : frontend if frontend.inbound_port == 443])
+  gateway_ready            = local.gateway_app_frontend != null
+  gateway_envoy_backend_id = local.gateway_ready ? "${local.zone}/${local.gateway_app_frontend.backend_id}" : null
+  edge_staged_pipelines    = local.gateway_ready ? local.edge_pipelines : {}
 }
 
 resource "scaleway_lb_acl" "edge_only" {
@@ -1062,7 +1084,7 @@ resource "scaleway_edge_services_pipeline" "gateway" {
 }
 
 resource "scaleway_edge_services_backend_stage" "gateway" {
-  for_each    = local.edge_pipelines
+  for_each    = local.edge_staged_pipelines
   pipeline_id = scaleway_edge_services_pipeline.gateway[each.key].id
 
   lb_backend_config {
@@ -1085,7 +1107,7 @@ resource "scaleway_edge_services_backend_stage" "gateway" {
 # payload since the Application Insights SDK removal. Known false positives can be excepted with
 # exclusion_rules by CRS rule ID.
 resource "scaleway_edge_services_waf_stage" "gateway" {
-  for_each         = local.edge_pipelines
+  for_each         = local.edge_staged_pipelines
   pipeline_id      = scaleway_edge_services_pipeline.gateway[each.key].id
   mode             = "enable"
   paranoia_level   = 1
@@ -1093,21 +1115,21 @@ resource "scaleway_edge_services_waf_stage" "gateway" {
 }
 
 resource "scaleway_edge_services_cache_stage" "gateway" {
-  for_each     = local.edge_pipelines
+  for_each     = local.edge_staged_pipelines
   pipeline_id  = scaleway_edge_services_pipeline.gateway[each.key].id
   fallback_ttl = 3600
   waf_stage_id = scaleway_edge_services_waf_stage.gateway[each.key].id
 }
 
 resource "scaleway_edge_services_tls_stage" "gateway" {
-  for_each            = local.edge_pipelines
+  for_each            = local.edge_staged_pipelines
   pipeline_id         = scaleway_edge_services_pipeline.gateway[each.key].id
   managed_certificate = true
   cache_stage_id      = scaleway_edge_services_cache_stage.gateway[each.key].id
 }
 
 resource "scaleway_edge_services_dns_stage" "gateway_custom" {
-  for_each     = local.edge_pipelines
+  for_each     = local.edge_staged_pipelines
   pipeline_id  = scaleway_edge_services_pipeline.gateway[each.key].id
   fqdns        = [local.edge_pipelines[each.key].fqdn]
   tls_stage_id = scaleway_edge_services_tls_stage.gateway[each.key].id
@@ -1121,7 +1143,7 @@ resource "scaleway_edge_services_dns_stage" "gateway_custom" {
 # forces destroy+create (remove old head, then attach the new stage) rather than an in-place swap
 # against a stage that no longer exists.
 resource "scaleway_edge_services_head_stage" "gateway" {
-  for_each      = local.edge_pipelines
+  for_each      = local.edge_staged_pipelines
   pipeline_id   = scaleway_edge_services_pipeline.gateway[each.key].id
   head_stage_id = scaleway_edge_services_dns_stage.gateway_custom[each.key].id
 
@@ -1131,7 +1153,7 @@ resource "scaleway_edge_services_head_stage" "gateway" {
 }
 
 resource "scaleway_edge_services_dns_stage" "gateway_auto" {
-  for_each     = local.edge_pipelines
+  for_each     = local.edge_staged_pipelines
   pipeline_id  = scaleway_edge_services_pipeline.gateway[each.key].id
   tls_stage_id = scaleway_edge_services_tls_stage.gateway[each.key].id
 }

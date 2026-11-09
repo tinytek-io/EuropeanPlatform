@@ -34,6 +34,11 @@ public sealed partial class DeployCommand : Command
     /// </summary>
     private const int RegistryTagsToKeep = 3;
 
+    // The Gateway API CRDs and the Cilium version whose Envoy CRDs the cluster gets; bump the Cilium
+    // one with Kapsule's Cilium version.
+    private const string GatewayApiVersion = "v1.6.1";
+    private const string CiliumVersion = "v1.20.2";
+
     public DeployCommand() : base(
         "deploy",
         "Deploy an environment to Scaleway: applies pending Terraform changes, resolves deploy-time secrets from Terraform outputs, and runs the Aspire build/publish/deploy pipeline"
@@ -233,6 +238,7 @@ public sealed partial class DeployCommand : Command
         var registryHost = registryEndpoint.Split('/')[0];
         var registryPullSecretKey = await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_pull_secret_key");
         var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
+        PrepareClusterForGateway(kubeconfigPath, repositoryRoot);
         ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
         AdoptHandAppliedNetworkPolicies(kubeconfigPath, repositoryRoot);
         LogInToRegistry(registryHost, credentials);
@@ -265,7 +271,9 @@ public sealed partial class DeployCommand : Command
             ("Storage__BucketPrefix", bucketPrefix),
             // The network policies in the chart admit database egress to exactly this endpoint.
             ("Database__EndpointIp", databaseEndpointIp),
-            ("Database__EndpointPort", databaseEndpointPort)
+            ("Database__EndpointPort", databaseEndpointPort),
+            // The gateway Service adopts the Terraform-owned Load Balancer (zone/lb-id).
+            ("Gateway__LoadBalancerId", await TerraformHelper.OutputAsync(environmentModuleFolder, "gateway_lb_ref"))
         };
         environmentVariables.AddRange(workloadKeys.Select(key => ($"Parameters__{key.Key}-secret-manager-key", key.Value["secret_key"])));
         environmentVariables.AddRange(cockpitEndpoints.Select(endpoint => ($"Cockpit__{endpoint.Key}OtlpEndpoint", endpoint.Value)));
@@ -502,6 +510,69 @@ public sealed partial class DeployCommand : Command
 
     // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
     // exists on disk only in the owner-only temp manifest, only for the duration of the apply.
+    // Kapsule ships Cilium with its Gateway API controller off and without the Gateway API and Envoy
+    // CRDs, and the release's Gateway, HTTPRoutes, and BackendTLSPolicies need all of them. Every step
+    // is idempotent, so the deploy converges a fresh cluster and re-converges one after a Kapsule
+    // upgrade (which may revert cilium-config). Cilium is restarted only when something changed.
+    private static void PrepareClusterForGateway(string kubeconfigPath, string repositoryRoot)
+    {
+        PrintHeader("Preparing the cluster for the Gateway API");
+
+        var kubectl = $"kubectl --kubeconfig {kubeconfigPath}";
+        string[] customResourceDefinitions =
+        [
+            $"https://github.com/kubernetes-sigs/gateway-api/releases/download/{GatewayApiVersion}/standard-install.yaml",
+            $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumenvoyconfigs.yaml",
+            $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwideenvoyconfigs.yaml"
+        ];
+        var changed = customResourceDefinitions.Aggregate(false, (current, manifest) => KubectlApply(kubectl, $"apply -f {manifest}", "the CRDs from " + manifest) || current);
+
+        var configuration = ProcessHelper.ExecuteQuietly($"{kubectl} get configmap cilium-config -n kube-system -o jsonpath={{.data}}");
+        ExitOnFailure(configuration, "Reading cilium-config");
+        var gatewaySettings = JsonSerializer.Deserialize<Dictionary<string, string>>(configuration.StdOut)!;
+        string[] requiredSettings = ["enable-gateway-api", "enable-gateway-api-secrets-sync", "enable-envoy-config"];
+        if (requiredSettings.Any(setting => gatewaySettings.GetValueOrDefault(setting) != "true"))
+        {
+            // A patch file, not -p: the process runs without a shell, so a quoted JSON argument
+            // would not survive argument parsing.
+            var patchFile = Path.Combine(Path.GetTempPath(), $"pp-cilium-config-patch-{Guid.NewGuid():N}.json");
+            File.WriteAllText(patchFile, JsonSerializer.Serialize(new { data = requiredSettings.ToDictionary(setting => setting, _ => "true") }));
+            var patchResult = ProcessHelper.ExecuteQuietly($"{kubectl} patch configmap cilium-config -n kube-system --type merge --patch-file {patchFile}");
+            File.Delete(patchFile);
+            ExitOnFailure(patchResult, "Enabling Cilium's Gateway API controller");
+            changed = true;
+        }
+
+        var gatewayApiManifest = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "gateway-api.yaml");
+        changed = KubectlApply(kubectl, $"apply -f {gatewayApiManifest}", "the Cilium GatewayClass and RBAC") || changed;
+
+        if (changed)
+        {
+            AnsiConsole.MarkupLine("  Restarting Cilium so it picks up the Gateway API configuration...");
+            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout restart deployment/cilium-operator daemonset/cilium -n kube-system"), "Restarting Cilium");
+            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout status daemonset/cilium -n kube-system --timeout=10m"), "Waiting for Cilium");
+            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout status deployment/cilium-operator -n kube-system --timeout=10m"), "Waiting for the Cilium operator");
+        }
+
+        AnsiConsole.MarkupLine($"  [green]✓[/] Gateway API {GatewayApiVersion} and Cilium's Gateway controller {(changed ? "set up" : "already in place")}");
+    }
+
+    /// <summary>Applies a manifest and reports whether it created or changed anything.</summary>
+    private static bool KubectlApply(string kubectl, string arguments, string what)
+    {
+        var result = ProcessHelper.ExecuteQuietly($"{kubectl} {arguments}");
+        ExitOnFailure(result, $"Applying {what}");
+        return result.StdOut.Split('\n').Any(line => line.EndsWith(" created") || line.EndsWith(" configured"));
+    }
+
+    private static void ExitOnFailure(ProcessResult result, string operation)
+    {
+        if (result.Success) return;
+
+        AnsiConsole.MarkupLine($"[red]{Markup.Escape(operation)} failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
+        Environment.Exit(result.ExitCode == 0 ? 1 : result.ExitCode);
+    }
+
     private static void ApplyRegistryPullSecret(string kubeconfigPath, string registryHost, string secretKey)
     {
         var dockerConfigJson = JsonSerializer.Serialize(new

@@ -100,6 +100,7 @@ public sealed class BootstrapCommand : Command
             await TerraformHelper.ApplyChangesAsync(moduleFolder, planArguments, autoApprove, "Bootstrap cancelled; nothing was changed.");
         }
 
+        await ScalewayEnvironment.EnsureEmailOfferAsync(administrator, projectId);
         await WriteOperatorProfileAsync(moduleFolder, projectName, organizationId, projectId);
     }
 

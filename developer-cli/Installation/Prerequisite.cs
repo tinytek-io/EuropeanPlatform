@@ -13,8 +13,11 @@ public abstract record Prerequisite
     public static readonly Prerequisite GithubCli = new CommandLineToolPrerequisite("gh", "GitHub CLI", new Version(2, 83));
     public static readonly Prerequisite TypeScriptLanguageServer = new CommandLineToolPrerequisite("typescript-language-server", "TypeScript Language Server", new Version(4, 3, 0));
     public static readonly Prerequisite CSharpLanguageServer = new CommandLineToolPrerequisite("csharp-ls", "C# Language Server", new Version(0, 22, 0));
+
     public static readonly Prerequisite Terraform = new CommandLineToolPrerequisite("terraform", "Terraform", new Version(1, 16));
-    public static readonly Prerequisite Kubectl = new CommandLineToolPrerequisite("kubectl", "kubectl", new Version(1, 28));
+
+    // kubectl has no --version flag; `kubectl version --client` prints "Client Version: v1.x.y".
+    public static readonly Prerequisite Kubectl = new CommandLineToolPrerequisite("kubectl", "kubectl", new Version(1, 28), "version --client");
 
     protected abstract bool IsValid();
 
@@ -77,7 +80,7 @@ public abstract record Prerequisite
     protected abstract bool CheckExists();
 }
 
-file sealed record CommandLineToolPrerequisite(string Command, string DisplayName, Version MinVersion) : Prerequisite
+file sealed record CommandLineToolPrerequisite(string Command, string DisplayName, Version MinVersion, string VersionArguments = "--version") : Prerequisite
 {
     protected override bool IsValid()
     {
@@ -91,7 +94,7 @@ file sealed record CommandLineToolPrerequisite(string Command, string DisplayNam
         var output = ProcessHelper.StartProcess(new ProcessStartInfo
             {
                 FileName = Configuration.IsWindows ? "cmd.exe" : "/bin/bash",
-                Arguments = Configuration.IsWindows ? $"/c {Command} --version" : $"-c \"{Command} --version\"",
+                Arguments = Configuration.IsWindows ? $"/c {Command} {VersionArguments}" : $"-c \"{Command} {VersionArguments}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             }
