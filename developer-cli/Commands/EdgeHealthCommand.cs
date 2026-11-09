@@ -29,7 +29,12 @@ namespace DeveloperCli.Commands;
 public sealed class EdgeHealthCommand : Command
 {
     private const string ApiBaseUrl = "https://api.scaleway.com/edge-services/v1beta1";
-    private const int MinimumDaysBeforeCertificateExpiry = 7;
+
+    // Managed edge certificates are 90-day Let's Encrypt certificates that Scaleway renews on its
+    // own, conventionally around 30 days before expiry. One that still has fewer than 21 days left
+    // has missed its renewal, which leaves three weeks for a person to act (the deploy never
+    // recreates a TLS stage that still serves a certificate).
+    private const int MinimumDaysBeforeCertificateExpiry = 21;
 
     // A plain shared client for the public endpoint checks; it carries no credentials and its
     // default handler validates certificates, which is exactly the behavior under test.
@@ -134,18 +139,17 @@ public sealed class EdgeHealthCommand : Command
             var pipeline = await ReadJsonAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}");
             var status = pipeline["status"]?.GetValue<string>();
             var errors = pipeline["errors"]?.AsArray();
+            var messages = errors is { Count: > 0 }
+                ? string.Join("; ", errors.Select(error => $"{error?["code"]?.GetValue<string>()}: {error?["message"]?.GetValue<string>()}"))
+                : null;
 
             if (status != "ready")
             {
-                return ("pipeline status", false, $"status is '{status}', expected 'ready'");
+                return ("pipeline status", false, messages is null ? $"status is '{status}', expected 'ready'" : $"status is '{status}', expected 'ready' ({messages})");
             }
 
-            if (errors is { Count: > 0 })
+            if (messages is not null)
             {
-                var messages = string.Join("; ", errors.Select(error =>
-                        $"{error?["code"]?.GetValue<string>()}: {error?["message"]?.GetValue<string>()}"
-                    )
-                );
                 return ("pipeline status", false, $"status ready but has errors: {messages}");
             }
 
@@ -353,7 +357,7 @@ public sealed class EdgeHealthCommand : Command
             );
             checks.Add(daysLeft >= MinimumDaysBeforeCertificateExpiry
                 ? ("certificate expiry", true, $"{daysLeft:F0} day(s) left")
-                : ("certificate expiry", false, $"only {daysLeft:F0} day(s) left (threshold {MinimumDaysBeforeCertificateExpiry})")
+                : ("certificate expiry", false, $"only {daysLeft:F0} day(s) left (threshold {MinimumDaysBeforeCertificateExpiry}) — the managed renewal has not happened; check that the CNAME still points at the pipeline and the TLS stage's errors in the Scaleway console")
             );
         }
         catch (Exception exception)
