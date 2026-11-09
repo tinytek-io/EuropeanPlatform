@@ -16,7 +16,7 @@
 # environment never changes it, because every resource would be renamed.
 prefix = "ep"
 
-node_count = 2 # Two nodes so a Kapsule node reboot or drain never drops the whole serving path
+node_count = 1 # Staging is for development: a node replacement or upgrade may briefly interrupt it
 node_type  = "PLAY2-NANO"
 
 database_node_type = "db-dev-s" # No SLA — production moves to db-s or larger

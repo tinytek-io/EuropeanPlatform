@@ -642,9 +642,12 @@ resource "scaleway_k8s_cluster" "kapsule" {
 
 resource "scaleway_k8s_pool" "default" {
   cluster_id = scaleway_k8s_cluster.kapsule.id
-  name       = "default"
-  node_type  = var.node_type
-  size       = var.node_count
+  # The node type cannot change in place, so a new type replaces the pool. The name carries the
+  # type and the replacement is created first: the new nodes are ready before Kapsule drains and
+  # deletes the old pool, and the workloads reschedule onto them without an outage.
+  name      = "default-${lower(var.node_type)}"
+  node_type = var.node_type
+  size      = var.node_count
   # No public IPs on the nodes: the edge WAF (and the gateway load balancer, which sits on the
   # private network) is the only public entry — a node's public IP would bypass it entirely.
   # Nodes keep outbound access for image pulls and telemetry through the private network.
@@ -656,6 +659,18 @@ resource "scaleway_k8s_pool" "default" {
   # The Kapsule API only accepts public_ip_disabled when the NAT gateway is attached and
   # advertises the default route; the dependency guarantees the apply ordering.
   depends_on = [scaleway_vpc_gateway_network.nat]
+
+  # Kapsule upgrades add a surge node alongside the old one, so a single-node pool has somewhere to
+  # reschedule during an upgrade. The API requires max_unavailable >= 1, so the old node may drain
+  # while the surge node is still joining: a single-node environment can blip during upgrades.
+  upgrade_policy {
+    max_unavailable = 1
+    max_surge       = 1
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # -------------------------------------------------------------------------------------------------
