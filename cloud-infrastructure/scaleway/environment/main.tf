@@ -682,7 +682,7 @@ variable "workload_key_expiry" {
 # plan time instead of silently planning staging's hostnames into another environment.
 
 variable "domain_name" {
-  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the platform serves exactly two edge pipelines); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the back-office is also the staff OIDC provider's issuer); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
   type        = string
 }
 
@@ -712,6 +712,29 @@ resource "random_bytes" "authentication_token_signing_key" {
 resource "tls_private_key" "back_office_delegation" {
   algorithm   = "ECDSA"
   ecdsa_curve = "P256"
+}
+
+# The staff OIDC provider (the back-office signing staff in to Forgejo and other tools): its clients
+# are listed in the committed staff identity file, which Terraform reads only for their ids. Each
+# gets a generated secret (output staff_identity_client_secrets, to configure the tool with; the
+# back-office workers register it, hashed, in the provider's store), and every API replica signs ID
+# tokens with one RSA key the tools fetch from the JWKS endpoint. Rotate a
+# secret with terraform apply -replace='random_password.staff_identity_client["<clientId>"]', the
+# signing key with -replace=tls_private_key.staff_identity_signing; then redeploy.
+locals {
+  staff_identity_file       = "${path.module}/../../staff-identity/${var.environment}.yaml"
+  staff_identity_client_ids = fileexists(local.staff_identity_file) ? [for client in coalesce(try(yamldecode(file(local.staff_identity_file)).clients, null), []) : client.clientId] : []
+}
+
+resource "random_password" "staff_identity_client" {
+  for_each = toset(local.staff_identity_client_ids)
+  length   = 48
+  special  = false
+}
+
+resource "tls_private_key" "staff_identity_signing" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
 }
 
 # The AES key material protecting the shared Data Protection keyring persisted in Object Storage:
@@ -903,6 +926,7 @@ locals {
       ConnectionStrings__back-office-database = local.back_office_database_connection_string
       ConnectionStrings__blob-storage         = local.blob_storage_connection_string
       BackOfficeDelegation__SigningKeyPem     = tls_private_key.back_office_delegation.private_key_pem_pkcs8
+      StaffIdentity__SigningKeyPem            = tls_private_key.staff_identity_signing.private_key_pem_pkcs8
       data-protection-encryption-key          = local.data_protection_encryption_key
       InternalTls__CertificatePem             = tls_locally_signed_cert.workload["back-office-api"].cert_pem
       InternalTls__KeyPem                     = tls_private_key.workload["back-office-api"].private_key_pem
@@ -921,9 +945,17 @@ locals {
 
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
   # Cockpit resource and travels the same Secret Manager path as the workload's other secrets.
+  # The staff OIDC client secrets are keyed by the client ids read from the staff identity file,
+  # known at plan time, so the secret names stay visible to for_each on a fresh environment.
   workload_secrets = {
     for workload, secrets in local.base_workload_secrets :
-    workload => merge(secrets, { Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key })
+    workload => merge(concat(
+      [secrets],
+      # The staff OIDC provider's client secrets, one per client in the staff identity file. Only the
+      # workers hold them: they sync the client list into the provider's store, which keeps a hash.
+      [workload == "back-office-workers" ? { for client_id, secret in random_password.staff_identity_client : "StaffIdentity__ClientSecrets__${client_id}" => secret.result } : {}],
+      [{ Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key }]
+    )...)
   }
 
   secret_entries = merge([

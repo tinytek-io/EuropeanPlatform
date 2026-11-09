@@ -34,6 +34,9 @@ builder.Services
 // (local development and environments that explicitly opt in through MockEasyAuth:Enabled).
 builder.Services.AddStaffSession();
 
+// The staff OIDC provider other tools sign staff in through (its endpoints are mapped below, with the sign-in).
+builder.Services.AddStaffIdentityProvider();
+
 var app = builder.Build();
 
 // Decided on the built configuration (every source in place), and the file is loaded and validated
@@ -69,6 +72,7 @@ string[] backOfficeUnauthenticatedPaths = mockEasyAuthEnabled || staffSignInEnab
 if (staffSignInEnabled)
 {
     app.MapStaffSessionEndpoints(backOfficeHostname);
+    app.MapStaffIdentityProviderEndpoints(backOfficeHostname);
 }
 
 if (!mockEasyAuthEnabled && !staffSignInEnabled)

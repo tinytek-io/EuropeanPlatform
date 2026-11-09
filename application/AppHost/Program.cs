@@ -340,12 +340,15 @@ if (isPublishMode)
 }
 
 // The back-office system's background work: it migrates the back-office database in local
-// development (the migrator Job owns it when deployed), so the API waits for it. In containers it
-// has no inbound listener beyond the image default.
+// development (the migrator Job owns it when deployed) and syncs the staff identity file's OIDC
+// clients into the provider's store, so the API waits for it. In containers it has no inbound
+// listener beyond the image default.
 var backOfficeWorkers = builder
     .AddProject<BackOffice_Workers>("back-office-workers")
     .WithReference(backOfficeDatabase)
-    .WaitFor(backOfficeDatabase);
+    .WaitFor(backOfficeDatabase)
+    // The workers sync the staff identity file's OIDC client list into the provider's store.
+    .WithEnvironment("StaffIdentity__File", staffSignInEnabled ? staffIdentityFile : string.Empty);
 
 if (!isPublishMode)
 {

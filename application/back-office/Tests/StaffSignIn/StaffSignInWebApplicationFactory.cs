@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
+using BackOffice.StaffIdentity;
 using BackOffice.Tests.System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Telemetry;
@@ -18,6 +20,11 @@ public sealed partial class StaffSignInWebApplicationFactory : BackOfficeWebAppl
     public const string AdminEmail = "jane.doe@example.com";
     public const string ThrottledEmail = "max.mustermann@example.com";
     public const string DeactivatedEmail = "eve.gone@example.com";
+
+    // An OIDC client only admins may sign in to, as a tool like Forgejo is registered.
+    public const string ClientId = "test-tool";
+    public const string ClientSecret = "test-tool-client-secret";
+    public const string ClientRedirectUri = "https://tool.test.localhost/oauth/callback";
 
     // One staff member per sign-in test, so no test runs into another's code-request limit.
     public static readonly string[] SignInTestEmails = Enumerable.Range(1, 8).Select(number => $"staff.member{number}@example.com").ToArray();
@@ -42,7 +49,11 @@ public sealed partial class StaffSignInWebApplicationFactory : BackOfficeWebAppl
                                                    groups: [staff]
                                                    active: false
                                                {string.Join('\n', SignInTestEmails.Select((email, index) => $"  - id: staff.member{index + 1}\n    email: {email}\n    name: Staff Member {index + 1}\n    groups: [staff]"))}
-                                               clients: []
+                                               clients:
+                                                 - clientId: {ClientId}
+                                                   displayName: Test tool
+                                                   redirectUris: [{ClientRedirectUri}]
+                                                   allowedGroups: [admins]
                                                """
         );
     }
@@ -51,7 +62,11 @@ public sealed partial class StaffSignInWebApplicationFactory : BackOfficeWebAppl
 
     public TelemetryEventsCollectorSpy TelemetryEventsCollectorSpy { get; } = new(new TelemetryEventsCollector());
 
-    protected override Dictionary<string, string?> AdditionalSettings => new() { ["StaffIdentity:File"] = _staffIdentityFile };
+    protected override Dictionary<string, string?> AdditionalSettings => new()
+    {
+        ["StaffIdentity:File"] = _staffIdentityFile,
+        [$"StaffIdentity:ClientSecrets:{ClientId}"] = ClientSecret
+    };
 
     [GeneratedRegex("is: ([A-Z]{6})")]
     private static partial Regex OneTimePasswordPattern { get; }
@@ -72,11 +87,30 @@ public sealed partial class StaffSignInWebApplicationFactory : BackOfficeWebAppl
         services.AddSingleton(EmailClient);
         services.RemoveAll<ITelemetryEventsCollector>();
         services.AddScoped<ITelemetryEventsCollector>(_ => TelemetryEventsCollectorSpy);
+
+        // The back-office workers sync the client list in a deployment; the test host does it right after the schema
+        // exists (the schema creator is the first hosted service).
+        services.AddTransient<StaffIdentityClientReconciler>();
+        services.Insert(1, ServiceDescriptor.Singleton<IHostedService, StaffIdentityClientSync>());
     }
 
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
         if (disposing) File.Delete(_staffIdentityFile);
+    }
+
+    private sealed class StaffIdentityClientSync(IServiceProvider serviceProvider) : IHostedService
+    {
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            using var scope = serviceProvider.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<StaffIdentityClientReconciler>().ReconcileAsync(cancellationToken);
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

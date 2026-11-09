@@ -1,5 +1,6 @@
 using BackOffice.Database;
 using BackOffice.Features.SecurityChecks;
+using BackOffice.StaffIdentity;
 using BackOffice.Workers;
 using SharedKernel.Configuration;
 using SharedKernel.Database;
@@ -16,6 +17,10 @@ builder
 builder.Services.AddWorkerServices();
 builder.Services.AddTransient<DatabaseMigrationService<BackOfficeDbContext>>();
 builder.Services.AddTransient<DataMigrationRunner<BackOfficeDbContext>>();
+
+// The staff OIDC provider's client list (committed in the staff identity file) is synced into its store here: the
+// workers run as one replica, so there is a single writer, and they hold the client secrets the API does not need.
+builder.Services.AddStaffIdentityClientSync();
 
 // The security checks read the deployed environment's Scaleway resources, so they run only in the
 // cloud; locally there is no edge or Load Balancer to check.
@@ -55,6 +60,10 @@ using (var scope = host.Services.CreateScope())
     // Data migrations run here as an idempotent no-op after the migrator Job has applied them, and
     // as the resilient fallback if they were not: tracked in __data_migrations_history.
     await scope.ServiceProvider.GetRequiredService<DataMigrationRunner<BackOfficeDbContext>>().RunMigrationsAsync(lifetime.ApplicationStopping);
+
+    // Converge the OIDC clients to the committed list on every start. Must succeed before the worker runs: a
+    // failure exits the process so the orchestrator notices, rather than serving with a stale client list.
+    await scope.ServiceProvider.GetRequiredService<StaffIdentityClientReconciler>().ReconcileAsync(lifetime.ApplicationStopping);
 }
 
 await host.RunAsync();

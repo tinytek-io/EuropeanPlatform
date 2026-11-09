@@ -13,4 +13,13 @@
         <ProjectReference Include="..\Core\BackOffice.csproj"/>
     </ItemGroup>
 
+    <!-- The staff identity files ship with the workers too (staff-identity/<environment>.yaml): they sync the
+    file's OIDC client list into the provider's store. StaffIdentity:File selects the environment's one. -->
+    <ItemGroup>
+        <Content Include="..\..\..\cloud-infrastructure\staff-identity\*.yaml">
+            <Link>staff-identity\%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+
 </Project>

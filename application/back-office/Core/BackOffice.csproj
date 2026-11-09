@@ -15,6 +15,10 @@
     <ItemGroup>
         <!-- The committed staff identity file (cloud-infrastructure/staff-identity) is YAML. -->
         <PackageReference Include="YamlDotNet"/>
+        <!-- The staff OIDC provider other tools (Forgejo, ...) sign staff in through. -->
+        <PackageReference Include="OpenIddict.EntityFrameworkCore"/>
+        <PackageReference Include="OpenIddict.Server.AspNetCore"/>
+        <PackageReference Include="OpenIddict.Server.DataProtection"/>
     </ItemGroup>
 
 </Project>
