@@ -18,7 +18,7 @@ Everything PP merges **after** `269de1c18` is adoption backlog. Work it chronolo
 | Email | Azure Communication Services | Scaleway Transactional Email over SMTP |
 | Telemetry | Application Insights | OpenTelemetry → Scaleway Cockpit |
 | Back-office | Hosted inside the account SCS | Its own SCS — BFF over `/internal-api/back-office/*` with the shared delegation contract |
-| Staff auth | Entra Easy Auth | OIDC provider (`BackOffice:Oidc`), mock identity selector as the dev/staging fallback |
+| Staff auth | Entra Easy Auth | The back-office's own email-code sign-in from the committed staff identity file, and the back-office as the staff OIDC provider (OpenIddict); mock identity selector in development |
 | CI | GitHub Actions | Workflows disabled (`.github/workflows-disabled/`); developer CLI is the gate |
 | Brand | PlatformPlatform, orange | EuropeanPlatform, EU-flag blue, EU-hosted tagline |
 

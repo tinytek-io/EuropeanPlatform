@@ -20,7 +20,7 @@ When a PR touches any of these areas, convert it to EP's way instead of copying 
 | Email | Azure Communication Services | SMTP (Scaleway Transactional Email) |
 | Telemetry | Application Insights | OpenTelemetry → Scaleway Cockpit; frontend uses its own tracker |
 | Back-office | Hosted inside the account SCS | Its own SCS: BFF over `/internal-api/back-office/*` with the shared delegation contract (see `application/README.md` § Back-office) |
-| Staff auth | Entra Easy Auth | OIDC provider with the mock identity selector as the dev/staging fallback (`BackOffice:Oidc`) |
+| Staff auth | Entra Easy Auth | The back-office's own email-code sign-in from the committed staff identity file (`cloud-infrastructure/staff-identity/`), and the back-office as the staff OIDC provider (OpenIddict); the mock identity selector in development |
 | CI | GitHub Actions workflows | Workflows disabled (`.github/workflows-disabled/`); checks run through the developer CLI (`build`, `format`, `lint`, `test`) |
 | Brand | PlatformPlatform, orange logos | EuropeanPlatform, EU-flag blue logos, EU-hosted tagline (`application/platform-settings.jsonc`) |
 

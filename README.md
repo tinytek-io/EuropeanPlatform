@@ -22,7 +22,7 @@ Show your support for our project - give us a star on GitHub! It truly means a l
 
 ### Back office
 
-Operate the platform from a dedicated SPA on its own hostname, behind its own staff sign-in (a standard OIDC provider, with a mock identity selector as the stand-in in development and staging):
+Operate the platform from a dedicated SPA on its own hostname, behind its own staff sign-in (an emailed one-time code for the people listed in git, with a mock identity selector in development). The back-office is also the OIDC provider other tools (Forgejo, ...) sign staff in through:
 
 * **Dashboard** - KPI tiles for total accounts, blended MRR, all-time revenue, active users, and live sessions; trend cards for MRR, revenue, tenant growth, plan distribution, user logins; activity feeds for recent signups, payments, logins, and Stripe webhook events
 * **Accounts** - Search and filter every tenant; drill into detail with owner, plan, and signup activity
@@ -402,56 +402,43 @@ Remember to add redirect URIs for each environment in your Google Cloud Console 
 - `https://app.yourproduct.com/api/account/authentication/Google/login/callback`
 - `https://app.yourproduct.com/api/account/authentication/Google/signup/callback`
 
-### (Optional) Configure a staff OIDC provider for the back-office
+### Staff sign-in and the staff OIDC provider
 
-The back-office staff sign-in uses any standard OpenID Connect provider (Entra ID, Google
-Workspace, Auth0, ...) when one is configured; otherwise environments fall back to the mock
-identity selector (local development, and staging until a provider exists).
+The back-office signs staff in itself: a staff member enters their work email and receives a
+one-time code (Transactional Email); nobody has a password. Who may sign in is decided by the
+environment's staff identity file, `cloud-infrastructure/staff-identity/<environment>.yaml` — the
+only place staff are managed (see the [README](./cloud-infrastructure/staff-identity/README.md)
+beside it for the format). Changes take effect with the next deploy; deactivating someone
+(`active: false`) ends their sessions on their next request. The open-source project ships every
+list empty, and the first deploy of an environment asks for the first admin and writes the entry;
+commit it in your fork.
 
-To wire a provider, set — as Secret Manager entries for the back-office workloads or environment
-variables on the back-office API — the keys under `BackOffice:Oidc`:
+The back-office is also an OIDC provider, so other tools sign staff in through it. List a tool
+under `clients` in the same file (its `clientId`, `redirectUris`, and the `allowedGroups` that may
+use it) and deploy; Terraform generates its client secret. Configure the tool with:
 
-- `BackOffice:Oidc:Authority` — the provider's base URL with a discoverable
-  `.well-known/openid-configuration` (e.g. `https://login.microsoftonline.com/{tenant}/v2.0`)
-- `BackOffice:Oidc:ClientId` — the application/client ID registered with the provider
-- `BackOffice:Oidc:ClientSecret` — the client secret (`BackOffice__Oidc__ClientSecret` as a
-  Secret Manager entry)
-- `BackOffice:Oidc:StaffGroupId` — the `groups` claim value every staff member carries
-  (required: a sign-in without it is denied, so an account at the provider alone never grants
-  staff access)
+- Issuer / discovery URL: `https://back-office.<domain>` (`/.well-known/openid-configuration`)
+- Client ID: the `clientId`, and the secret from
+  `terraform -chdir=cloud-infrastructure/scaleway/environment output -json staff_identity_client_secrets`
+- Scopes: `openid profile email groups` — the ID token carries `sub` (the staff id),
+  `preferred_username`, `name`, `email`, and `groups` (`staff`, `admins`)
 
-Register the redirect URI `https://back-office.<your-domain>/.auth/login/aad/callback` with the
-provider. Back-office admin actions additionally require `BackOffice:AdminsGroupId` (in the
-tier's AppHost configuration) set to the value the provider issues in the `groups` claim for staff
-administrators — the back-office's own admin policy and account's internal-API admin gate both
-read it, and deployed environments must set it explicitly. When these keys are
-configured, the mock identity selector is disabled automatically.
+#### Test the staff sign-in locally
 
-#### Test the OIDC flow locally with the Authelia harness
+The dev stack keeps the mock identity picker by default. To run the real sign-in against the
+development staff identity file (`application/AppHost/StaffIdentity/development.yaml`):
 
-The local dev stack can run [Authelia](https://www.authelia.com) — a small open-source OIDC
-provider — as a stand-in for a production identity provider, exercising the exact same flow:
-discovery, the authorization redirect, code + PKCE, the callback, and the `groups` claim that
-gates admin features.
-
-1. Start the dev stack with the harness enabled: `AUTHELIA__ENABLED=true dotnet run --project
-   AppHost` (or export `Authelia__Enabled=true`). This adds `authelia` + `authelia-redis`
-   containers at `https://authelia.dev.localhost:9091`, wires the back-office to them, and hides
-   the mock login picker.
-2. Run the harness spec against it:
+1. Start the dev stack with `STAFFIDENTITY__ENABLED=true` on the AppHost.
+2. Sign in as `dev-admin@dev.localhost` (groups `staff` + `admins`) or `dev-staff@dev.localhost`
+   (`staff` only), and read the code in Mailpit.
+3. Run the spec against it:
 
    ```bash
-   dotnet run --project developer-cli -- e2e back-office-oidc --no-wait-for-aspire
+   dotnet run --project developer-cli -- e2e staff-sign-in --no-wait-for-aspire
    ```
 
-   with `BACK_OFFICE_OIDC_ENABLED=true` in the environment (the spec skips itself otherwise, so
-   it stays out of the default suite). It signs in as `oidcadmin` / `OIDCTest123!` — a static
-   dev user in the `admins` group (see `application/AppHost/Authelia/`) — and asserts the
-   dashboard renders.
-
-The harness certificate is self-signed (`authelia-tls.pem`), so the OIDC backchannel runs with
-the dev-only `BackOffice:Oidc:DevAllowUntrustedCertificate` bypass — leave that unset for real
-providers.
+   with `STAFF_SIGN_IN_ENABLED=true` in the environment (the spec skips itself otherwise, so it
+   stays out of the default suite).
 
 ### (Optional) Configure Stripe for staging and production
 
@@ -470,14 +457,10 @@ Provision the **Publishable Key**, **API Key** (Secret key), and **Webhook Secre
 ### Back-office access
 
 The back-office runs as its own self-contained system — a backend-for-frontend over the feature
-systems' internal APIs — on its own hostname (`back-office.<domain>`), protected by an
-authentication gate: on staging this is MockEasyAuth (a deliberate stand-in until a proper OIDC
-provider for staff accounts is configured), and the edge pipelines serve its hostname with the
-same TLS, WAF, and caching as the app.
-
-To grant a person access once staff OIDC is configured, add them to the administrator group in
-the identity provider; the platform-issued token then carries the claim the back-office uses to
-enforce admin-only endpoints.
+systems' internal APIs — on its own hostname (`back-office.<domain>`), behind its own staff
+sign-in, and the edge pipelines serve its hostname with the same TLS, WAF, and caching as the app.
+To grant a person access, add them to the environment's staff identity file (`admins` for the
+admin-only actions) and deploy.
 
 Add the back-office CNAME record the same way as the app hostname (see the
 [DNS guide](./cloud-infrastructure/scaleway/docs/dns-guide.md)).
@@ -612,7 +595,7 @@ EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 │  │   ├─ Migrator       # Run-once database migrator, deployed as a pre-upgrade Job
 │  │   └─ Tests          # Tests for the Api, Core, and Workers
 │  ├─ back-office        # Staff surface for operations and support, on its own hostname
-│  │   ├─ WebApp         # React SPA served to staff (OIDC sign-in, mock selector in development)
+│  │   ├─ WebApp         # React SPA served to staff (email-code sign-in, mock selector in development)
 │  │   ├─ Api            # BFF over the feature systems' internal APIs
 │  │   ├─ Core           # Staff identity, delegation, and BFF use cases
 │  │   └─ Tests          # System tests over the full BFF pipeline
@@ -625,7 +608,7 @@ EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 └─ developer-cli         # A .NET CLI tool for automating common developer tasks
 ```
 
-** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The `back-office` SCS is the staff surface for operations and support on its own hostname — a backend-for-frontend over the feature systems' internal APIs, with its own staff identity (MockEasyAuth on staging and in development until a proper OIDC provider is configured).
+** A [Self-Contained System](https://scs-architecture.org/) is a large microservice (or a small monolith) that contains the full stack, including frontend, background jobs, etc. The `main` SCS is the shell application with catch-all routing where you build your product. The `account` SCS is loaded into main via Module Federation, enabling seamless navigation between product pages and account pages without full page reloads. The `back-office` SCS is the staff surface for operations and support on its own hostname — a backend-for-frontend over the feature systems' internal APIs, with its own staff identity: it signs staff in from the committed staff identity file and is the OIDC provider other tools sign staff in through (MockEasyAuth stands in during development).
 
 # Technologies
 

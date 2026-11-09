@@ -42,6 +42,15 @@ public sealed partial class DeployCommand : Command
     private const string GatewayApiVersion = "v1.6.1";
     private const string CiliumVersion = "v1.20.2";
 
+    // The staff identity file an environment starts from when it has none; {0} is the Terraform environment.
+    private const string EmptyStaffIdentityTemplate = """
+                                                      # The {0} staff identity: who may sign in to the back-office, and which tools may sign them in.
+                                                      # See README.md for the format. Nobody has a password; sign-in is by an emailed one-time code.
+                                                      staff: []
+                                                      clients: []
+
+                                                      """;
+
     private static readonly TimeSpan EdgeCertificateIssuanceTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan EdgeCertificatePollInterval = TimeSpan.FromSeconds(20);
 
@@ -177,6 +186,10 @@ public sealed partial class DeployCommand : Command
             AnsiConsole.MarkupLine("[red]The edge_hostnames output is missing the 'back-office' hostname.[/] The platform serves exactly two edge pipelines; check the environment module.");
             Environment.Exit(1);
         }
+
+        // Nobody could sign in to an environment whose staff list is empty (there is no password and
+        // no break-glass account), so the deploy asks for the first admin.
+        EnsureFirstAdmin(repositoryRoot, terraformEnvironment);
 
         var domainName = (await TerraformHelper.RunSensitiveAsync(environmentModuleFolder, "output -raw domain_name", "read the domain name output")).Trim();
         var region = (await TerraformHelper.RunSensitiveAsync(environmentModuleFolder, "output -raw region", "read the region output")).Trim();
@@ -709,6 +722,55 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
+    }
+
+    // The staff list is the environment's staff identity file in git (the open-source project ships it
+    // empty). An environment whose list has nobody in it could never be signed in to — no staff member
+    // has a password, so there is no break-glass account — so the deploy asks for the first admin and
+    // writes them into the list, which the operator commits. Further staff are added to the same file.
+    private static void EnsureFirstAdmin(string repositoryRoot, string terraformEnvironment)
+    {
+        var staffPath = Path.Combine(repositoryRoot, "cloud-infrastructure", "staff-identity", $"{terraformEnvironment}.yaml");
+        if (!File.Exists(staffPath))
+        {
+            File.WriteAllText(staffPath, string.Format(EmptyStaffIdentityTemplate, terraformEnvironment));
+        }
+
+        var staffIdentity = File.ReadAllText(staffPath);
+        if (Regex.IsMatch(staffIdentity, "^  - id:", RegexOptions.Multiline))
+        {
+            return;
+        }
+
+        var relativePath = Markup.Escape(Path.GetRelativePath(repositoryRoot, staffPath));
+        AnsiConsole.MarkupLine($"  [yellow]The {terraformEnvironment} staff list ({relativePath}) has nobody in it.[/] Add the first admin; they sign in with an emailed one-time code.");
+        if (Console.IsInputRedirected || !Regex.IsMatch(staffIdentity, "^staff: \\[\\]$", RegexOptions.Multiline))
+        {
+            AnsiConsole.MarkupLine($"[red]The first admin cannot be added here.[/] Add their entry to {relativePath} by hand (see the README beside it), or run the deploy interactively with the empty list the file starts from.");
+            Environment.Exit(1);
+        }
+
+        var email = AnsiConsole.Prompt(new TextPrompt<string>("  First admin's email:")
+            .Validate(value => Regex.IsMatch(value, "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$") ? ValidationResult.Success() : ValidationResult.Error("Enter an email address."))
+        ).Trim().ToLowerInvariant();
+        var name = AnsiConsole.Prompt(new TextPrompt<string>("  First admin's full name:")).Trim();
+
+        // The id is the OIDC subject other tools key accounts on (never reused); derived from the name.
+        var id = string.Join('.', Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9 ]", "").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (id.Length == 0) id = Regex.Replace(email.Split('@')[0], "[^a-z0-9._-]", "");
+
+        // JSON strings are valid YAML double-quoted scalars, so a name with a colon or quote stays one value.
+        var adminEntry = $"""
+                          staff:
+                            - id: {JsonSerializer.Serialize(id)}
+                              email: {JsonSerializer.Serialize(email)}
+                              name: {JsonSerializer.Serialize(name)}
+                              groups: [staff, admins]
+                          """;
+        // A match evaluator inserts the entry literally: a replacement string would treat a '$' in the name as a group.
+        File.WriteAllText(staffPath, Regex.Replace(staffIdentity, "^staff: \\[\\]$", _ => adminEntry, RegexOptions.Multiline));
+
+        AnsiConsole.MarkupLine($"  [green]✓[/] {Markup.Escape(email)} added as the first admin (id {Markup.Escape(id)}). Commit {relativePath} in your fork so the next deploy keeps them.");
     }
 
     // The network policies ship in the chart, but clusters set up before that carry them applied by

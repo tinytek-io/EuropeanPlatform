@@ -5,7 +5,7 @@ The application code for EuropeanPlatform is divided into self-contained systems
 These are the self-contained systems:
 - `main` - the primary shell application where you build your product. It handles catch-all routing and hosts the account module via Module Federation, so navigation between product pages and account pages happens without full page reloads.
 - `account` - a federated module for authentication, tenant signup, user management, and account settings. Loaded into the main system at runtime via Module Federation and shares the same navigation shell. It also exposes an internal API (`/internal-api/back-office/*`) that the back-office consumes (see [the back-office](#back-office)).
-- `back-office` - the staff surface for operations and support, served on its own hostname. It owns the staff identity outright (a configured OIDC provider, with a mock identity selector as the development stand-in) and owns no database: it is a backend-for-frontend over the feature systems' internal APIs.
+- `back-office` - the staff surface for operations and support, served on its own hostname. It owns the staff identity outright (an emailed one-time code for the staff in the committed staff identity file, and the OIDC provider other tools sign staff in through; a mock identity selector is the development stand-in) and its own database holds only that identity state: otherwise it is a backend-for-frontend over the feature systems' internal APIs.
 
 The point of EuropeanPlatform is not to create a distributed system. Since EuropeanPlatform has all the core functionalities of a SaaS solution, the idea is that you build your product in `main` and make only minimal changes to `account`. Ideally, you should not need additional self-contained systems unless you have a strong reason to create them. Remember, microservices are a solution to scale teams, not systems.
 
@@ -143,10 +143,10 @@ The back-office is the staff surface for operations and support: the dashboard, 
 
 It owns two things outright:
 
-1. **The staff identity.** A configured OpenID Connect provider (`BackOffice:Oidc`) takes precedence; the mock identity selector (a dev/staging stand-in that picks a fixed admin or regular staff identity) applies when no provider exists. The identity machinery — the identity handler, the OIDC login, the mock selector — lives in the back-office system (`BackOffice.Authentication`), not in the shared kernel.
+1. **The staff identity.** With a staff identity file (`StaffIdentity:File`, the environment's committed `cloud-infrastructure/staff-identity/<environment>.yaml`) the back-office signs staff in itself with an emailed one-time code and is the OIDC provider (OpenIddict) other tools sign staff in through; the mock identity selector (a development stand-in that picks a fixed admin or regular staff identity) applies only without one. The identity machinery — the identity handler, the staff session, the provider, the mock selector — lives in the back-office system (`BackOffice.Authentication`, `BackOffice.StaffIdentity`), not in the shared kernel.
 2. **The staff-facing contract.** The SPA talks to `/api/back-office/*` on the back-office API only.
 
-It deliberately owns no database: reads and writes are served over the feature systems' **internal APIs**. The back-office is a backend-for-frontend; account (and later other feature systems) own the data and expose an internal API the back-office calls with the signed-in staff member's authority.
+Its own database holds only the staff identity state (the sign-in codes and the OIDC provider's store); everything else is read and written over the feature systems' **internal APIs**. The back-office is a backend-for-frontend; account (and later other feature systems) own the data and expose an internal API the back-office calls with the signed-in staff member's authority.
 
 ### The delegation contract
 

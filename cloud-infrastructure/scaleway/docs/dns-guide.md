@@ -90,7 +90,7 @@ dotnet run --project developer-cli -- edge-health -e staging
 dig +short app.staging.europeanplatform.net         # should chain to the pipeline endpoint IPs
 dig +short back-office.staging.europeanplatform.net
 curl -sI https://app.staging.europeanplatform.net/         # expect 200
-curl -sI https://back-office.staging.europeanplatform.net/ # expect 401 (auth gate) while MockEasyAuth is active
+curl -sI https://back-office.staging.europeanplatform.net/ # expect the staff sign-in gate, never back-office content
 ```
 
 ## 4. Optional: delegate the staging sub-zone to Scaleway DNS
