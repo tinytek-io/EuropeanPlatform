@@ -66,7 +66,7 @@ public sealed partial class DnsCheckCommand : Command
         var stateResult = await ProcessHelper.ExecuteSensitiveAsync("terraform show -json", environmentModuleFolder);
         if (!stateResult.Success)
         {
-            AnsiConsole.MarkupLine("[red]Could not read the Terraform state:[/] {Markup.Escape(stateResult.StdErr.Trim())}");
+            AnsiConsole.MarkupLine($"[red]Could not read the Terraform state:[/] {Markup.Escape(stateResult.StdErr.Trim())}");
             return 1;
         }
 
