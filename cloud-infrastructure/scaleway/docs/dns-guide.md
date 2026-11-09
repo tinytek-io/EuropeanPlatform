@@ -22,16 +22,9 @@ Public traffic never touches the cluster's Load Balancer directly: each public h
 Scaleway Edge Services pipeline (WAF + edge TLS + caching) in front of the gateway LB. The DNS
 records are therefore **CNAMEs to the pipeline endpoints**, not A records to the LB IP.
 
-Find the pipeline endpoints for your environment (they are stable — the pipelines are managed by
-Terraform and only change if the pipeline resources are replaced):
-
-```bash
-cd cloud-infrastructure/scaleway/environment
-terraform state list | grep edge_services_pipeline          # pipeline ids
-scw edge-services pipeline list -o json                    # id + endpoint per pipeline
-```
-
-Then create one CNAME per public hostname (example values for the staging environment):
+The pipeline endpoints are stable: the pipelines are managed by Terraform and only change if the
+pipeline resources are replaced. `dns-check` prints each hostname's exact CNAME target. Create one
+CNAME per public hostname (example values for the staging environment):
 
 | Type  | Name                   | Value                                                          |
 |-------|------------------------|----------------------------------------------------------------|
@@ -55,19 +48,13 @@ cert-manager issuance path described above depends on the hostnames resolving th
 Transactional email is sent through Scaleway TEM with the environment-specific sending domain
 `staging.europeanplatform.net` (isolated from the apex domain's reputation; the apex stays free for the
 production environment). After `terraform apply` registers the domain
-(`scaleway_tem_domain`), get the expected records:
-
-```bash
-scw tem domain list -o json                          # find the staging domain id
-scw tem domain get domain-id=<id> -o json            # dkim_config contains the DKIM public key
-```
-
-Create three records in the DNS console for the `staging` zone:
+(`scaleway_tem_domain`), `dns-check` prints the expected records with their exact values, the DKIM
+public key included. Create them in the DNS console for the `staging` zone:
 
 | Type | Name                     | Value                                            |
 |------|--------------------------|--------------------------------------------------|
 | TXT  | `staging` (zone apex)    | `v=spf1 include:_spf.tem.scaleway.com ~all`     |
-| TXT  | `<project-id>._domainkey.staging` | the `dkim_config` value from the command above (the selector is the domain's `project_id`) |
+| TXT  | `<project-id>._domainkey.staging` | the domain's `dkim_config` value, as `dns-check` prints it (the selector is the domain's `project_id`) |
 | TXT  | `_dmarc.staging`         | `v=DMARC1; p=none; rua=mailto:ops@europeanplatform.net` |
 
 Then run `dotnet run --project developer-cli -- dns-check`: once the records resolve it asks Scaleway to

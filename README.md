@@ -55,7 +55,7 @@ TL;DR: Requires .NET 10, Node, and Docker. Clone the repo and `dotnet run` from 
 
 ### Prerequisites
 
-For development, you need .NET, Docker, and Node. And the Scaleway CLI (`scw`), Terraform, and the Aspire CLI for setting up deployments.
+For development, you need .NET, Docker, and Node. And Terraform and the Aspire CLI for setting up deployments. The Scaleway CLI (`scw`) is optional: the developer CLI talks to Scaleway through its own SDK, and `scw init` is just a convenient way to store the administrator key the bootstrap uses (exporting `SCW_ACCESS_KEY` and `SCW_SECRET_KEY` works too).
 
 <details>
 
@@ -228,7 +228,7 @@ Open a terminal and run the following commands (if not installed):
    dotnet dev-certs https --trust
    ```
 
-10. (Optional) Install the GitHub CLI and Scaleway CLI (needed for deployment setup)
+10. (Optional) Install the GitHub CLI, and the Scaleway CLI if you want `scw init` to store your Scaleway key
 
    ```bash
    (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \

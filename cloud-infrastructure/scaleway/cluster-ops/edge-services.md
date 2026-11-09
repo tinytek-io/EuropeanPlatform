@@ -21,8 +21,8 @@ backend (LB)`. There is one pipeline per public hostname:
 | WAF | enable (blocking), paranoia 1 | enable (blocking), paranoia 1 |
 | cache | fallback TTL 3600s | fallback TTL 3600s |
 
-Pipeline ids are stable (TF-managed); read them from `terraform state` or
-`scw edge-services pipeline list`. The parked "auto" DNS stages reserve each pipeline's
+Pipeline ids are stable (TF-managed); read them from `terraform state`, or run `edge-health`, which
+lists each pipeline with its stage chain. The parked "auto" DNS stages reserve each pipeline's
 `*.svc.edge.scw.cloud` endpoint and double as smoke-test hosts.
 
 ### Head stages — the one reference outside the API
