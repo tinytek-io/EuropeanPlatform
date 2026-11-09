@@ -1,12 +1,10 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
-using JetBrains.Annotations;
 using Scaleway.Sdk;
 using Spectre.Console;
+using ScwAccount = Scaleway.Sdk.Account.V3;
+using ScwIam = Scaleway.Sdk.Iam.V1Alpha1;
 
 namespace DeveloperCli.Utilities;
 
@@ -150,39 +148,59 @@ public static partial class ScalewayEnvironment
     }
 
     /// <summary>Who owns the key (a user, or an IAM application) and its preferred project.</summary>
-    public static async Task<ApiKey> GetApiKeyAsync(ScalewayCredentials credentials)
+    public static Task<ScwIam.APIKey> GetApiKeyAsync(ScalewayCredentials credentials)
     {
-        return await GetAsync<ApiKey>(credentials, $"iam/v1alpha1/api-keys/{credentials.AccessKey}", "read the API key's owner (does the key have IAM read access?)");
+        return CallAsync(credentials, "read the API key's owner (does the key have IAM read access?)",
+            async transport => await new ScwIam.IamApi(transport).GetApiKeyAsync(credentials.AccessKey)
+        );
     }
 
-    public static async Task<string> GetOrganizationIdAsync(ScalewayCredentials credentials, string projectId)
+    public static async Task<string> GetOrganizationIdAsync(ScalewayCredentials credentials, string? projectId)
     {
-        return (await GetAsync<Project>(credentials, $"account/v3/projects/{projectId}", "read the key's project")).OrganizationId;
+        if (projectId is null)
+        {
+            AnsiConsole.MarkupLine($"[red]The key from {Markup.Escape(credentials.Source)} has no default project,[/] so its organization cannot be found. Set one on the key in the Scaleway console.");
+            Environment.Exit(1);
+        }
+
+        var project = await CallAsync(credentials, "read the key's project", async transport => await new ScwAccount.AccountApi(transport).GetProjectAsync(projectId));
+        return project.OrganizationId!;
     }
 
     /// <summary>The project named exactly <paramref name="name" />, or null when it does not exist yet.</summary>
     public static async Task<string?> FindProjectIdAsync(ScalewayCredentials credentials, string organizationId, string name)
     {
-        var projects = await GetAsync<ProjectPage>(credentials, $"account/v3/projects?organization_id={organizationId}&name={Uri.EscapeDataString(name)}&page_size=100", "list the organization's projects");
-        return projects.Projects.SingleOrDefault(project => project.Name == name)?.Id;
+        var projects = await CallAsync(credentials, "list the organization's projects",
+            async transport => await new ScwAccount.AccountApi(transport).ListProjectsAsync(new ScwAccount.ListProjectsRequest { OrganizationId = organizationId, Name = name })
+        );
+
+        // The name filter is a prefix match upstream, so the exact name is checked here.
+        return projects.SingleOrDefault(project => project.Name == name)?.Id;
     }
 
     /// <summary>
     ///     Subscribes the project to Transactional Email's free Essential offer when it has no offer
     ///     yet; email domains are refused without one ("No active offer subscription for the
     ///     project"), and no Terraform resource manages it. An existing offer is never changed.
+    ///     The SDK does not generate offer subscriptions (the collection is updated in place with a PATCH,
+    ///     which the generator's CRUD matcher does not model), so this goes through its transport.
     /// </summary>
     public static async Task EnsureEmailOfferAsync(ScalewayCredentials credentials, string projectId)
     {
-        var offersPath = $"transactional-email/v1alpha1/regions/{Region}/offer-subscriptions";
-        var subscriptions = await SendAsync<OfferSubscriptionPage>(credentials, HttpMethod.Get, $"{offersPath}?project_id={projectId}", null, "read the project's Transactional Email offer");
-        if (subscriptions.TotalCount > 0)
+        const string regionPath = $"transactional-email/v1alpha1/regions/{Region}";
+        var subscriptions = await CallAsync(credentials, "read the project's Transactional Email offer",
+            async transport => await transport.ListResourcesAsync($"{regionPath}/offer-subscriptions", Region, [new KeyValuePair<string, string>("project_id", projectId)])
+        );
+        if (subscriptions.Length > 0)
         {
             AnsiConsole.MarkupLine("[green]The project already has a Transactional Email offer.[/]");
             return;
         }
 
-        await SendAsync<JsonElement>(credentials, HttpMethod.Patch, offersPath, new { project_id = projectId, name = EmailOffer }, "subscribe the project to Transactional Email's Essential offer");
+        // The transport PATCHes "{path}/{id}"; the offer collection is the target itself, so it is the last segment.
+        await CallAsync(credentials, "subscribe the project to Transactional Email's Essential offer",
+            async transport => await transport.UpdateResourceAsync(regionPath, Region, "offer-subscriptions", new { project_id = projectId, name = EmailOffer })
+        );
         AnsiConsole.MarkupLine($"[green]Subscribed the project to Transactional Email's '{EmailOffer}' offer[/] (free tier, no commitment).");
     }
 
@@ -203,65 +221,36 @@ public static partial class ScalewayEnvironment
         Environment.SetEnvironmentVariable("AWS_SECRET_ACCESS_KEY", credentials.SecretKey);
     }
 
-    private static Task<T> GetAsync<T>(ScalewayCredentials credentials, string path, string action)
-    {
-        return SendAsync<T>(credentials, HttpMethod.Get, path, null, action);
-    }
-
-    private static async Task<T> SendAsync<T>(ScalewayCredentials credentials, HttpMethod method, string path, object? body, string action)
+    // One SDK transport per call, built from the key alone: the first calls are the ones that find the organization,
+    // so nothing here can require it. A rejected key and any other failure end the command with a readable reason.
+    private static async Task<T> CallAsync<T>(ScalewayCredentials credentials, string action, Func<ScalewayApiClient, Task<T?>> call)
     {
         using var httpClient = new HttpClient();
         httpClient.BaseAddress = new Uri("https://api.scaleway.com/");
         httpClient.Timeout = TimeSpan.FromSeconds(30);
         httpClient.DefaultRequestHeaders.Add("X-Auth-Token", credentials.SecretKey);
+        using var transport = new ScalewayApiClient(httpClient);
 
-        using var request = new HttpRequestMessage(method, path);
-        if (body is not null) request.Content = JsonContent.Create(body);
-        var response = await httpClient.SendAsync(request);
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        try
+        {
+            var result = await call(transport);
+            if (result is not null) return result;
+
+            AnsiConsole.MarkupLine($"[red]Could not {Markup.Escape(action)}:[/] not found with the key from {Markup.Escape(credentials.Source)}.");
+        }
+        catch (ScalewayApiException exception) when (exception.StatusCode == (int)HttpStatusCode.Unauthorized)
         {
             var hint = credentials.Source.StartsWith("SCW_")
                 ? " Exported variables take precedence over the scw profiles; unset SCW_ACCESS_KEY and SCW_SECRET_KEY to use the profile instead."
                 : "";
             AnsiConsole.MarkupLine($"[red]The key {Markup.Escape(credentials.AccessKey)} from {Markup.Escape(credentials.Source)} is not valid[/] (revoked, expired, or mistyped).{Markup.Escape(hint)}");
-            Environment.Exit(1);
         }
-
-        if (!response.IsSuccessStatusCode)
+        catch (ScalewayApiException exception)
         {
-            AnsiConsole.MarkupLine($"[red]Could not {Markup.Escape(action)}:[/] HTTP {(int)response.StatusCode} with the key from {Markup.Escape(credentials.Source)}.");
-            Environment.Exit(1);
+            AnsiConsole.MarkupLine($"[red]Could not {Markup.Escape(action)}:[/] HTTP {exception.StatusCode} with the key from {Markup.Escape(credentials.Source)}.");
         }
 
-        return (await response.Content.ReadFromJsonAsync<T>())!;
+        Environment.Exit(1);
+        return default!;
     }
-
-    public sealed record ApiKey(
-        [property: JsonPropertyName("user_id")]
-        string? UserId,
-        [property: JsonPropertyName("application_id")]
-        string? ApplicationId,
-        [property: JsonPropertyName("default_project_id")]
-        string DefaultProjectId
-    );
-
-    [UsedImplicitly]
-    private sealed record Project(
-        [property: JsonPropertyName("id")] string Id,
-        [property: JsonPropertyName("name")] string Name,
-        [property: JsonPropertyName("organization_id")]
-        string OrganizationId
-    );
-
-    [UsedImplicitly]
-    private sealed record OfferSubscriptionPage(
-        [property: JsonPropertyName("total_count")]
-        int TotalCount
-    );
-
-    [UsedImplicitly]
-    private sealed record ProjectPage(
-        [property: JsonPropertyName("projects")]
-        Project[] Projects
-    );
 }

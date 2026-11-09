@@ -1,14 +1,14 @@
 using System.CommandLine;
 using System.Diagnostics;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
-using JetBrains.Annotations;
+using Scaleway.Sdk;
 using Spectre.Console;
+using ScwRegistry = Scaleway.Sdk.Registry.V1;
 
 namespace DeveloperCli.Commands;
 
@@ -322,7 +322,7 @@ public sealed partial class DeployCommand : Command
         // checked here.
         ValidateDeployedChartImages(applicationFolder);
 
-        await PruneRegistryTagsAsync(await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_namespace_id"), credentials);
+        await PruneRegistryTagsAsync(await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_namespace_id"), credentials, organizationId, projectId);
 
         // The rollout can change what Terraform reads from the cluster: the Kapsule controller creates
         // (or recreates) the gateway Load Balancer's 443 and 80 frontends, and the edge-only ACLs on
@@ -381,53 +381,53 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
     }
 
-    private static async Task PruneRegistryTagsAsync(string namespaceId, ScalewayCredentials credentials)
+    private static async Task PruneRegistryTagsAsync(string namespaceId, ScalewayCredentials credentials, string organizationId, string projectId)
     {
-        var secretKey = credentials.SecretKey;
-
         // Registry namespace IDs are region-qualified (<region>/<uuid>): the region selects the API,
         // which takes the bare uuid.
-        var registryApiBaseUrl = $"https://api.scaleway.com/registry/v1/regions/{namespaceId.Split('/')[0]}";
+        var region = namespaceId.Split('/')[0];
         namespaceId = namespaceId.Split('/').Last();
 
         try
         {
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("X-Auth-Token", secretKey);
-            httpClient.Timeout = TimeSpan.FromSeconds(30);
+            using var scaleway = new ScalewayClient(new ScalewayCredentialConfig
+                {
+                    AccessKey = credentials.AccessKey, SecretKey = credentials.SecretKey, OrganizationId = OrganizationId.Parse(organizationId)
+                }
+            );
+            var registry = scaleway.WithProject(ProjectId.Parse(projectId)).Registry;
 
-            var images = (await GetRegistryPageAsync<RegistryImagePage>(httpClient, $"{registryApiBaseUrl}/images?namespace_id={namespaceId}&page_size=100"))?.Images ?? [];
             var kept = 0;
             var deleted = 0;
-            foreach (var image in images)
+            var failed = 0;
+            foreach (var image in await registry.ListImagesAsync(new ScwRegistry.ListImagesRequest { NamespaceId = namespaceId }, region))
             {
-                var tags = (await GetRegistryPageAsync<RegistryTagPage>(httpClient, $"{registryApiBaseUrl}/images/{image.Id}/tags?order_by=created_at_desc&page_size=100"))?.Tags ?? [];
+                var tags = await registry.ListTagsAsync(image.Id!, new ScwRegistry.ListTagsRequest { OrderBy = ScwRegistry.ListTagsOrderBy.CreatedAtDesc }, region);
                 foreach (var tag in tags.Skip(RegistryTagsToKeep))
                 {
-                    var response = await httpClient.DeleteAsync($"{registryApiBaseUrl}/tags/{tag.Id}");
-                    if (response.IsSuccessStatusCode)
+                    try
                     {
+                        await registry.DeleteTagAsync(tag.Id!, region);
                         deleted++;
+                    }
+                    catch (ScalewayApiException)
+                    {
+                        // A tag that cannot be deleted now is retried by the next deploy's prune.
+                        failed++;
                     }
                 }
 
                 kept += Math.Min(tags.Count, RegistryTagsToKeep);
             }
 
-            AnsiConsole.MarkupLine($"[green]Registry pruned:[/] kept {kept} tags, deleted {deleted} stale tags.");
+            var failures = failed > 0 ? $" {failed} could not be deleted and are retried next deploy." : "";
+            AnsiConsole.MarkupLine($"[green]Registry pruned:[/] kept {kept} tags, deleted {deleted} stale tags.{failures}");
         }
         catch (Exception exception)
         {
             // Pruning is housekeeping: a failure must never fail an otherwise successful deploy.
             AnsiConsole.MarkupLine($"[yellow]Registry prune failed[/] (the deploy itself succeeded): {Markup.Escape(exception.Message)}");
         }
-    }
-
-    private static async Task<T?> GetRegistryPageAsync<T>(HttpClient httpClient, string url)
-    {
-        var response = await httpClient.GetAsync(url);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<T>();
     }
 
     // Fails loud when a SPA's index.html references an asset that is not in the dist — the
@@ -935,18 +935,4 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.Write(new Rule($"[bold] {title} [/]"));
         AnsiConsole.WriteLine();
     }
-
-    // Deserialization-only shapes for the registry prune: the JSON serializer instantiates them
-    // (hence UsedImplicitly), and only the ids are needed — kept tags are deleted by id, not name.
-    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
-    private sealed record RegistryImagePage(List<RegistryImage> Images);
-
-    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
-    private sealed record RegistryTagPage(List<RegistryTag> Tags);
-
-    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
-    private sealed record RegistryImage(string Id);
-
-    [UsedImplicitly(ImplicitUseKindFlags.InstantiatedNoFixedConstructorSignature)]
-    private sealed record RegistryTag(string Id);
 }
