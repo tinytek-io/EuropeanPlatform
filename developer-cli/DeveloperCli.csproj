@@ -32,6 +32,15 @@
         <Compile Include="..\application\shared-kernel\SharedKernel\Configuration\DockerVolumeNaming.cs" Link="Utilities\DockerVolumeNaming.cs" />
     </ItemGroup>
     <ItemGroup>
+        <!-- Linked source from the SDK generator, for the same reason: `scaleway-sdk schemas` downloads the pinned
+             schemas and the generator parses them, so both have to agree on which document a pin names. Compiling
+             the files keeps one pin table instead of two, held to the schemas on disk by Scaleway.Sdk.Generator.Tests.
+             They are dependency-free; the generator's YamlDotNet reference does not come with them. -->
+        <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaPins.cs" Link="Utilities\SchemaPins.cs" />
+        <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaVersionCheck.cs" Link="Utilities\SchemaVersionCheck.cs" />
+        <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaVersionCache.cs" Link="Utilities\SchemaVersionCache.cs" />
+    </ItemGroup>
+    <ItemGroup>
         <!-- Scaleway.Sdk has no package dependencies (it is built to stand alone), so referencing it keeps the
              CLI isolated from shared-kernel's dependency closure while sharing one Scaleway client. -->
         <ProjectReference Include="..\application\shared-kernel\Scaleway.Sdk\Scaleway.Sdk.csproj" />

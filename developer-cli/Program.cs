@@ -56,7 +56,7 @@ rootCommand.Options.Add(traceOption);
 
 var allCommands = Assembly.GetExecutingAssembly().GetTypes()
     .Where(t => !t.IsAbstract && t.IsAssignableTo(typeof(Command)))
-    .Where(t => t.Namespace != "DeveloperCli.Commands.ClaudeCommand")
+    .Where(t => t.Namespace is not "DeveloperCli.Commands.ClaudeCommand" and not "DeveloperCli.Commands.ScalewaySdk")
     .Select(Activator.CreateInstance)
     .Cast<Command>()
     .ToList();
