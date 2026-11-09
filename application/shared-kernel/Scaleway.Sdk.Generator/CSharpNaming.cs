@@ -34,6 +34,16 @@ public static class CSharpNaming
         return result.ToString();
     }
 
+    /// <summary>
+    ///     A parameter name for a resource group's identifier, with a leading acronym lower-cased as a whole:
+    ///     <c>DNSStage</c> → <c>dnsStageId</c>, <c>APIKey</c> → <c>apiKeyId</c>, rather than <c>dNSStageId</c>.
+    /// </summary>
+    public static string IdentifierParameter(string resourceGroupName)
+    {
+        var normalized = NormalizeOperationId(resourceGroupName);
+        return char.ToLowerInvariant(normalized[0]) + normalized[1..] + "Id";
+    }
+
     public static string ToPascalCase(string input)
     {
         if (string.IsNullOrEmpty(input))

@@ -146,44 +146,44 @@ public sealed class VpcApi(IScalewayApiClient client, ScalewayRequestScope? scop
     }
 
     /// <summary>Get a VPC</summary>
-    /// <param name="vPCId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
+    /// <param name="vpcId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
     /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>GetVPC</c> — <c>GET /vpc/v2/regions/{region}/vpcs/{id}</c> (V2).
     /// </remarks>
-    public async Task<VPC?> GetVpcAsync(string vPCId, string? region = null, CancellationToken cancellationToken = default)
+    public async Task<VPC?> GetVpcAsync(string vpcId, string? region = null, CancellationToken cancellationToken = default)
     {
         region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
-        var response = await client.GetResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vPCId, cancellationToken);
+        var response = await client.GetResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vpcId, cancellationToken);
         return response?.Deserialize<VPC>(JsonOptions);
     }
 
     /// <summary>Update VPC</summary>
-    /// <param name="vPCId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
+    /// <param name="vpcId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
     /// <param name="request">The request body, serialized with the snake_case field names Scaleway declares.</param>
     /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>UpdateVPC</c> — <c>PATCH /vpc/v2/regions/{region}/vpcs/{id}</c> (V2).
     /// </remarks>
-    public async Task<VPC> UpdateVpcAsync(string vPCId, UpdateVpcRequest request, string? region = null, CancellationToken cancellationToken = default)
+    public async Task<VPC> UpdateVpcAsync(string vpcId, UpdateVpcRequest request, string? region = null, CancellationToken cancellationToken = default)
     {
         region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
-        var response = await client.UpdateResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vPCId, request, cancellationToken);
+        var response = await client.UpdateResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vpcId, request, cancellationToken);
         return response.Deserialize<VPC>(JsonOptions)!;
     }
 
     /// <summary>Delete a VPC</summary>
-    /// <param name="vPCId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
+    /// <param name="vpcId">Scaleway ID of the VPC to address. The transport appends it to <c>vpc/v2/regions/{region}/vpcs</c>.</param>
     /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>DeleteVPC</c> — <c>DELETE /vpc/v2/regions/{region}/vpcs/{id}</c> (V2).
     /// </remarks>
-    public Task DeleteVpcAsync(string vPCId, string? region = null, CancellationToken cancellationToken = default)
+    public Task DeleteVpcAsync(string vpcId, string? region = null, CancellationToken cancellationToken = default)
     {
         region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
-        return client.DeleteResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vPCId, cancellationToken);
+        return client.DeleteResourceAsync($"vpc/v2/regions/{region}/vpcs", region, vpcId, cancellationToken);
     }
 }

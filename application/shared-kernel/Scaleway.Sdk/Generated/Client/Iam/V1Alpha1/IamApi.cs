@@ -203,38 +203,38 @@ public sealed class IamApi(IScalewayApiClient client, ScalewayRequestScope? scop
     }
 
     /// <summary>Get an API key</summary>
-    /// <param name="aPIKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
+    /// <param name="apiKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>GetAPIKey</c> — <c>GET /iam/v1alpha1/api-keys/{id}</c> (V1Alpha1).
     /// </remarks>
-    public async Task<APIKey?> GetApiKeyAsync(string aPIKeyId, CancellationToken cancellationToken = default)
+    public async Task<APIKey?> GetApiKeyAsync(string apiKeyId, CancellationToken cancellationToken = default)
     {
-        var response = await client.GetResourceAsync("iam/v1alpha1/api-keys", string.Empty, aPIKeyId, cancellationToken);
+        var response = await client.GetResourceAsync("iam/v1alpha1/api-keys", string.Empty, apiKeyId, cancellationToken);
         return response?.Deserialize<APIKey>(JsonOptions);
     }
 
     /// <summary>Update an API key</summary>
-    /// <param name="aPIKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
+    /// <param name="apiKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
     /// <param name="request">The request body, serialized with the snake_case field names Scaleway declares.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>UpdateAPIKey</c> — <c>PATCH /iam/v1alpha1/api-keys/{id}</c> (V1Alpha1).
     /// </remarks>
-    public async Task<APIKey> UpdateApiKeyAsync(string aPIKeyId, UpdateApiKeyRequest request, CancellationToken cancellationToken = default)
+    public async Task<APIKey> UpdateApiKeyAsync(string apiKeyId, UpdateApiKeyRequest request, CancellationToken cancellationToken = default)
     {
-        var response = await client.UpdateResourceAsync("iam/v1alpha1/api-keys", string.Empty, aPIKeyId, request, cancellationToken);
+        var response = await client.UpdateResourceAsync("iam/v1alpha1/api-keys", string.Empty, apiKeyId, request, cancellationToken);
         return response.Deserialize<APIKey>(JsonOptions)!;
     }
 
     /// <summary>Delete an API key</summary>
-    /// <param name="aPIKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
+    /// <param name="apiKeyId">Scaleway ID of the APIKey to address. The transport appends it to <c>iam/v1alpha1/api-keys</c>.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <remarks>
     ///     Scaleway operation <c>DeleteAPIKey</c> — <c>DELETE /iam/v1alpha1/api-keys/{id}</c> (V1Alpha1).
     /// </remarks>
-    public Task DeleteApiKeyAsync(string aPIKeyId, CancellationToken cancellationToken = default)
+    public Task DeleteApiKeyAsync(string apiKeyId, CancellationToken cancellationToken = default)
     {
-        return client.DeleteResourceAsync("iam/v1alpha1/api-keys", string.Empty, aPIKeyId, cancellationToken);
+        return client.DeleteResourceAsync("iam/v1alpha1/api-keys", string.Empty, apiKeyId, cancellationToken);
     }
 }

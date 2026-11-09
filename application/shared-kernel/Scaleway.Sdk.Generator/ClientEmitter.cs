@@ -565,7 +565,7 @@ public static class ClientEmitter
 
         foreach (var group in api.ResourceGroups)
         {
-            var identifierParameter = char.ToLowerInvariant(group.Name[0]) + group.Name[1..] + "Id";
+            var identifierParameter = CSharpNaming.IdentifierParameter(group.Name);
 
             // List/Create address the collection, Get/Update/Delete the item prefix. The two paths are usually
             // identical, but each carries its own scope and parent-id parameters, so each is resolved separately:
