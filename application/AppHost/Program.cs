@@ -161,11 +161,13 @@ var subscriptionUiEnabled = !isPublishMode || stripeFullyConfigured ? "true" : "
 // the values are filled from infrastructure outputs at deploy time).
 IResourceBuilder<IResourceWithConnectionString> accountDatabase;
 IResourceBuilder<IResourceWithConnectionString> mainDatabase;
+IResourceBuilder<IResourceWithConnectionString> backOfficeDatabase;
 
 if (isPublishMode)
 {
     accountDatabase = builder.AddConnectionString("account-database");
     mainDatabase = builder.AddConnectionString("main-database");
+    backOfficeDatabase = builder.AddConnectionString("back-office-database");
 }
 else
 {
@@ -177,6 +179,7 @@ else
 
     accountDatabase = postgres.AddDatabase("account-database", "account");
     mainDatabase = postgres.AddDatabase("main-database", "main");
+    backOfficeDatabase = postgres.AddDatabase("back-office-database", "back_office");
 }
 
 // Object storage is S3 (Scaleway Object Storage when published, SeaweedFS in local development).
@@ -333,9 +336,13 @@ if (isPublishMode)
         .WithKubernetesProbes("/internal-api/ready", "/internal-api/live");
 }
 
-// The back-office system's background work. It owns no database, so it waits on nothing and
-// needs no references; in containers it has no inbound listener beyond the image default.
-var backOfficeWorkers = builder.AddProject<BackOffice_Workers>("back-office-workers");
+// The back-office system's background work: it migrates the back-office database in local
+// development (the migrator Job owns it when deployed), so the API waits for it. In containers it
+// has no inbound listener beyond the image default.
+var backOfficeWorkers = builder
+    .AddProject<BackOffice_Workers>("back-office-workers")
+    .WithReference(backOfficeDatabase)
+    .WaitFor(backOfficeDatabase);
 
 if (!isPublishMode)
 {
@@ -349,6 +356,8 @@ var backOfficeApi = builder
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
+    .WithReference(backOfficeDatabase)
+    .WaitFor(backOfficeWorkers)
     // The SPA's bundle URLs target the back-office's own origin (dedicated Kestrel port on
     // localhost, the gateway hostname in publish mode).
     .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.BackOfficeSystemApi, "");
@@ -486,11 +495,13 @@ if (isPublishMode)
 // as Jobs, not Deployments: the chart patch turns the generated workload into a pre-upgrade Job.
 IResourceBuilder<ProjectResource> accountMigrator = null!;
 IResourceBuilder<ProjectResource> mainMigrator = null!;
+IResourceBuilder<ProjectResource> backOfficeMigrator = null!;
 
 if (isPublishMode)
 {
     accountMigrator = builder.AddProject<Account_Migrator>("account-migrator");
     mainMigrator = builder.AddProject<Main_Migrator>("main-migrator");
+    backOfficeMigrator = builder.AddProject<BackOffice_Migrator>("back-office-migrator");
 }
 
 // Deployed workloads share the HMAC token-signing key (tokens are issued and validated by the
@@ -507,7 +518,8 @@ if (isPublishMode)
         ("back-office-api", backOfficeApi),
         ("back-office-workers", backOfficeWorkers),
         ("account-migrator", accountMigrator),
-        ("main-migrator", mainMigrator)
+        ("main-migrator", mainMigrator),
+        ("back-office-migrator", backOfficeMigrator)
     };
 
     foreach (var (name, workload) in workloadBuilders)
@@ -638,6 +650,11 @@ const string jobTemplate = """
                                    app.kubernetes.io/name: "{{ .Chart.Name }}"
                                    app.kubernetes.io/component: "RESOURCE"
                                    app.kubernetes.io/instance: "{{ .Release.Name }}"
+                                   # The migrator network policy selects this label, not the
+                                   # component names: the Job runs before the release's policies
+                                   # are applied, so a migrator new in a release is admitted only by
+                                   # a policy already in the cluster.
+                                   workload-role: "migrator"
                                spec:
                                  restartPolicy: Never
                                  imagePullSecrets:

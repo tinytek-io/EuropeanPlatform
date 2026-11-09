@@ -257,6 +257,13 @@ resource "scaleway_rdb_database" "main" {
   name        = "main"
 }
 
+# The back-office's own database: the staff identity state (the OIDC provider's stores and the
+# sign-in codes). Staff and OIDC clients are committed configuration, not rows here.
+resource "scaleway_rdb_database" "back_office" {
+  instance_id = scaleway_rdb_instance.main.id
+  name        = "back_office"
+}
+
 # Databases created through the API do not grant the instance's admin user any privilege on
 # them, so migrations fail with "permission denied for database" at connect time. Each database
 # needs an explicit privilege grant for the application user.
@@ -328,6 +335,17 @@ resource "scaleway_rdb_privilege" "app_main" {
   }
 }
 
+resource "scaleway_rdb_privilege" "app_back_office" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.back_office.name
+  user_name     = scaleway_rdb_user.app.name
+  permission    = "readwrite"
+
+  lifecycle {
+    ignore_changes = [permission]
+  }
+}
+
 resource "scaleway_rdb_privilege" "migrator_account" {
   instance_id   = scaleway_rdb_instance.main.id
   database_name = scaleway_rdb_database.account.name
@@ -338,6 +356,13 @@ resource "scaleway_rdb_privilege" "migrator_account" {
 resource "scaleway_rdb_privilege" "migrator_main" {
   instance_id   = scaleway_rdb_instance.main.id
   database_name = scaleway_rdb_database.main.name
+  user_name     = scaleway_rdb_user.migrator.name
+  permission    = "all"
+}
+
+resource "scaleway_rdb_privilege" "migrator_back_office" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.back_office.name
   user_name     = scaleway_rdb_user.migrator.name
   permission    = "all"
 }
@@ -794,16 +819,18 @@ locals {
   # The application connects as the readwrite user (it can never change database structure);
   # the migrator connection string reaches only the workers' Secret Manager paths, where the
   # pre-upgrade migration Job (MIGRATE_ONLY) resolves it.
-  database_host                      = "${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port}"
-  app_database_credentials           = "Username=${scaleway_rdb_user.app.name};Password=${random_password.app_user.result};SSL Mode=Require"
-  migrator_database_credentials      = "Username=${scaleway_rdb_user.migrator.name};Password=${random_password.migrator_user.result};SSL Mode=Require"
-  account_database_connection_string = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
-  main_database_connection_string    = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
-  account_migrator_connection_string = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
-  main_migrator_connection_string    = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
-  blob_storage_connection_string     = "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage.access_key};SecretKey=${scaleway_iam_api_key.storage.secret_key};ForcePathStyle=true;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
-  signing_key                        = random_bytes.authentication_token_signing_key.base64
-  data_protection_encryption_key     = random_bytes.data_protection_encryption_key.base64
+  database_host                          = "${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port}"
+  app_database_credentials               = "Username=${scaleway_rdb_user.app.name};Password=${random_password.app_user.result};SSL Mode=Require"
+  migrator_database_credentials          = "Username=${scaleway_rdb_user.migrator.name};Password=${random_password.migrator_user.result};SSL Mode=Require"
+  account_database_connection_string     = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
+  main_database_connection_string        = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
+  account_migrator_connection_string     = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
+  main_migrator_connection_string        = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
+  back_office_database_connection_string = "Host=${local.database_host};Database=back_office;${local.app_database_credentials}"
+  back_office_migrator_connection_string = "Host=${local.database_host};Database=back_office;${local.migrator_database_credentials}"
+  blob_storage_connection_string         = "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage.access_key};SecretKey=${scaleway_iam_api_key.storage.secret_key};ForcePathStyle=true;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
+  signing_key                            = random_bytes.authentication_token_signing_key.base64
+  data_protection_encryption_key         = random_bytes.data_protection_encryption_key.base64
 
   # Path-style addressing (s3.<region>.scw.cloud/<bucket>) keeps every Object Storage call on the
   # one hostname the workloads' egress policies admit (cluster-ops/network-policies.yaml);
@@ -854,6 +881,10 @@ locals {
       ConnectionStrings__main-database = local.main_migrator_connection_string
       Database__ApplicationUser        = scaleway_rdb_user.app.name
     }
+    back-office-migrator = {
+      ConnectionStrings__back-office-database = local.back_office_migrator_connection_string
+      Database__ApplicationUser               = scaleway_rdb_user.app.name
+    }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key
       # The CA is public material, but the gateway reads it through Secret Manager like its other
@@ -869,19 +900,22 @@ locals {
       # deployed environments) — hence the blob-storage connection string. It holds the private
       # delegation key but NOT the platform token signing key: the BFF never receives application
       # tokens, so a compromised back-office cannot mint them.
-      ConnectionStrings__blob-storage     = local.blob_storage_connection_string
-      BackOfficeDelegation__SigningKeyPem = tls_private_key.back_office_delegation.private_key_pem_pkcs8
-      data-protection-encryption-key      = local.data_protection_encryption_key
-      InternalTls__CertificatePem         = tls_locally_signed_cert.workload["back-office-api"].cert_pem
-      InternalTls__KeyPem                 = tls_private_key.workload["back-office-api"].private_key_pem
+      ConnectionStrings__back-office-database = local.back_office_database_connection_string
+      ConnectionStrings__blob-storage         = local.blob_storage_connection_string
+      BackOfficeDelegation__SigningKeyPem     = tls_private_key.back_office_delegation.private_key_pem_pkcs8
+      data-protection-encryption-key          = local.data_protection_encryption_key
+      InternalTls__CertificatePem             = tls_locally_signed_cert.workload["back-office-api"].cert_pem
+      InternalTls__KeyPem                     = tls_private_key.workload["back-office-api"].private_key_pem
       # The internal CA (public material) validates account's in-cluster TLS on the BFF's
       # internal API calls, mirroring the app-gateway's trust configuration.
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
-    # The back-office's background work owns no database and no storage. The security checks it
-    # runs need the gateway LB they verify (zone-qualified, as Terraform reports it).
+    # The back-office workers migrate nothing when deployed (the migrator Job does) but run its
+    # data migrations and housekeeping on the back-office database. The security checks they run
+    # need the gateway LB they verify (zone-qualified, as Terraform reports it).
     back-office-workers = {
-      SecurityChecks__GatewayLoadBalancerId = scaleway_lb.gateway.id
+      ConnectionStrings__back-office-database = local.back_office_database_connection_string
+      SecurityChecks__GatewayLoadBalancerId   = scaleway_lb.gateway.id
     }
   }
 

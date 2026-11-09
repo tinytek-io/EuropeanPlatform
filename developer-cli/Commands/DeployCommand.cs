@@ -226,6 +226,7 @@ public sealed partial class DeployCommand : Command
         PrepareClusterForGateway(kubeconfigPath, repositoryRoot);
         ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
         AdoptHandAppliedNetworkPolicies(kubeconfigPath, repositoryRoot);
+        AdmitMigrationJobsUnderTheLivePolicy(kubeconfigPath, repositoryRoot);
         LogInToRegistry(registryHost, credentials);
 
         PrintHeader("Running the Aspire deploy pipeline");
@@ -758,6 +759,51 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine($"  [green]✓[/] {handApplied.Length} hand-applied network policies adopted into the release");
+    }
+
+    // The migration Jobs are pre-upgrade hooks: they run under the policies already in the cluster,
+    // before the release applies its own. The migrator policy therefore has to select the label
+    // every migration Job's pods carry (workload-role: migrator) BEFORE the rollout, or a migrator
+    // new in this release gets the namespace's default-deny and times out reaching Secret Manager
+    // (found live: back-office-migrator's first deploy). The selector set here is the one the chart
+    // sets, so Helm finds the live policy already converged; once a cluster has it, this is a no-op.
+    private static void AdmitMigrationJobsUnderTheLivePolicy(string kubeconfigPath, string repositoryRoot)
+    {
+        const string policyName = "migrators-east-west";
+        const string migratorSelector = """{"key":"k8s:workload-role","operator":"In","values":["migrator"]}""";
+
+        var policiesPath = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "network-policies.yaml");
+        if (!File.ReadAllText(policiesPath).Contains("""- { key: "k8s:workload-role", operator: In, values: [migrator] }"""))
+        {
+            AnsiConsole.MarkupLine($"[red]The {policyName} policy in network-policies.yaml no longer selects workload-role: migrator.[/] Update the deploy's pre-rollout selector to match it.");
+            Environment.Exit(1);
+        }
+
+        var kubectl = $"kubectl --kubeconfig {kubeconfigPath} --namespace default";
+        var live = ProcessHelper.ExecuteQuietly($"{kubectl} get ciliumnetworkpolicy {policyName} --ignore-not-found -o jsonpath={{.spec.endpointSelector}}");
+        if (!live.Success)
+        {
+            AnsiConsole.MarkupLine($"[red]Reading the {policyName} network policy failed:[/] " + Markup.Escape(live.GetErrorSummary("kubectl")));
+            Environment.Exit(live.ExitCode);
+        }
+
+        // Absent on a first install (nothing in the namespace is denied yet), or already converged.
+        if (live.StdOut.Trim().Length == 0 || live.StdOut.Contains("k8s:workload-role"))
+        {
+            return;
+        }
+
+        var patch = """{"spec":{"endpointSelector":{"matchExpressions":[{"key":"k8s:io.kubernetes.pod.namespace","operator":"In","values":["default"]},"""
+                    + migratorSelector + "]}}}";
+        // One quoted argument with escaped quotes: the process argument parser strips bare ones.
+        var result = ProcessHelper.ExecuteQuietly($"{kubectl} patch ciliumnetworkpolicy {policyName} --type=merge -p \"{patch.Replace("\"", "\\\"")}\"");
+        if (!result.Success)
+        {
+            AnsiConsole.MarkupLine($"[red]Admitting the migration Jobs under the {policyName} policy failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"  [green]✓[/] {policyName} now admits every migration Job by its workload-role label");
     }
 
     private static void PrintHeader(string title)

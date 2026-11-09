@@ -1,4 +1,5 @@
 using BackOffice.Authentication;
+using BackOffice.Database;
 using BackOffice.ExecutionContext;
 using BackOffice.Integrations.Account;
 using Microsoft.AspNetCore.Authentication;
@@ -17,15 +18,12 @@ public static class Configuration
     {
         public IHostApplicationBuilder AddBackOfficeInfrastructure()
         {
-            // The back-office owns no database: it is a BFF over the feature systems' internal
-            // APIs. The default blob client is still required: the shared Data Protection keyring
-            // (antiforgery tokens minted here) persists in Object Storage, and AddApiServices
-            // resolves IBlobStorageClient for the keyring repository in deployed environments.
-            // AddSharedTelemetry wires OpenTelemetry plus the Secret Manager configuration
-            // provider (a no-op locally).
-            builder
-                .AddDefaultBlobStorage()
-                .AddSharedTelemetry();
+            // A BFF over the feature systems' internal APIs whose own database holds only the staff
+            // identity state (the OIDC provider's stores and the sign-in codes). The bundle also
+            // registers the default blob client, which the shared Data Protection keyring
+            // (antiforgery tokens minted here) needs in deployed environments, plus telemetry and
+            // the Secret Manager configuration provider (a no-op locally).
+            builder.AddSharedInfrastructure<BackOfficeDbContext>("back-office-database");
 
             // The account internal API client validates account's in-cluster TLS against the
             // Terraform-managed internal CA (a no-op locally, where the ASP.NET development
