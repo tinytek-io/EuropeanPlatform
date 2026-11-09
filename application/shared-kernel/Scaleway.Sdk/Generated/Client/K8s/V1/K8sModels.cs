@@ -179,6 +179,66 @@ public readonly record struct ClusterCni(string Value) : IScalewayEnumValue<Clus
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
+[JsonConverter(typeof(ScalewayEnumValueConverter<ClusterPoolConfigContainerRuntime>))]
+public readonly record struct ClusterPoolConfigContainerRuntime(string Value) : IScalewayEnumValue<ClusterPoolConfigContainerRuntime>
+{
+    /// <remarks>Scaleway value <c>unknown_runtime</c>.</remarks>
+    public static readonly ClusterPoolConfigContainerRuntime UnknownRuntime = new("unknown_runtime");
+    /// <remarks>Scaleway value <c>docker</c>.</remarks>
+    public static readonly ClusterPoolConfigContainerRuntime Docker = new("docker");
+    /// <remarks>Scaleway value <c>containerd</c>.</remarks>
+    public static readonly ClusterPoolConfigContainerRuntime Containerd = new("containerd");
+    /// <remarks>Scaleway value <c>crio</c>.</remarks>
+    public static readonly ClusterPoolConfigContainerRuntime Crio = new("crio");
+
+    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static ClusterPoolConfigContainerRuntime FromValue(string value) => new(value);
+
+    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static implicit operator ClusterPoolConfigContainerRuntime(string value) => new(value);
+
+    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
+    public override string ToString() => Value;
+}
+
+/// <summary>
+///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
+///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
+/// </summary>
+/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
+[JsonConverter(typeof(ScalewayEnumValueConverter<ClusterPoolConfigRootVolumeType>))]
+public readonly record struct ClusterPoolConfigRootVolumeType(string Value) : IScalewayEnumValue<ClusterPoolConfigRootVolumeType>
+{
+    /// <remarks>Scaleway value <c>default_volume_type</c>.</remarks>
+    public static readonly ClusterPoolConfigRootVolumeType DefaultVolumeType = new("default_volume_type");
+    /// <remarks>Scaleway value <c>l_ssd</c>.</remarks>
+    public static readonly ClusterPoolConfigRootVolumeType LSsd = new("l_ssd");
+    /// <remarks>Scaleway value <c>b_ssd</c>.</remarks>
+    public static readonly ClusterPoolConfigRootVolumeType BSsd = new("b_ssd");
+    /// <remarks>Scaleway value <c>sbs_5k</c>.</remarks>
+    public static readonly ClusterPoolConfigRootVolumeType Sbs5k = new("sbs_5k");
+    /// <remarks>Scaleway value <c>sbs_15k</c>.</remarks>
+    public static readonly ClusterPoolConfigRootVolumeType Sbs15k = new("sbs_15k");
+
+    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static ClusterPoolConfigRootVolumeType FromValue(string value) => new(value);
+
+    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static implicit operator ClusterPoolConfigRootVolumeType(string value) => new(value);
+
+    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
+    public override string ToString() => Value;
+}
+
+/// <summary>
+///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
+///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
+/// </summary>
+/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
 [JsonConverter(typeof(ScalewayEnumValueConverter<ClusterStatus>))]
 public readonly record struct ClusterStatus(string Value) : IScalewayEnumValue<ClusterStatus>
 {
@@ -311,66 +371,6 @@ public readonly record struct ListClustersStatus(string Value) : IScalewayEnumVa
     /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
     public static implicit operator ListClustersStatus(string value) => new(value);
-
-    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
-    public override string ToString() => Value;
-}
-
-/// <summary>
-///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
-///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
-/// </summary>
-/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<PoolConfigContainerRuntime>))]
-public readonly record struct PoolConfigContainerRuntime(string Value) : IScalewayEnumValue<PoolConfigContainerRuntime>
-{
-    /// <remarks>Scaleway value <c>unknown_runtime</c>.</remarks>
-    public static readonly PoolConfigContainerRuntime UnknownRuntime = new("unknown_runtime");
-    /// <remarks>Scaleway value <c>docker</c>.</remarks>
-    public static readonly PoolConfigContainerRuntime Docker = new("docker");
-    /// <remarks>Scaleway value <c>containerd</c>.</remarks>
-    public static readonly PoolConfigContainerRuntime Containerd = new("containerd");
-    /// <remarks>Scaleway value <c>crio</c>.</remarks>
-    public static readonly PoolConfigContainerRuntime Crio = new("crio");
-
-    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static PoolConfigContainerRuntime FromValue(string value) => new(value);
-
-    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator PoolConfigContainerRuntime(string value) => new(value);
-
-    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
-    public override string ToString() => Value;
-}
-
-/// <summary>
-///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
-///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
-/// </summary>
-/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<PoolConfigRootVolumeType>))]
-public readonly record struct PoolConfigRootVolumeType(string Value) : IScalewayEnumValue<PoolConfigRootVolumeType>
-{
-    /// <remarks>Scaleway value <c>default_volume_type</c>.</remarks>
-    public static readonly PoolConfigRootVolumeType DefaultVolumeType = new("default_volume_type");
-    /// <remarks>Scaleway value <c>l_ssd</c>.</remarks>
-    public static readonly PoolConfigRootVolumeType LSsd = new("l_ssd");
-    /// <remarks>Scaleway value <c>b_ssd</c>.</remarks>
-    public static readonly PoolConfigRootVolumeType BSsd = new("b_ssd");
-    /// <remarks>Scaleway value <c>sbs_5k</c>.</remarks>
-    public static readonly PoolConfigRootVolumeType Sbs5k = new("sbs_5k");
-    /// <remarks>Scaleway value <c>sbs_15k</c>.</remarks>
-    public static readonly PoolConfigRootVolumeType Sbs15k = new("sbs_15k");
-
-    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static PoolConfigRootVolumeType FromValue(string value) => new(value);
-
-    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator PoolConfigRootVolumeType(string value) => new(value);
 
     /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
     public override string ToString() => Value;
@@ -541,6 +541,15 @@ public sealed record ClusterOpenIdConnectConfig
     public string[]? RequiredClaim { get; init; }
 }
 
+/// <summary>Defines how node provisioning should behave during pool version upgrade.</summary>
+public sealed record ClusterPoolConfigUpgradePolicy
+{
+    /// <summary>The maximum number of nodes that can be `upgrading` at the same time.</summary>
+    public long? MaxUnavailable { get; init; }
+    /// <summary>The maximum number of nodes to be created during the upgrade, e.g. the pool will scale up to reach `size`+`max_surge` before downscaling to `size` after node upgrades.</summary>
+    public long? MaxSurge { get; init; }
+}
+
 /// <remarks>Scaleway schema component <c>scaleway.k8s.v1.CoreV1Taint</c>.</remarks>
 public sealed record CoreV1Taint
 {
@@ -572,7 +581,7 @@ public sealed record CreateClusterRequest : IProjectScopedRequest<CreateClusterR
     /// <summary>Container Network Interface (CNI) plugin running in the cluster.</summary>
     public ClusterCni? Cni { get; init; }
     /// <summary>Pools created along with the cluster.</summary>
-    public List<PoolConfig>? Pools { get; init; }
+    public List<CreateClusterRequestPoolConfig>? Pools { get; init; }
     /// <summary>Autoscaler configuration for the cluster. It allows you to set (to an extent) your preferred autoscaler configuration, which is an implementation of the cluster-autoscaler (https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/).</summary>
     public CreateClusterRequestAutoscalerConfig? AutoscalerConfig { get; init; }
     /// <summary>Auto upgrade configuration of the cluster. This configuration enables to set a specific 2-hour time window in which the cluster can be automatically updated to the latest patch version.</summary>
@@ -650,19 +659,8 @@ public sealed record CreateClusterRequestAutoscalerConfig
     public long? LogLevel { get; init; }
 }
 
-/// <remarks>Scaleway schema component <c>scaleway.std.File</c>.</remarks>
-public sealed record File
-{
-    /// <remarks>Scaleway field <c>name</c>.</remarks>
-    public string? Name { get; init; }
-    /// <remarks>Scaleway field <c>content_type</c>.</remarks>
-    public string? ContentType { get; init; }
-    /// <remarks>Scaleway field <c>content</c>.</remarks>
-    public string? Content { get; init; }
-}
-
 /// <remarks>Scaleway schema component <c>scaleway.k8s.v1.CreateClusterRequest.PoolConfig</c>.</remarks>
-public sealed record PoolConfig
+public sealed record CreateClusterRequestPoolConfig
 {
     /// <summary>Name of the pool.</summary>
     public string? Name { get; init; }
@@ -679,7 +677,7 @@ public sealed record PoolConfig
     /// <summary>Defines the maximum size of the pool. Note that this field is only used when autoscaling is enabled on the pool.</summary>
     public long? MaxSize { get; init; }
     /// <summary>Customization of the container runtime is available for each pool.</summary>
-    public PoolConfigContainerRuntime? ContainerRuntime { get; init; }
+    public ClusterPoolConfigContainerRuntime? ContainerRuntime { get; init; }
     /// <summary>Defines whether the autohealing feature is enabled for the pool.</summary>
     public bool? Autohealing { get; init; }
     /// <summary>Tags associated with the pool, see [managing tags](https://www.scaleway.com/en/docs/kubernetes/api-cli/managing-tags).</summary>
@@ -687,11 +685,11 @@ public sealed record PoolConfig
     /// <summary>Kubelet arguments to be used by this pool. Note that this feature is experimental.</summary>
     public Dictionary<string, string>? KubeletArgs { get; init; }
     /// <summary>Defines how node provisioning should behave during pool version upgrade.</summary>
-    public PoolConfigUpgradePolicy? UpgradePolicy { get; init; }
+    public ClusterPoolConfigUpgradePolicy? UpgradePolicy { get; init; }
     /// <summary>Zone in which the pool's nodes will be spawned.</summary>
     public string? Zone { get; init; }
     /// <summary>Defines the system volume disk type. Several types of volume (`volume_type`) are provided:. * `l_ssd` is a local block storage which means your system is stored locally on your node's hypervisor. This type is not available for all node types * `sbs_5k` is a remote block storage which means your system is stored on a centralized and resilient cluster with 5k IOPS limits * `sbs_15k` is a faster remote block storage which means your system is stored on a centralized and resilient cluster with 15k IOPS limits * `b_ssd` is the legacy remote block storage which means your system is stored on a centralized and resilient cluster. Not available for new pools, use `sbs_5k` or `sbs_15k` instead.</summary>
-    public PoolConfigRootVolumeType? RootVolumeType { get; init; }
+    public ClusterPoolConfigRootVolumeType? RootVolumeType { get; init; }
     /// <summary>System volume disk size. (in bytes)</summary>
     public long? RootVolumeSize { get; init; }
     /// <summary>Defines if the public IP should be removed from Nodes. To use this feature, your Cluster must have an attached Private Network set up with a Public Gateway.</summary>
@@ -706,13 +704,15 @@ public sealed record PoolConfig
     public List<CoreV1Taint>? StartupTaints { get; init; }
 }
 
-/// <summary>Defines how node provisioning should behave during pool version upgrade.</summary>
-public sealed record PoolConfigUpgradePolicy
+/// <remarks>Scaleway schema component <c>scaleway.std.File</c>.</remarks>
+public sealed record File
 {
-    /// <summary>The maximum number of nodes that can be `upgrading` at the same time.</summary>
-    public long? MaxUnavailable { get; init; }
-    /// <summary>The maximum number of nodes to be created during the upgrade, e.g. the pool will scale up to reach `size`+`max_surge` before downscaling to `size` after node upgrades.</summary>
-    public long? MaxSurge { get; init; }
+    /// <remarks>Scaleway field <c>name</c>.</remarks>
+    public string? Name { get; init; }
+    /// <remarks>Scaleway field <c>content_type</c>.</remarks>
+    public string? ContentType { get; init; }
+    /// <remarks>Scaleway field <c>content</c>.</remarks>
+    public string? Content { get; init; }
 }
 
 /// <remarks>Body of <c>PATCH /k8s/v1/regions/{region}/clusters/{id}</c> (Scaleway operation <c>UpdateCluster</c>).</remarks>

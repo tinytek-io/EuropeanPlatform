@@ -30,12 +30,12 @@ public sealed class ScalewayTransactionalEmailClient(HttpClient httpClient, ILog
         var request = new ScwTem.CreateEmailRequest
         {
             From = new ScwTem.EmailFrom { Email = _senderEmail },
-            To = [new ScwTem.Address { Email = message.Recipient }],
+            To = [new ScwTem.CreateEmailRequestAddress { Email = message.Recipient }],
             Subject = message.Subject,
             Text = message.PlainTextBody,
             Html = message.HtmlBody,
             ProjectId = _projectId,
-            AdditionalHeaders = message.Headers?.Select(header => new ScwTem.Header { Key = header.Key, Value = header.Value }).ToList()
+            AdditionalHeaders = message.Headers?.Select(header => new ScwTem.CreateEmailRequestHeader { Key = header.Key, Value = header.Value }).ToList()
         };
 
         // The recipient address is PII and logs are exported to Cockpit, so only its domain is logged.

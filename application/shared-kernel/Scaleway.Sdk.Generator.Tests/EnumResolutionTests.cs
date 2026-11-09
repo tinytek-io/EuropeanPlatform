@@ -32,6 +32,17 @@ public sealed class EnumResolutionTests
         api.Enums.Count(parsedEnum => parsedEnum.Name.EndsWith("Privacy", StringComparison.Ordinal)).Should().Be(1, "one concept, one type");
     }
 
+    [Fact]
+    public void NestedComponentsSharingALastSegment_KeepTheirOwnValues()
+    {
+        // Transactional Email declares Domain.Status and Email.Status. Named by their last segment alone they were one
+        // "Status", and the domain's status was generated with the email statuses (sending, sent, ...).
+        var api = SchemaSource.ParseClientApi("transactional-email", File.ReadAllText(SchemaFiles.SchemaPath("transactional-email")))!;
+
+        api.Enums.Single(parsedEnum => parsedEnum.Name == "DomainStatus").Values.Should().Contain("checked").And.NotContain("sending");
+        api.Enums.Single(parsedEnum => parsedEnum.Name == "EmailStatus").Values.Should().Contain("sending").And.NotContain("checked");
+    }
+
     [Theory]
     [InlineData("""{ "type": "string", "enum": [] }""")]
     [InlineData("""{ "type": "string", "enum": [1, 2] }""")]

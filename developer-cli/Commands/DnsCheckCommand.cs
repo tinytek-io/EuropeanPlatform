@@ -27,9 +27,7 @@ namespace DeveloperCli.Commands;
 /// </remarks>
 public sealed partial class DnsCheckCommand : Command
 {
-    // Transactional Email's domain statuses (the SDK's generated DomainStatus carries the email statuses instead).
-    private const string ValidatedEmailDomainStatus = "checked";
-    private static readonly string[] InProgressEmailDomainStatuses = ["unchecked", "pending", "autoconfiguring"];
+    private static readonly ScwTem.DomainStatus[] InProgressEmailDomainStatuses = [ScwTem.DomainStatus.Unchecked, ScwTem.DomainStatus.Pending, ScwTem.DomainStatus.Autoconfiguring];
 
     private static readonly TimeSpan EmailDomainCheckTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan EmailDomainCheckPollInterval = TimeSpan.FromSeconds(5);
@@ -169,20 +167,20 @@ public sealed partial class DnsCheckCommand : Command
                 continue;
             }
 
-            if (domain.Status?.Value != ValidatedEmailDomainStatus && !domainsWithDrift.Contains(regionAndId))
+            if (domain.Status != ScwTem.DomainStatus.Checked && !domainsWithDrift.Contains(regionAndId))
             {
                 domain = await WaitForEmailDomainCheckAsync(temApi, domainId, region);
             }
 
-            var status = domain.Status?.Value ?? "unknown";
+            var status = domain.Status ?? ScwTem.DomainStatus.Unknown;
             var error = string.IsNullOrWhiteSpace(domain.LastError) ? "" : $" Scaleway reports: {domain.LastError}";
-            if (status == ValidatedEmailDomainStatus)
+            if (status == ScwTem.DomainStatus.Checked)
             {
                 AnsiConsole.MarkupLine($"[green]Transactional Email has validated {Markup.Escape(domain.Name ?? domainId)}[/]: mail from it is accepted.");
             }
             else if (domainsWithDrift.Contains(regionAndId))
             {
-                AnsiConsole.MarkupLine($"[red]Transactional Email refuses mail from {Markup.Escape(domain.Name ?? domainId)}[/] (status {Markup.Escape(status)}) until the records above resolve; it is checked once they do.");
+                AnsiConsole.MarkupLine($"[red]Transactional Email refuses mail from {Markup.Escape(domain.Name ?? domainId)}[/] (status {Markup.Escape(status.Value)}) until the records above resolve; it is checked once they do.");
             }
             else if (InProgressEmailDomainStatuses.Contains(status))
             {
@@ -190,7 +188,7 @@ public sealed partial class DnsCheckCommand : Command
             }
             else
             {
-                AnsiConsole.MarkupLine($"[red]Transactional Email did not validate {Markup.Escape(domain.Name ?? domainId)}[/] (status {Markup.Escape(status)}), so it refuses mail from it.{Markup.Escape(error)}");
+                AnsiConsole.MarkupLine($"[red]Transactional Email did not validate {Markup.Escape(domain.Name ?? domainId)}[/] (status {Markup.Escape(status.Value)}), so it refuses mail from it.{Markup.Escape(error)}");
                 failures++;
             }
         }
@@ -203,7 +201,7 @@ public sealed partial class DnsCheckCommand : Command
     {
         var domain = await temApi.CheckDomainAsync(domainId, region);
         var deadline = DateTimeOffset.UtcNow + EmailDomainCheckTimeout;
-        while (domain.Status?.Value is not ValidatedEmailDomainStatus && DateTimeOffset.UtcNow < deadline)
+        while (domain.Status != ScwTem.DomainStatus.Checked && DateTimeOffset.UtcNow < deadline)
         {
             await Task.Delay(EmailDomainCheckPollInterval);
             domain = await temApi.GetDomainAsync(domainId, region) ?? domain;

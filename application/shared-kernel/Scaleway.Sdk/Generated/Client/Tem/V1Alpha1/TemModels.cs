@@ -187,14 +187,22 @@ public readonly record struct DomainReputationStatus(string Value) : IScalewayEn
 [JsonConverter(typeof(ScalewayEnumValueConverter<DomainStatus>))]
 public readonly record struct DomainStatus(string Value) : IScalewayEnumValue<DomainStatus>
 {
-    /// <remarks>Scaleway value <c>unknown_status</c>.</remarks>
-    public static readonly DomainStatus UnknownStatus = new("unknown_status");
-    /// <remarks>Scaleway value <c>sending</c>.</remarks>
-    public static readonly DomainStatus Sending = new("sending");
-    /// <remarks>Scaleway value <c>sent</c>.</remarks>
-    public static readonly DomainStatus Sent = new("sent");
-    /// <remarks>Scaleway value <c>failed</c>.</remarks>
-    public static readonly DomainStatus Failed = new("failed");
+    /// <remarks>Scaleway value <c>unknown</c>.</remarks>
+    public static readonly DomainStatus Unknown = new("unknown");
+    /// <remarks>Scaleway value <c>checked</c>.</remarks>
+    public static readonly DomainStatus Checked = new("checked");
+    /// <remarks>Scaleway value <c>unchecked</c>.</remarks>
+    public static readonly DomainStatus Unchecked = new("unchecked");
+    /// <remarks>Scaleway value <c>invalid</c>.</remarks>
+    public static readonly DomainStatus Invalid = new("invalid");
+    /// <remarks>Scaleway value <c>locked</c>.</remarks>
+    public static readonly DomainStatus Locked = new("locked");
+    /// <remarks>Scaleway value <c>revoked</c>.</remarks>
+    public static readonly DomainStatus Revoked = new("revoked");
+    /// <remarks>Scaleway value <c>pending</c>.</remarks>
+    public static readonly DomainStatus Pending = new("pending");
+    /// <remarks>Scaleway value <c>autoconfiguring</c>.</remarks>
+    public static readonly DomainStatus Autoconfiguring = new("autoconfiguring");
 
     /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
@@ -284,14 +292,18 @@ public readonly record struct EmailRcptType(string Value) : IScalewayEnumValue<E
 [JsonConverter(typeof(ScalewayEnumValueConverter<EmailStatus>))]
 public readonly record struct EmailStatus(string Value) : IScalewayEnumValue<EmailStatus>
 {
-    /// <remarks>Scaleway value <c>unknown_status</c>.</remarks>
-    public static readonly EmailStatus UnknownStatus = new("unknown_status");
+    /// <remarks>Scaleway value <c>unknown</c>.</remarks>
+    public static readonly EmailStatus Unknown = new("unknown");
+    /// <remarks>Scaleway value <c>new</c>.</remarks>
+    public static readonly EmailStatus New = new("new");
     /// <remarks>Scaleway value <c>sending</c>.</remarks>
     public static readonly EmailStatus Sending = new("sending");
     /// <remarks>Scaleway value <c>sent</c>.</remarks>
     public static readonly EmailStatus Sent = new("sent");
     /// <remarks>Scaleway value <c>failed</c>.</remarks>
     public static readonly EmailStatus Failed = new("failed");
+    /// <remarks>Scaleway value <c>canceled</c>.</remarks>
+    public static readonly EmailStatus Canceled = new("canceled");
 
     /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
@@ -350,26 +362,6 @@ public readonly record struct ListEmailsOrderBy(string Value) : IScalewayEnumVal
     public override string ToString() => Value;
 }
 
-/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Address</c>.</remarks>
-public sealed record Address
-{
-    /// <summary>Email address.</summary>
-    public string? Email { get; init; }
-    /// <summary>(Optional) Name displayed.</summary>
-    public string? Name { get; init; }
-}
-
-/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Attachment</c>.</remarks>
-public sealed record Attachment
-{
-    /// <summary>Filename of the attachment.</summary>
-    public string? Name { get; init; }
-    /// <summary>MIME type of the attachment.</summary>
-    public string? Type { get; init; }
-    /// <summary>Content of the attachment encoded in base64.</summary>
-    public string? Content { get; init; }
-}
-
 /// <remarks>Body of <c>POST /transactional-email/v1alpha1/regions/{region}/domains</c> (Scaleway operation <c>CreateDomain</c>).</remarks>
 public sealed record CreateDomainRequest : IProjectScopedRequest<CreateDomainRequest>
 {
@@ -393,11 +385,11 @@ public sealed record CreateEmailRequest : IProjectScopedRequest<CreateEmailReque
     /// <summary>Sender information. Must be from a checked domain declared in the Project.</summary>
     public EmailFrom? From { get; init; }
     /// <summary>An array of the primary recipient's information.</summary>
-    public List<Address>? To { get; init; }
+    public List<CreateEmailRequestAddress>? To { get; init; }
     /// <summary>An array of the carbon copy recipient's information.</summary>
-    public List<Address>? Cc { get; init; }
+    public List<CreateEmailRequestAddress>? Cc { get; init; }
     /// <summary>An array of the blind carbon copy recipient's information.</summary>
-    public List<Address>? Bcc { get; init; }
+    public List<CreateEmailRequestAddress>? Bcc { get; init; }
     /// <summary>Subject of the email.</summary>
     public string? Subject { get; init; }
     /// <summary>Text content.</summary>
@@ -407,15 +399,44 @@ public sealed record CreateEmailRequest : IProjectScopedRequest<CreateEmailReque
     /// <summary>ID of the Project in which to create the email. (UUID format)</summary>
     public string? ProjectId { get; init; }
     /// <summary>Array of attachments.</summary>
-    public List<Attachment>? Attachments { get; init; }
+    public List<CreateEmailRequestAttachment>? Attachments { get; init; }
     /// <summary>Maximum date to deliver the email. (RFC 3339 format)</summary>
     public DateTimeOffset? SendBefore { get; init; }
     /// <summary>Array of additional headers as key-value.</summary>
-    public List<Header>? AdditionalHeaders { get; init; }
+    public List<CreateEmailRequestHeader>? AdditionalHeaders { get; init; }
 
     /// <summary>Returns a copy carrying <c>project_id</c>. A scoped client calls this before sending, so a caller never repeats the id.</summary>
     /// <param name="projectId">The value to stamp on the copy. An explicit value already on this record is not overwritten by the client.</param>
     public CreateEmailRequest WithProjectId(string projectId) => this with { ProjectId = projectId };
+}
+
+/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Address</c>.</remarks>
+public sealed record CreateEmailRequestAddress
+{
+    /// <summary>Email address.</summary>
+    public string? Email { get; init; }
+    /// <summary>(Optional) Name displayed.</summary>
+    public string? Name { get; init; }
+}
+
+/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Attachment</c>.</remarks>
+public sealed record CreateEmailRequestAttachment
+{
+    /// <summary>Filename of the attachment.</summary>
+    public string? Name { get; init; }
+    /// <summary>MIME type of the attachment.</summary>
+    public string? Type { get; init; }
+    /// <summary>Content of the attachment encoded in base64.</summary>
+    public string? Content { get; init; }
+}
+
+/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Header</c>.</remarks>
+public sealed record CreateEmailRequestHeader
+{
+    /// <summary>Email header key.</summary>
+    public string? Key { get; init; }
+    /// <summary>Email header value.</summary>
+    public string? Value { get; init; }
 }
 
 /// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailResponse</c>.</remarks>
@@ -645,7 +666,7 @@ public sealed record Email
     /// <summary>Number of attempts to send the email.</summary>
     public long? TryCount { get; init; }
     /// <summary>Information about the last three attempts to send the email.</summary>
-    public List<Try>? LastTries { get; init; }
+    public List<EmailTry>? LastTries { get; init; }
     /// <summary>Flags categorize emails. They allow you to obtain more information about recurring errors, for example.</summary>
     public List<EmailFlag>? Flags { get; init; }
 }
@@ -659,17 +680,8 @@ public sealed record EmailFrom
     public string? Name { get; init; }
 }
 
-/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.CreateEmailRequest.Header</c>.</remarks>
-public sealed record Header
-{
-    /// <summary>Email header key.</summary>
-    public string? Key { get; init; }
-    /// <summary>Email header value.</summary>
-    public string? Value { get; init; }
-}
-
 /// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.Email.Try</c>.</remarks>
-public sealed record Try
+public sealed record EmailTry
 {
     /// <summary>Rank number of this attempt to send the email.</summary>
     public long? Rank { get; init; }

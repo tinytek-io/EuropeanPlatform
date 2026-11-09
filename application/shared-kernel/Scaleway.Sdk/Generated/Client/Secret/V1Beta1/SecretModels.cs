@@ -45,6 +45,39 @@ public readonly record struct AccessSecretVersionResponseType(string Value) : IS
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
+[JsonConverter(typeof(ScalewayEnumValueConverter<ListSecretsOrderBy>))]
+public readonly record struct ListSecretsOrderBy(string Value) : IScalewayEnumValue<ListSecretsOrderBy>
+{
+    /// <remarks>Scaleway value <c>name_asc</c>.</remarks>
+    public static readonly ListSecretsOrderBy NameAsc = new("name_asc");
+    /// <remarks>Scaleway value <c>name_desc</c>.</remarks>
+    public static readonly ListSecretsOrderBy NameDesc = new("name_desc");
+    /// <remarks>Scaleway value <c>created_at_asc</c>.</remarks>
+    public static readonly ListSecretsOrderBy CreatedAtAsc = new("created_at_asc");
+    /// <remarks>Scaleway value <c>created_at_desc</c>.</remarks>
+    public static readonly ListSecretsOrderBy CreatedAtDesc = new("created_at_desc");
+    /// <remarks>Scaleway value <c>updated_at_asc</c>.</remarks>
+    public static readonly ListSecretsOrderBy UpdatedAtAsc = new("updated_at_asc");
+    /// <remarks>Scaleway value <c>updated_at_desc</c>.</remarks>
+    public static readonly ListSecretsOrderBy UpdatedAtDesc = new("updated_at_desc");
+
+    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static ListSecretsOrderBy FromValue(string value) => new(value);
+
+    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static implicit operator ListSecretsOrderBy(string value) => new(value);
+
+    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
+    public override string ToString() => Value;
+}
+
+/// <summary>
+///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
+///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
+/// </summary>
+/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
 [JsonConverter(typeof(ScalewayEnumValueConverter<ListSecretsType>))]
 public readonly record struct ListSecretsType(string Value) : IScalewayEnumValue<ListSecretsType>
 {
@@ -70,39 +103,6 @@ public readonly record struct ListSecretsType(string Value) : IScalewayEnumValue
     /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
     public static implicit operator ListSecretsType(string value) => new(value);
-
-    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
-    public override string ToString() => Value;
-}
-
-/// <summary>
-///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
-///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
-/// </summary>
-/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<OrderBy>))]
-public readonly record struct OrderBy(string Value) : IScalewayEnumValue<OrderBy>
-{
-    /// <remarks>Scaleway value <c>name_asc</c>.</remarks>
-    public static readonly OrderBy NameAsc = new("name_asc");
-    /// <remarks>Scaleway value <c>name_desc</c>.</remarks>
-    public static readonly OrderBy NameDesc = new("name_desc");
-    /// <remarks>Scaleway value <c>created_at_asc</c>.</remarks>
-    public static readonly OrderBy CreatedAtAsc = new("created_at_asc");
-    /// <remarks>Scaleway value <c>created_at_desc</c>.</remarks>
-    public static readonly OrderBy CreatedAtDesc = new("created_at_desc");
-    /// <remarks>Scaleway value <c>updated_at_asc</c>.</remarks>
-    public static readonly OrderBy UpdatedAtAsc = new("updated_at_asc");
-    /// <remarks>Scaleway value <c>updated_at_desc</c>.</remarks>
-    public static readonly OrderBy UpdatedAtDesc = new("updated_at_desc");
-
-    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static OrderBy FromValue(string value) => new(value);
-
-    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
-    /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator OrderBy(string value) => new(value);
 
     /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
     public override string ToString() => Value;
@@ -484,7 +484,7 @@ public sealed record ListSecretsRequest : IProjectScopedRequest<ListSecretsReque
     /// <summary>Filter by Project ID (optional). (UUID format)</summary>
     public string? ProjectId { get; init; }
     /// <remarks>Scaleway field <c>order_by</c>.</remarks>
-    public OrderBy? OrderBy { get; init; }
+    public ListSecretsOrderBy? OrderBy { get; init; }
     /// <remarks>Scaleway field <c>page</c>.</remarks>
     public long? Page { get; init; }
     /// <remarks>Scaleway field <c>page_size</c>.</remarks>

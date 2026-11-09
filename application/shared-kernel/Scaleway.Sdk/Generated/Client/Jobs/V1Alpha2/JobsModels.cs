@@ -98,21 +98,21 @@ public readonly record struct JobRunState(string Value) : IScalewayEnumValue<Job
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<OrderBy>))]
-public readonly record struct OrderBy(string Value) : IScalewayEnumValue<OrderBy>
+[JsonConverter(typeof(ScalewayEnumValueConverter<ListJobDefinitionsOrderBy>))]
+public readonly record struct ListJobDefinitionsOrderBy(string Value) : IScalewayEnumValue<ListJobDefinitionsOrderBy>
 {
     /// <remarks>Scaleway value <c>created_at_asc</c>.</remarks>
-    public static readonly OrderBy CreatedAtAsc = new("created_at_asc");
+    public static readonly ListJobDefinitionsOrderBy CreatedAtAsc = new("created_at_asc");
     /// <remarks>Scaleway value <c>created_at_desc</c>.</remarks>
-    public static readonly OrderBy CreatedAtDesc = new("created_at_desc");
+    public static readonly ListJobDefinitionsOrderBy CreatedAtDesc = new("created_at_desc");
 
     /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static OrderBy FromValue(string value) => new(value);
+    public static ListJobDefinitionsOrderBy FromValue(string value) => new(value);
 
     /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator OrderBy(string value) => new(value);
+    public static implicit operator ListJobDefinitionsOrderBy(string value) => new(value);
 
     /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
     public override string ToString() => Value;
@@ -123,37 +123,21 @@ public readonly record struct OrderBy(string Value) : IScalewayEnumValue<OrderBy
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<State>))]
-public readonly record struct State(string Value) : IScalewayEnumValue<State>
+[JsonConverter(typeof(ScalewayEnumValueConverter<ListJobRunsOrderBy>))]
+public readonly record struct ListJobRunsOrderBy(string Value) : IScalewayEnumValue<ListJobRunsOrderBy>
 {
-    /// <remarks>Scaleway value <c>unknown_state</c>.</remarks>
-    public static readonly State UnknownState = new("unknown_state");
-    /// <remarks>Scaleway value <c>initialized</c>.</remarks>
-    public static readonly State Initialized = new("initialized");
-    /// <remarks>Scaleway value <c>validated</c>.</remarks>
-    public static readonly State Validated = new("validated");
-    /// <remarks>Scaleway value <c>queued</c>.</remarks>
-    public static readonly State Queued = new("queued");
-    /// <remarks>Scaleway value <c>running</c>.</remarks>
-    public static readonly State Running = new("running");
-    /// <remarks>Scaleway value <c>succeeded</c>.</remarks>
-    public static readonly State Succeeded = new("succeeded");
-    /// <remarks>Scaleway value <c>failed</c>.</remarks>
-    public static readonly State Failed = new("failed");
-    /// <remarks>Scaleway value <c>interrupting</c>.</remarks>
-    public static readonly State Interrupting = new("interrupting");
-    /// <remarks>Scaleway value <c>interrupted</c>.</remarks>
-    public static readonly State Interrupted = new("interrupted");
-    /// <remarks>Scaleway value <c>retrying</c>.</remarks>
-    public static readonly State Retrying = new("retrying");
+    /// <remarks>Scaleway value <c>created_at_asc</c>.</remarks>
+    public static readonly ListJobRunsOrderBy CreatedAtAsc = new("created_at_asc");
+    /// <remarks>Scaleway value <c>created_at_desc</c>.</remarks>
+    public static readonly ListJobRunsOrderBy CreatedAtDesc = new("created_at_desc");
 
     /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static State FromValue(string value) => new(value);
+    public static ListJobRunsOrderBy FromValue(string value) => new(value);
 
     /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator State(string value) => new(value);
+    public static implicit operator ListJobRunsOrderBy(string value) => new(value);
 
     /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
     public override string ToString() => Value;
@@ -337,7 +321,7 @@ public sealed record ListJobDefinitionsRequest : IProjectScopedRequest<ListJobDe
     /// <remarks>Scaleway field <c>page_size</c>.</remarks>
     public long? PageSize { get; init; }
     /// <remarks>Scaleway field <c>order_by</c>.</remarks>
-    public OrderBy? OrderBy { get; init; }
+    public ListJobDefinitionsOrderBy? OrderBy { get; init; }
     /// <remarks>Scaleway field <c>project_id</c>.</remarks>
     public string? ProjectId { get; init; }
     /// <remarks>Scaleway field <c>organization_id</c>.</remarks>
@@ -376,7 +360,7 @@ public sealed record ListJobRunsRequest : IProjectScopedRequest<ListJobRunsReque
     /// <remarks>Scaleway field <c>page_size</c>.</remarks>
     public long? PageSize { get; init; }
     /// <remarks>Scaleway field <c>order_by</c>.</remarks>
-    public OrderBy? OrderBy { get; init; }
+    public ListJobRunsOrderBy? OrderBy { get; init; }
     /// <remarks>Scaleway field <c>job_definition_id</c>.</remarks>
     public string? JobDefinitionId { get; init; }
     /// <remarks>Scaleway field <c>project_id</c>.</remarks>
@@ -384,7 +368,7 @@ public sealed record ListJobRunsRequest : IProjectScopedRequest<ListJobRunsReque
     /// <remarks>Scaleway field <c>organization_id</c>.</remarks>
     public string? OrganizationId { get; init; }
     /// <remarks>Scaleway field <c>state</c>.</remarks>
-    public State? State { get; init; }
+    public JobRunState? State { get; init; }
     /// <remarks>Scaleway field <c>states</c>.</remarks>
     public List<JobRunState>? States { get; init; }
     /// <remarks>Scaleway field <c>reasons</c>.</remarks>

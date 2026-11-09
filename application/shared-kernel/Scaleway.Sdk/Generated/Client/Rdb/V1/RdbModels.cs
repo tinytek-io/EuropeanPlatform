@@ -270,25 +270,25 @@ public readonly record struct StorageClass(string Value) : IScalewayEnumValue<St
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
-[JsonConverter(typeof(ScalewayEnumValueConverter<Type>))]
-public readonly record struct Type(string Value) : IScalewayEnumValue<Type>
+[JsonConverter(typeof(ScalewayEnumValueConverter<VolumeType>))]
+public readonly record struct VolumeType(string Value) : IScalewayEnumValue<VolumeType>
 {
     /// <remarks>Scaleway value <c>lssd</c>.</remarks>
-    public static readonly Type Lssd = new("lssd");
+    public static readonly VolumeType Lssd = new("lssd");
     /// <remarks>Scaleway value <c>bssd</c>.</remarks>
-    public static readonly Type Bssd = new("bssd");
+    public static readonly VolumeType Bssd = new("bssd");
     /// <remarks>Scaleway value <c>sbs_5k</c>.</remarks>
-    public static readonly Type Sbs5k = new("sbs_5k");
+    public static readonly VolumeType Sbs5k = new("sbs_5k");
     /// <remarks>Scaleway value <c>sbs_15k</c>.</remarks>
-    public static readonly Type Sbs15k = new("sbs_15k");
+    public static readonly VolumeType Sbs15k = new("sbs_15k");
 
     /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static Type FromValue(string value) => new(value);
+    public static VolumeType FromValue(string value) => new(value);
 
     /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
     /// <param name="value">The wire value, as Scaleway spells it.</param>
-    public static implicit operator Type(string value) => new(value);
+    public static implicit operator VolumeType(string value) => new(value);
 
     /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
     public override string ToString() => Value;
@@ -637,7 +637,7 @@ public sealed record InstanceSetting
 public sealed record InstanceVolume
 {
     /// <remarks>Scaleway field <c>type</c>.</remarks>
-    public Type? Type { get; init; }
+    public VolumeType? Type { get; init; }
     /// <summary>(in bytes)</summary>
     public long? Size { get; init; }
     /// <remarks>Scaleway field <c>class</c>.</remarks>

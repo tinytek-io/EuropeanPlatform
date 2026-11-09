@@ -416,9 +416,17 @@ public static class OpenApiClientParser
         };
     }
 
+    /// <summary>
+    ///     The name a component is known by in generated code: everything after its API version segment, so a nested
+    ///     component keeps its parent (<c>scaleway.transactional_email.v1alpha1.Domain.Status</c> is
+    ///     <c>DomainStatus</c>). Taking only the last segment made <c>Domain.Status</c> and <c>Email.Status</c> one
+    ///     <c>Status</c>, and every reference to the domain's status resolved to the email statuses. A component without
+    ///     a version segment (<c>google.protobuf.StringValue</c>) keeps its last segment.
+    /// </summary>
     internal static string ShortName(string reference)
     {
-        var lastDot = reference.LastIndexOf('.');
-        return lastDot >= 0 ? reference[(lastDot + 1)..] : reference[(reference.LastIndexOf('/') + 1)..];
+        var segments = reference[(reference.LastIndexOf('/') + 1)..].Split('.');
+        var versionIndex = Array.FindLastIndex(segments, segment => segment.Length > 1 && segment[0] == 'v' && char.IsDigit(segment[1]));
+        return versionIndex >= 0 && versionIndex < segments.Length - 1 ? string.Concat(segments[(versionIndex + 1)..]) : segments[^1];
     }
 }
