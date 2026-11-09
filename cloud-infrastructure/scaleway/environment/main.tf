@@ -789,9 +789,13 @@ locals {
   main_database_connection_string    = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
   account_migrator_connection_string = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
   main_migrator_connection_string    = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
-  blob_storage_connection_string     = "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage.access_key};SecretKey=${scaleway_iam_api_key.storage.secret_key};ForcePathStyle=false;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
+  blob_storage_connection_string     = "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage.access_key};SecretKey=${scaleway_iam_api_key.storage.secret_key};ForcePathStyle=true;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
   signing_key                        = random_bytes.authentication_token_signing_key.base64
   data_protection_encryption_key     = random_bytes.data_protection_encryption_key.base64
+
+  # Path-style addressing (s3.<region>.scw.cloud/<bucket>) keeps every Object Storage call on the
+  # one hostname the workloads' egress policies admit (cluster-ops/network-policies.yaml);
+  # virtual-hosted URLs (<bucket>.s3.<region>.scw.cloud) are dropped there and hang at connect.
 
   # Secret NAME = .NET configuration key (double underscore flattens to a section separator).
   base_workload_secrets = {

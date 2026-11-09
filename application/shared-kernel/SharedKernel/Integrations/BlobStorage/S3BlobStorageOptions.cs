@@ -4,7 +4,7 @@ namespace SharedKernel.Integrations.BlobStorage;
 ///     Connection details for an S3-compatible object store (Scaleway Object Storage in production,
 ///     SeaweedFS in local development), expressed as a single connection string so it flows through the
 ///     existing `ConnectionStrings:blob-storage` configuration key and deploy-time secret inputs.
-///     Format: `ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=...;SecretKey=...;Region=fr-par;ForcePathStyle=false`.
+///     Format: `ServiceUrl=https://s3.fr-par.scw.cloud;AccessKey=...;SecretKey=...;Region=fr-par;ForcePathStyle=true`.
 /// </summary>
 /// <remarks>
 ///     Scaleway's bucket namespace is shared across all customers of a region (unlike its projects),
