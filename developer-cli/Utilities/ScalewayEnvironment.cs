@@ -147,6 +147,19 @@ public static partial class ScalewayEnvironment
         return null!;
     }
 
+    /// <summary>
+    ///     The generated SDK's client for a resolved environment, for the commands that act inside its project
+    ///     (<c>CreateClient(...).WithProject(...)</c>). Unlike the lookups below it fails with the SDK's own exceptions.
+    /// </summary>
+    public static ScalewayClient CreateClient(ScalewayCredentials credentials, string organizationId)
+    {
+        return new ScalewayClient(new ScalewayCredentialConfig
+            {
+                AccessKey = credentials.AccessKey, SecretKey = credentials.SecretKey, OrganizationId = OrganizationId.Parse(organizationId)
+            }
+        );
+    }
+
     /// <summary>Who owns the key (a user, or an IAM application) and its preferred project.</summary>
     public static Task<ScwIam.APIKey> GetApiKeyAsync(ScalewayCredentials credentials)
     {

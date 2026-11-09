@@ -11,6 +11,12 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Added
 
+- **Edge Services** (`v1beta1`) — `ScalewayProjectClient.EdgeServices` (`Scaleway.Sdk.EdgeServices.V1Beta1`):
+  pipelines and their DNS, TLS, cache, WAF and backend stages with full CRUD, plus the list-only head stages. Each
+  stage is listed and created under its pipeline and addressed at its own path. The API is global, so no call takes
+  a region; listing pipelines fills `project_id` from the project scope. Route stages, purge requests, plans and
+  billing are not generated.
+
 - **Load Balancer** (zoned API, `v1`) — `ScalewayProjectClient.LoadBalancers` (`Scaleway.Sdk.Lb.V1`): Load
   Balancers, their frontends and ACLs, with List, Get, Create and Delete. Frontends are listed under their Load
   Balancer and ACLs under their frontend. Update is not generated for any of the three: Scaleway updates them with
@@ -166,6 +172,10 @@ may include breaking changes in minor releases; each is called out under `Change
   after the cluster had already been created. Two generated fields change type; `integer` is unaffected.
 
 ### Changed
+
+- The identifier parameter of a resource group whose name starts with an acronym is lower-cased as a whole:
+  `apiKeyId` instead of `aPIKeyId` on IAM's API key operations, `vpcId` instead of `vPCId` on VPC's. Only callers
+  that pass the identifier as a named argument are affected.
 
 - Every generated resource group is claimed at `StructurallyConformant` in the manifest and the README's coverage
   table. Twelve groups (IAM, VPC, Secret Manager, Serverless Containers, Managed Databases, Redis, Registry

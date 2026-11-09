@@ -11,7 +11,7 @@ All Scaleway API calls go through `Scaleway.Sdk`, whose typed clients are genera
 
 1. Never hand-write a Scaleway API path or build your own `HttpClient` for the Scaleway API. Use the generated clients through the entry points:
    - `ScalewayClient` (organization-scoped): `Iam`, `Projects`
-   - `ScalewayProjectClient` (from `ScalewayClient.WithProject`): `Containers`, `Databases`, `Jobs`, `Kubernetes`, `LoadBalancers`, `Redis`, `Registry`, `Secrets`, `Tem`, `Vpc`
+   - `ScalewayProjectClient` (from `ScalewayClient.WithProject`): `Containers`, `Databases`, `EdgeServices`, `Jobs`, `Kubernetes`, `LoadBalancers`, `Redis`, `Registry`, `Secrets`, `Tem`, `Vpc`
    - Code that holds no organization (for example a worker given only a project) constructs the generated `*Api` directly on a `ScalewayApiClient` and names the project on the request
 2. When an operation is missing, extend the generator rather than falling back to a raw path:
    - Add the resource group to `SchemaSource.ClientResourceGroups`, or the exact `operationId` to `SchemaSource.ClientActionOperations` for a body-less GET or empty-body POST action
@@ -29,7 +29,6 @@ All Scaleway API calls go through `Scaleway.Sdk`, whose typed clients are genera
 
 Known exceptions to rule 1, each to be removed rather than copied:
 
-- Edge Services (`edge-services/v1beta1`) in `ScalewaySecurityInventoryClient`, `DeployCommand` and `EdgeHealthCommand`: its schema is not checked in yet
 - Transactional Email offer subscriptions in `ScalewayEnvironment.EnsureEmailOfferAsync`: a `PATCH` on the collection itself, which the CRUD matcher does not model; it uses the SDK transport
 - `ScalewayPricingCatalogClient`'s product-catalog path
 

@@ -9,7 +9,8 @@ namespace BackOffice.Tests.SecurityChecks;
 
 /// <summary>
 ///     Feeds the inventory client Scaleway-shaped responses for every path it reads, so a mapping mistake between the
-///     generated Load Balancer models and the snapshots the checks evaluate fails here rather than in a deployed worker.
+///     generated Load Balancer and Edge Services models and the snapshots the checks evaluate fails here rather than in a
+///     deployed worker.
 /// </summary>
 public sealed class ScalewaySecurityInventoryClientTests
 {
@@ -24,11 +25,15 @@ public sealed class ScalewaySecurityInventoryClientTests
         ["/lb/v1/zones/fr-par-1/lbs/11111111-1111-1111-1111-111111111111/frontends"] = """{ "frontends": [{ "id": "frontend-443", "name": "app-https", "inbound_port": 443 }], "total_count": 1 }""",
         ["/lb/v1/zones/fr-par-1/frontends/frontend-443/acls"] =
             """{ "acls": [{ "name": "edge-only", "index": 0, "action": { "type": "deny" }, "match": { "ips_edge_services": true, "invert": true, "ip_subnet": [] } }], "total_count": 1 }""",
-        ["/edge-services/v1beta1/pipelines"] = """{ "pipelines": [], "total_count": 0 }"""
+        ["/edge-services/v1beta1/pipelines"] = """{ "pipelines": [{ "id": "pipeline-1", "name": "staging-app", "status": "ready", "errors": [] }], "total_count": 1 }""",
+        ["/edge-services/v1beta1/pipelines/pipeline-1/waf-stages"] =
+            """{ "stages": [{ "id": "waf-1", "mode": "log_only", "exclusion_rules": [{ "rule_id": 942100 }, { "rule_id": 920350 }] }], "total_count": 1 }""",
+        ["/edge-services/v1beta1/pipelines/pipeline-1/tls-stages"] = """{ "stages": [{ "id": "tls-1", "backend_stage_id": "backend-1" }], "total_count": 1 }""",
+        ["/edge-services/v1beta1/pipelines/pipeline-1/cache-stages"] = """{ "stages": [{ "id": "cache-1", "waf_stage_id": "waf-1" }], "total_count": 1 }"""
     };
 
     [Fact]
-    public async Task ReadAsync_WhenScalewayReturnsTheGateway_ShouldMapLoadBalancersFrontendsAndAcls()
+    public async Task ReadAsync_WhenScalewayReturnsTheGateway_ShouldMapLoadBalancersFrontendsAclsAndEdgePipelines()
     {
         // Arrange
         Environment.SetEnvironmentVariable("SCW_DEFAULT_PROJECT_ID", ProjectId);
@@ -46,8 +51,9 @@ public sealed class ScalewaySecurityInventoryClientTests
         inventory.LoadBalancers.Should().BeEquivalentTo([new LoadBalancerSnapshot(GatewayId, "gateway", ["51.15.0.1"])]);
         var frontend = inventory.GatewayFrontends.Should().ContainSingle().Subject;
         frontend.Should().BeEquivalentTo(new FrontendSnapshot("frontend-443", "app-https", 443, [new AclSnapshot("edge-only", 0, "deny", true, true, [])]));
-        inventory.EdgePipelines.Should().BeEmpty();
-        handler.RequestedUris.Where(uri => uri.AbsolutePath.EndsWith("/lbs")).Should().OnlyContain(uri => uri.Query.Contains($"project_id={ProjectId}"));
+        inventory.EdgePipelines.Should().BeEquivalentTo([new EdgePipelineSnapshot("pipeline-1", "staging-app", [new WafStageSnapshot("waf-1", "log_only", 2)], ["tls-1"])]);
+        handler.RequestedUris.Where(uri => uri.AbsolutePath.EndsWith("/lbs") || uri.AbsolutePath.EndsWith("/pipelines"))
+            .Should().OnlyContain(uri => uri.Query.Contains($"project_id={ProjectId}"));
     }
 
     private sealed class RecordedResponsesHandler(Dictionary<string, string> responses) : HttpMessageHandler

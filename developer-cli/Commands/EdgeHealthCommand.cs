@@ -6,9 +6,10 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.Json.Nodes;
 using DeveloperCli.Utilities;
+using Scaleway.Sdk;
 using Spectre.Console;
+using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
 
 namespace DeveloperCli.Commands;
 
@@ -20,16 +21,12 @@ namespace DeveloperCli.Commands;
 ///     (the provider's head_stage Read is a no-op) nor the deploy pipeline surfaces that.
 /// </summary>
 /// <remarks>
-///     Uses the raw edge-services HTTP API rather than the generated SDK: the endpoints needed
-///     (head-stages in particular) are not cherry-picked into Scaleway.Sdk yet, and scw has no
-///     head-stage command at all. It acts with the environment's operator key (the scw profile the
-///     bootstrap command writes, or SCW_ACCESS_KEY/SCW_SECRET_KEY when exported) and checks only the
-///     environment's own project.
+///     Reads through the generated Edge Services client (scw has no head-stage command at all). It acts
+///     with the environment's operator key (the scw profile the bootstrap command writes, or
+///     SCW_ACCESS_KEY/SCW_SECRET_KEY when exported) and checks only the environment's own project.
 /// </remarks>
 public sealed class EdgeHealthCommand : Command
 {
-    private const string ApiBaseUrl = "https://api.scaleway.com/edge-services/v1beta1";
-
     // Managed edge certificates are 90-day Let's Encrypt certificates that Scaleway renews on its
     // own, conventionally around 30 days before expiry. One that still has fewer than 21 days left
     // has missed its renewal, which leaves three weeks for a person to act (the deploy never
@@ -59,10 +56,10 @@ public sealed class EdgeHealthCommand : Command
     {
         var resolved = await ScalewayEnvironment.ResolveAsync(environment);
 
-        using var httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Add("X-Auth-Token", resolved.Credentials.SecretKey);
+        using var scaleway = ScalewayEnvironment.CreateClient(resolved.Credentials, resolved.OrganizationId);
+        var edgeServices = scaleway.WithProject(ProjectId.Parse(resolved.ProjectId)).EdgeServices;
 
-        var pipelines = await ListPipelinesAsync(httpClient, resolved.ProjectId);
+        var pipelines = await edgeServices.ListPipelinesAsync();
         if (pipelines.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]Error:[/] no Edge Services pipelines found.");
@@ -73,32 +70,24 @@ public sealed class EdgeHealthCommand : Command
 
         var failures = 0;
 
-        foreach (var (pipelineId, pipelineName) in pipelines)
+        foreach (var pipeline in pipelines)
         {
-            AnsiConsole.MarkupLine($"[bold]{pipelineName}[/] ([dim]{pipelineId}[/])");
+            AnsiConsole.MarkupLine($"[bold]{(pipeline.Name ?? pipeline.Id ?? "").EscapeMarkup()}[/] ([dim]{pipeline.Id}[/])");
 
-            var pipelineChecks = new List<(string Check, bool Passed, string Detail)>
-            {
-                await CheckPipelineStatusAsync(httpClient, pipelineId)
-            };
+            var pipelineChecks = new List<(string Check, bool Passed, string Detail)> { PipelineStatusCheck(pipeline) };
 
-            var stages = await ListStagesAsync(httpClient, pipelineId);
+            var stages = await ListStagesAsync(edgeServices, pipeline.Id!);
             pipelineChecks.Add(HeadStageCheck(stages));
             pipelineChecks.AddRange(StageChecks(stages));
 
             failures += RenderChecks(pipelineChecks);
 
-            var hostnames = stages.DnsStages
-                .Where(stage => stage["type"]?.GetValue<string>() == "custom")
-                .SelectMany(GetFqdns)
-                .ToList();
+            var customDnsStages = stages.DnsStages.Where(stage => stage.Type == ScwEdge.DNSStageType.Custom).ToList();
+            var hostnames = customDnsStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
 
             // The pipeline's endpoint: recreated pipelines get a new one, which silently orphans
             // every CNAME still pointing at the old endpoint (the API exposes no stable alias).
-            var pipelineEndpoint = stages.DnsStages
-                .Where(stage => stage["type"]?.GetValue<string>() == "custom")
-                .Select(stage => stage["default_fqdn"]?.GetValue<string>())
-                .FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
+            var pipelineEndpoint = customDnsStages.Select(stage => stage.DefaultFqdn).FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
 
             foreach (var hostname in hostnames)
             {
@@ -123,59 +112,33 @@ public sealed class EdgeHealthCommand : Command
         AnsiConsole.MarkupLine("[green]All edge health checks passed.[/]");
     }
 
-    private static async Task<List<(string Id, string Name)>> ListPipelinesAsync(HttpClient httpClient, string projectId)
+    // The listing carries each pipeline's status and errors, so no per-pipeline read is needed.
+    private static (string Check, bool Passed, string Detail) PipelineStatusCheck(ScwEdge.Pipeline pipeline)
     {
-        var url = $"{ApiBaseUrl}/pipelines?page_size=100&project_id={projectId}";
-        var pipelines = await ReadJsonArrayAsync(httpClient, url, "pipelines");
-        return pipelines
-            .Select(node => (node["id"]!.GetValue<string>(), node["name"]?.GetValue<string>() ?? node["id"]!.GetValue<string>()))
-            .ToList();
+        var messages = pipeline.Errors is { Count: > 0 }
+            ? string.Join("; ", pipeline.Errors.Select(error => $"{error.Code}: {error.Message}"))
+            : null;
+
+        if (pipeline.Status != ScwEdge.PipelineStatus.Ready)
+        {
+            return ("pipeline status", false, messages is null ? $"status is '{pipeline.Status}', expected 'ready'" : $"status is '{pipeline.Status}', expected 'ready' ({messages})");
+        }
+
+        return messages is null
+            ? ("pipeline status", true, "ready, no errors")
+            : ("pipeline status", false, $"status ready but has errors: {messages}");
     }
 
-    private static async Task<(string Check, bool Passed, string Detail)> CheckPipelineStatusAsync(HttpClient httpClient, string pipelineId)
+    private static async Task<PipelineStages> ListStagesAsync(ScwEdge.EdgeServicesApi edgeServices, string pipelineId)
     {
-        try
-        {
-            var pipeline = await ReadJsonAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}");
-            var status = pipeline["status"]?.GetValue<string>();
-            var errors = pipeline["errors"]?.AsArray();
-            var messages = errors is { Count: > 0 }
-                ? string.Join("; ", errors.Select(error => $"{error?["code"]?.GetValue<string>()}: {error?["message"]?.GetValue<string>()}"))
-                : null;
-
-            if (status != "ready")
-            {
-                return ("pipeline status", false, messages is null ? $"status is '{status}', expected 'ready'" : $"status is '{status}', expected 'ready' ({messages})");
-            }
-
-            if (messages is not null)
-            {
-                return ("pipeline status", false, $"status ready but has errors: {messages}");
-            }
-
-            return ("pipeline status", true, "ready, no errors");
-        }
-        catch (Exception exception)
-        {
-            return ("pipeline status", false, exception.Message);
-        }
-    }
-
-    private static async Task<PipelineStages> ListStagesAsync(HttpClient httpClient, string pipelineId)
-    {
-        async Task<List<JsonNode>> StageList(string stageType)
-        {
-            return await ReadJsonArrayAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}/{stageType}-stages", "stages");
-        }
-
-        var dns = await StageList("dns");
-        var tls = await StageList("tls");
-        var cache = await StageList("cache");
-        var waf = await StageList("waf");
-        var backend = await StageList("backend");
-        var heads = await ReadJsonArrayAsync(httpClient, $"{ApiBaseUrl}/pipelines/{pipelineId}/head-stages", "head_stages");
-
-        return new PipelineStages(dns, tls, cache, waf, backend, heads);
+        return new PipelineStages(
+            await edgeServices.ListDnsStagesAsync(pipelineId),
+            await edgeServices.ListTlsStagesAsync(pipelineId),
+            (await edgeServices.ListCacheStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            (await edgeServices.ListWafStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            (await edgeServices.ListBackendStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            await edgeServices.ListHeadStagesAsync(pipelineId)
+        );
     }
 
     /// <summary>
@@ -190,36 +153,28 @@ public sealed class EdgeHealthCommand : Command
             return ("head stage", false, "no head stage — the pipeline has no entry point and will not serve");
         }
 
-        var headDnsStageId = stages.HeadStages[0]["dns_stage_id"]?.GetValue<string>();
-        var headExists = stages.DnsStages.Any(stage => stage["id"]?.GetValue<string>() == headDnsStageId);
+        var headDnsStageId = stages.HeadStages[0].DnsStageId;
+        var headExists = stages.DnsStages.Any(stage => stage.Id == headDnsStageId);
         return headExists
             ? ("head stage", true, $"head points at DNS stage {headDnsStageId?[..8]}")
             : ("head stage", false, $"head points at DNS stage '{headDnsStageId}' which does not exist (stale head)");
     }
 
-    private static List<string> GetFqdns(JsonNode stage)
-    {
-        var fqdns = stage["fqdns"]?.AsArray();
-        return fqdns is null
-            ? []
-            : fqdns.Select(fqdn => fqdn?.GetValue<string>()).OfType<string>().ToList();
-    }
-
     private static IEnumerable<(string Check, bool Passed, string Detail)> StageChecks(PipelineStages stages)
     {
         // DNS: the custom stage carries the FQDNs this pipeline serves; it must be active.
-        var customDns = stages.DnsStages.Where(stage => stage["type"]?.GetValue<string>() == "custom").ToList();
+        var customDns = stages.DnsStages.Where(stage => stage.Type == ScwEdge.DNSStageType.Custom).ToList();
         if (customDns.Count == 0)
         {
             yield return ("dns stage", false, "no custom DNS stage");
         }
         else
         {
-            var fqdns = customDns.SelectMany(GetFqdns).ToList();
-            var active = customDns.All(stage => stage["status"]?.GetValue<string>() == "active");
+            var fqdns = customDns.SelectMany(stage => stage.Fqdns ?? []).ToList();
+            var active = customDns.All(stage => stage.Status == ScwEdge.StageStatus.Active);
             yield return active && fqdns.Count > 0
                 ? ("dns stage", true, $"active, serving {string.Join(", ", fqdns)}")
-                : ("dns stage", false, $"status '{string.Join(",", customDns.Select(stage => stage["status"]?.GetValue<string>()))}', fqdns: [{string.Join(", ", fqdns)}]");
+                : ("dns stage", false, $"status '{string.Join(",", customDns.Select(stage => stage.Status))}', fqdns: [{string.Join(", ", fqdns)}]");
         }
 
         // TLS: active is not enough — the managed certificate must have materialized as a secret
@@ -232,23 +187,22 @@ public sealed class EdgeHealthCommand : Command
         }
         else
         {
-            var secretCount = tls["secrets"]?.AsArray().Count ?? 0;
-            var status = tls["status"]?.GetValue<string>();
-            yield return status == "active" && secretCount > 0
+            var secretCount = tls.Secrets?.Count ?? 0;
+            yield return tls.Status == ScwEdge.StageStatus.Active && secretCount > 0
                 ? ("tls stage", true, $"active, certificate materialized ({secretCount} secret(s))")
-                : ("tls stage", false, $"status '{status}', certificate secrets: {secretCount} (managed certificate did not issue)");
+                : ("tls stage", false, $"status '{tls.Status}', certificate secrets: {secretCount} (managed certificate did not issue)");
         }
 
-        foreach (var (name, nodes) in new[] { ("cache stage", stages.CacheStages), ("waf stage", stages.WafStages), ("backend stage", stages.BackendStages) })
+        foreach (var (name, statuses) in new[] { ("cache stage", stages.CacheStageStatuses), ("waf stage", stages.WafStageStatuses), ("backend stage", stages.BackendStageStatuses) })
         {
-            if (nodes.Count == 0)
+            if (statuses.Count == 0)
             {
                 yield return (name, false, $"no {name.Split(' ')[0]} stage");
                 continue;
             }
 
-            var status = nodes[0]["status"]?.GetValue<string>();
-            yield return status == "active"
+            var status = statuses[0];
+            yield return status == ScwEdge.StageStatus.Active
                 ? (name, true, "active")
                 : (name, false, $"status '{status}'");
         }
@@ -432,37 +386,12 @@ public sealed class EdgeHealthCommand : Command
         return failures;
     }
 
-    private static async Task<JsonNode> ReadJsonAsync(HttpClient httpClient, string url)
-    {
-        using var response = await httpClient.GetAsync(url);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"{(int)response.StatusCode} {response.ReasonPhrase} from {url}");
-        }
-
-        var content = await response.Content.ReadAsStringAsync();
-        return JsonNode.Parse(content) ?? throw new HttpRequestException($"empty response from {url}");
-    }
-
-    private static async Task<List<JsonNode>> ReadJsonArrayAsync(HttpClient httpClient, string url, string propertyName)
-    {
-        using var response = await httpClient.GetAsync(url);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"{(int)response.StatusCode} {response.ReasonPhrase} from {url}");
-        }
-
-        var content = await response.Content.ReadAsStringAsync();
-        var node = JsonNode.Parse(content) ?? throw new HttpRequestException($"empty response from {url}");
-        return node[propertyName]?.AsArray().Where(item => item is not null).Select(item => item!).ToList() ?? [];
-    }
-
     private sealed record PipelineStages(
-        List<JsonNode> DnsStages,
-        List<JsonNode> TlsStages,
-        List<JsonNode> CacheStages,
-        List<JsonNode> WafStages,
-        List<JsonNode> BackendStages,
-        List<JsonNode> HeadStages
+        IReadOnlyList<ScwEdge.DNSStage> DnsStages,
+        IReadOnlyList<ScwEdge.TLSStage> TlsStages,
+        List<ScwEdge.StageStatus?> CacheStageStatuses,
+        List<ScwEdge.StageStatus?> WafStageStatuses,
+        List<ScwEdge.StageStatus?> BackendStageStatuses,
+        IReadOnlyList<ScwEdge.ListHeadStagesResponseHeadStage> HeadStages
     );
 }
