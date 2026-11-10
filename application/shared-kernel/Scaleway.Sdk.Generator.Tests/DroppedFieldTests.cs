@@ -31,6 +31,33 @@ public sealed class DroppedFieldTests
     }
 
     [Fact]
+    public void AnUntypedArray_TakesTheElementTypeOfTheSameNamedTypedArray()
+    {
+        // Scaleway's update bodies declare a nullable array without items while the resource still types it.
+        var schema = Vpc("\"tags\": { \"type\": [\"array\", \"null\"] }", "\"tags\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } }");
+
+        var api = SchemaSource.ParseClientApi("vpc", schema)!;
+
+        var request = api.Records.Single(record => record.Name == "CreatePrivateNetworkRequest");
+        request.Fields.Should().Contain(field => field.Name == "tags" && field.CSharpType == "string[]?");
+        api.DroppedFields.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AnUntypedArray_WhoseNameIsTypedTwoWays_IsStillDropped()
+    {
+        var schema = Vpc(
+            "\"tags\": { \"type\": [\"array\", \"null\"] }",
+            "\"tags\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } }",
+            "\"tags\": { \"type\": \"array\", \"items\": { \"type\": \"integer\" } }"
+        );
+
+        var api = SchemaSource.ParseClientApi("vpc", schema)!;
+
+        api.DroppedFields.Should().ContainSingle().Which.FieldName.Should().Be("tags");
+    }
+
+    [Fact]
     public void AFieldWithNoType_IsStillDropped()
     {
         var api = SchemaSource.ParseClientApi("vpc", Vpc("\"mystery\": { \"description\": \"no type here\" }"))!;
@@ -58,16 +85,22 @@ public sealed class DroppedFieldTests
         dropped.Should().ContainSingle().Which.FieldName.Should().Be("mystery");
     }
 
-    private static string Vpc(string extraProperty = "")
+    private static string Vpc(string extraProperty = "", string privateNetworkProperty = "", string routeProperty = "")
     {
         var extra = extraProperty.Length > 0 ? $", {extraProperty}" : "";
+        var privateNetworkExtra = privateNetworkProperty.Length > 0 ? $", {privateNetworkProperty}" : "";
+        var routeExtra = routeProperty.Length > 0 ? $", {routeProperty}" : "";
         return $$"""
                  {
                    "components": {
                      "schemas": {
                        "scaleway.vpc.v2.PrivateNetwork": {
                          "type": "object",
-                         "properties": { "id": { "type": "string" } }
+                         "properties": { "id": { "type": "string" }{{privateNetworkExtra}} }
+                       },
+                       "scaleway.vpc.v2.Route": {
+                         "type": "object",
+                         "properties": { "id": { "type": "string" }{{routeExtra}} }
                        }
                      }
                    },

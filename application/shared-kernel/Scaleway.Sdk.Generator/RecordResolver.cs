@@ -15,6 +15,10 @@ internal sealed class RecordResolver
     private readonly Dictionary<string, ParsedRecord> _records = new(StringComparer.Ordinal);
     private readonly Dictionary<string, JsonElement> _schemasByShortName = new(StringComparer.Ordinal);
 
+    // Every array property a component declares with its items, by property name: the element type an untyped
+    // array of the same name can borrow. Built from components only, which is where Scaleway still types them.
+    private readonly Dictionary<string, List<JsonElement>> _typedArraysByPropertyName = new(StringComparer.Ordinal);
+
     public RecordResolver(JsonElement schemas)
     {
         foreach (var schema in schemas.EnumerateObject())
@@ -24,6 +28,7 @@ internal sealed class RecordResolver
             // Records are keyed by the short final segment; the dotted name Scaleway publishes is kept so a
             // generated type can point at the component it came from.
             _componentNamesByShortName[shortName] = schema.Name;
+            IndexTypedArrays(schema.Value);
         }
     }
 
@@ -151,7 +156,8 @@ internal sealed class RecordResolver
         {
             foreach (var property in properties.EnumerateObject())
             {
-                var csharpType = ResolveType(property.Value, name + CSharpNaming.ToPascalCase(property.Name));
+                var contextName = name + CSharpNaming.ToPascalCase(property.Name);
+                var csharpType = ResolveType(property.Value, contextName) ?? ResolveUntypedArray(property.Name, property.Value, contextName);
                 if (csharpType is not null)
                 {
                     // "x-one-of" marks the property as one alternative of a mutually-exclusive group.
@@ -168,6 +174,40 @@ internal sealed class RecordResolver
         }
 
         return fields;
+    }
+
+    /// <summary>
+    ///     An array declared without <c>items</c> borrows the element type every typed array of the same name in the
+    ///     schema agrees on. Scaleway's OpenAPI 3.1 documents mark a nullable array <c>[array, "null"]</c> and, in
+    ///     inline request bodies, drop its <c>items</c> (an update request's <c>tags</c>, <c>fqdns</c> or
+    ///     <c>command</c>), while the resource component it updates still types the same field. A name typed two
+    ///     different ways is left untyped, and the field is reported as dropped rather than guessed.
+    /// </summary>
+    private string? ResolveUntypedArray(string propertyName, JsonElement schema, string contextName)
+    {
+        if (SchemaType(schema) != "array" || schema.TryGetProperty("items", out _)) return null;
+        if (!_typedArraysByPropertyName.TryGetValue(propertyName, out var typedArrays)) return null;
+
+        var distinctItems = typedArrays.Select(typedArray => typedArray.GetProperty("items").GetRawText()).Distinct().Count();
+        return distinctItems == 1 ? ResolveType(typedArrays[0], contextName) : null;
+    }
+
+    private void IndexTypedArrays(JsonElement componentSchema)
+    {
+        if (!componentSchema.TryGetProperty("properties", out var properties)) return;
+
+        foreach (var property in properties.EnumerateObject())
+        {
+            if (SchemaType(property.Value) != "array" || !property.Value.TryGetProperty("items", out _)) continue;
+
+            if (!_typedArraysByPropertyName.TryGetValue(property.Name, out var typedArrays))
+            {
+                typedArrays = [];
+                _typedArraysByPropertyName[property.Name] = typedArrays;
+            }
+
+            typedArrays.Add(property.Value);
+        }
     }
 
     /// <summary>

@@ -661,6 +661,8 @@ public sealed record CreateFrontendRequest
     public double? TimeoutClient { get; init; }
     /// <summary>Certificate ID, deprecated in favor of certificate_ids array.</summary>
     public string? CertificateId { get; init; }
+    /// <summary>List of SSL/TLS certificate IDs to bind to the frontend.</summary>
+    public string[]? CertificateIds { get; init; }
     /// <summary>Defines whether to enable HTTP/3 protocol on the frontend.</summary>
     public bool? EnableHttp3 { get; init; }
     /// <summary>Rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.</summary>

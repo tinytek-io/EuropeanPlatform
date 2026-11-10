@@ -142,6 +142,11 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Fixed
 
+- An array field declared without `items` takes the element type the same-named typed array elsewhere in the schema
+  agrees on, instead of being dropped. Scaleway's OpenAPI 3.1 documents mark nullable arrays `[array, "null"]` and
+  omit `items` in inline request bodies, which had dropped `UpdateDnsStageRequest.Fqdns`,
+  `CreateDnsStageRequest.Fqdns` and the Load Balancer's `CreateFrontendRequest.CertificateIds`.
+
 - `BREAKING:` nested schema components are named after their parent. A component was named by its last dotted
   segment alone, so `Domain.Status` and `Email.Status` in Transactional Email were one `Status`, and every reference
   to the domain's status resolved to the email statuses: `Domain.Status` was typed with `sending`/`sent` and could not

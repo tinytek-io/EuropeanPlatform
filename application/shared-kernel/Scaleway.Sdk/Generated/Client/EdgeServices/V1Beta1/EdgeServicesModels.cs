@@ -532,6 +532,8 @@ public sealed record CreateCacheStageRequest
 /// <remarks>Body of <c>POST /edge-services/v1beta1/pipelines/{pipeline_id}/dns-stages</c> (Scaleway operation <c>CreateDNSStage</c>).</remarks>
 public sealed record CreateDnsStageRequest
 {
+    /// <summary>Custom Fully Qualified Domain Name to be configured (only 1 FQDN can be setup for now).</summary>
+    public string[]? Fqdns { get; init; }
     /// <summary>TLS stage ID the DNS stage will be linked to. (UUID format) Precisely one of tls_stage_id, cache_stage_id, backend_stage_id can be set.</summary>
     public string? TlsStageId { get; init; }
     /// <summary>Cache stage ID the DNS stage will be linked to. (UUID format) Precisely one of tls_stage_id, cache_stage_id, backend_stage_id can be set.</summary>
@@ -776,6 +778,8 @@ public sealed record UpdateCacheStageRequest
 /// <remarks>Body of <c>PATCH /edge-services/v1beta1/dns-stages/{id}</c> (Scaleway operation <c>UpdateDNSStage</c>).</remarks>
 public sealed record UpdateDnsStageRequest
 {
+    /// <summary>Custom Fully Qualified Domain Name to be configured (only 1 FQDN can be setup for now).</summary>
+    public string[]? Fqdns { get; init; }
     /// <summary>TLS stage ID the DNS stage will be linked to. (UUID format) Precisely one of tls_stage_id, cache_stage_id, backend_stage_id can be set.</summary>
     public string? TlsStageId { get; init; }
     /// <summary>Cache stage ID the DNS stage will be linked to. (UUID format) Precisely one of tls_stage_id, cache_stage_id, backend_stage_id can be set.</summary>
