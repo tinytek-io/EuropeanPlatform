@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using AppHost;
+using AppHost.Deployment;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using BackOffice.Authentication.MockSignIn;
@@ -60,6 +61,10 @@ if (isPublishMode)
     var registryRepository = builder.Configuration["Registry:Repository"]
                              ?? throw new InvalidOperationException("Publish mode requires Registry:Repository (the deploy passes the bootstrap module's registry namespace).");
     builder.AddContainerRegistry("scaleway-registry", registryEndpoint, registryRepository);
+
+    // What the cluster needs before the Helm rollout (Gateway API, Cilium, the registry pull secret, the network
+    // policies the release adopts, stale certificate challenges), as steps helm-deploy-kubernetes waits for.
+    builder.AddClusterPreparationSteps(registryEndpoint, builder.Configuration["Registry:PullSecretKey"]);
 }
 
 // Deployed workloads read their secrets from Scaleway Secret Manager: each workload runs with its

@@ -8,11 +8,12 @@ cluster (staging today, and again for production/review clusters):
 
 Kapsule ships Cilium with its Gateway API controller off (`enable-gateway-api`,
 `enable-gateway-api-secrets-sync`, `enable-envoy-config`), without the operator RBAC for
-`gateway.networking.k8s.io`, and without the Gateway API and Cilium Envoy CRDs. The deploy command
-converges all of it before every rollout (`DeployCommand.PrepareClusterForGateway`): it applies the
-Gateway API standard CRDs and the Cilium Envoy CRDs (versions pinned in the command), sets the three
-`cilium-config` keys, applies `gateway-api.yaml` (GatewayClass and RBAC), and restarts Cilium only
-when something changed. A Kapsule Cilium upgrade that reverts `cilium-config` is undone by the next
+`gateway.networking.k8s.io`, and without the Gateway API and Cilium Envoy CRDs. The deploy
+converges all of it before every rollout, in the AppHost's `prepare-gateway-api-kubernetes` pipeline
+step (`application/AppHost/Deployment/ClusterPreparationSteps.cs`): it applies the Gateway API
+standard CRDs and the Cilium Envoy CRDs (versions pinned in the step), sets the `cilium-config` keys
+(the Gateway API controller and the MTU), applies `gateway-api.yaml` (GatewayClass and RBAC), and
+restarts Cilium only when something changed. A Kapsule Cilium upgrade that reverts `cilium-config` is undone by the next
 deploy. Bump the pinned Cilium version with Kapsule's.
 
 ## 4. cert-manager — NO LONGER MANUAL
@@ -85,8 +86,9 @@ goes green. Verify with the §6 checks plus one deploy.
 ## 6c. Registry pull secret (per environment, once — then deploy-owned)
 
 The registry namespace is private; Kapsule nodes have no native registry authentication. The
-deploy command applies the `scaleway-registry-pull` dockerconfigjson Secret (from the bootstrap
-module's read-only registry-pull identity) on every deploy, and the generated chart's workloads
+deploy applies the `scaleway-registry-pull` dockerconfigjson Secret (from the bootstrap module's
+read-only registry-pull identity) on every deploy, in the AppHost's
+`apply-registry-pull-secret-kubernetes` pipeline step, and the generated chart's workloads
 reference it via `imagePullSecrets`. Nothing to do by hand as long as deploys run; after the
 first deploy with the secret, verify pulls authenticate:
 

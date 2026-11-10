@@ -1,8 +1,6 @@
 using System.CommandLine;
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
@@ -36,11 +34,6 @@ public sealed partial class DeployCommand : Command
     /// </summary>
     private const int RegistryTagsToKeep = 3;
 
-    // The Gateway API CRDs and the Cilium version whose Envoy CRDs the cluster gets; bump the Cilium
-    // one with Kapsule's Cilium version.
-    private const string GatewayApiVersion = "v1.6.1";
-    private const string CiliumVersion = "v1.20.2";
-
     // The staff identity file an environment starts from when it has none; {0} is the Terraform environment.
     private const string EmptyStaffIdentityTemplate = """
                                                       # The {0} staff identity: who may sign in to the back-office, and which tools may sign them in.
@@ -52,7 +45,6 @@ public sealed partial class DeployCommand : Command
 
     private static readonly TimeSpan EdgeCertificateIssuanceTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan EdgeCertificatePollInterval = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan StaleChallengeMinimumAge = TimeSpan.FromMinutes(10);
 
     public DeployCommand() : base(
         "deploy",
@@ -225,22 +217,14 @@ public sealed partial class DeployCommand : Command
             AnsiConsole.MarkupLine($"  [green]✓[/] {system} SPA bundle consistent");
         }
 
-        // The registry namespace is private: the cluster pulls workload images through a
-        // dockerconfigjson Secret built from the bootstrap module's read-only registry-pull
-        // identity (Kapsule nodes have no native registry authentication; the environment module
-        // passes the bootstrap's registry outputs through). Applied idempotently here — before the
-        // release's first pod pulls — so every deploy converges the Secret to the current pull key.
-        PrintHeader("Applying the cluster's registry pull secret");
-
+        // The cluster itself is prepared by the AppHost's pipeline steps before the Helm rollout (Gateway API,
+        // Cilium, the registry pull secret, network policy adoption, stale certificate challenges); see
+        // application/AppHost/Deployment/ClusterPreparationSteps.cs. The deploy hands them the kubeconfig and the
+        // read-only registry pull key.
         var registryEndpoint = await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_endpoint");
         var registryHost = registryEndpoint.Split('/')[0];
         var registryPullSecretKey = await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_pull_secret_key");
         var kubeconfigPath = WriteSecretTempFile($"pp-{terraformEnvironment}-kubeconfig-{Guid.NewGuid():N}.yaml", kubeconfig);
-        PrepareClusterForGateway(kubeconfigPath, repositoryRoot);
-        ApplyRegistryPullSecret(kubeconfigPath, registryHost, registryPullSecretKey);
-        AdoptHandAppliedNetworkPolicies(kubeconfigPath, repositoryRoot);
-        AdmitMigrationJobsUnderTheLivePolicy(kubeconfigPath, repositoryRoot);
-        ClearStaleCertificateChallenges(kubeconfigPath);
         LogInToRegistry(registryHost, credentials);
 
         PrintHeader("Running the Aspire deploy pipeline");
@@ -267,6 +251,7 @@ public sealed partial class DeployCommand : Command
             ("Scaleway__Region", region),
             ("Registry__Endpoint", registryHost),
             ("Registry__Repository", registryEndpoint[(registryHost.Length + 1)..]),
+            ("Registry__PullSecretKey", registryPullSecretKey),
             ("Storage__Endpoint", storageEndpoint),
             ("Storage__BucketPrefix", bucketPrefix),
             // The network policies in the chart admit database egress to exactly this endpoint.
@@ -619,120 +604,6 @@ public sealed partial class DeployCommand : Command
         AnsiConsole.MarkupLine($"  [green]✓[/] Docker logged in to {registryHost}");
     }
 
-    // The dockerconfigjson Secret the generated chart's imagePullSecrets reference. The pull key
-    // exists on disk only in the owner-only temp manifest, only for the duration of the apply.
-    // Kapsule ships Cilium with its Gateway API controller off and without the Gateway API and Envoy
-    // CRDs, and the release's Gateway, HTTPRoutes, and BackendTLSPolicies need all of them; it also pins
-    // Cilium's MTU below the Private Network's (see the mtu setting). Every step is idempotent, so the
-    // deploy converges a fresh cluster and re-converges one after a Kapsule upgrade (which may revert
-    // cilium-config). Cilium is restarted only when something changed.
-    private static void PrepareClusterForGateway(string kubeconfigPath, string repositoryRoot)
-    {
-        PrintHeader("Preparing the cluster for the Gateway API");
-
-        var kubectl = $"kubectl --kubeconfig {kubeconfigPath}";
-        string[] customResourceDefinitions =
-        [
-            $"https://github.com/kubernetes-sigs/gateway-api/releases/download/{GatewayApiVersion}/standard-install.yaml",
-            $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumenvoyconfigs.yaml",
-            $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwideenvoyconfigs.yaml"
-        ];
-        var changed = customResourceDefinitions.Aggregate(false, (current, manifest) => KubectlApply(kubectl, $"apply -f {manifest}", "the CRDs from " + manifest) || current);
-
-        var configuration = ProcessHelper.ExecuteQuietly($"{kubectl} get configmap cilium-config -n kube-system -o jsonpath={{.data}}");
-        ExitOnFailure(configuration, "Reading cilium-config");
-        var currentSettings = JsonSerializer.Deserialize<Dictionary<string, string>>(configuration.StdOut)!;
-        var requiredSettings = new Dictionary<string, string>
-        {
-            ["enable-gateway-api"] = "true",
-            ["enable-gateway-api-secrets-sync"] = "true",
-            ["enable-envoy-config"] = "true",
-            // Cilium treats `mtu` as the underlying network's MTU and subtracts the VXLAN overhead itself for
-            // pod routes. Kapsule pins it to 1450, which sizes cilium_host/cilium_net at 1450 while the Private
-            // Network carries 1500. Envoy receives the Load Balancer's traffic through those devices, so full
-            // 1500-byte packets were dropped silently and requests just over one packet hung until the edge's
-            // 60-second timeout. 1500 is the Private Network's real MTU, and tunnel routes become 1450.
-            ["mtu"] = "1500"
-        };
-        if (requiredSettings.Any(setting => currentSettings.GetValueOrDefault(setting.Key) != setting.Value))
-        {
-            // A patch file, not -p: the process runs without a shell, so a quoted JSON argument
-            // would not survive argument parsing.
-            var patchFile = Path.Combine(Path.GetTempPath(), $"pp-cilium-config-patch-{Guid.NewGuid():N}.json");
-            File.WriteAllText(patchFile, JsonSerializer.Serialize(new { data = requiredSettings }));
-            var patchResult = ProcessHelper.ExecuteQuietly($"{kubectl} patch configmap cilium-config -n kube-system --type merge --patch-file {patchFile}");
-            File.Delete(patchFile);
-            ExitOnFailure(patchResult, "Configuring Cilium's Gateway API controller and MTU");
-            changed = true;
-        }
-
-        var gatewayApiManifest = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "gateway-api.yaml");
-        changed = KubectlApply(kubectl, $"apply -f {gatewayApiManifest}", "the Cilium GatewayClass and RBAC") || changed;
-
-        if (changed)
-        {
-            AnsiConsole.MarkupLine("  Restarting Cilium so it picks up the Gateway API configuration...");
-            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout restart deployment/cilium-operator daemonset/cilium -n kube-system"), "Restarting Cilium");
-            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout status daemonset/cilium -n kube-system --timeout=10m"), "Waiting for Cilium");
-            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} rollout status deployment/cilium-operator -n kube-system --timeout=10m"), "Waiting for the Cilium operator");
-        }
-
-        AnsiConsole.MarkupLine($"  [green]✓[/] Gateway API {GatewayApiVersion} and Cilium's Gateway controller {(changed ? "set up" : "already in place")}");
-    }
-
-    /// <summary>Applies a manifest and reports whether it created or changed anything.</summary>
-    private static bool KubectlApply(string kubectl, string arguments, string what)
-    {
-        var result = ProcessHelper.ExecuteQuietly($"{kubectl} {arguments}");
-        ExitOnFailure(result, $"Applying {what}");
-        return result.StdOut.Split('\n').Any(line => line.EndsWith(" created") || line.EndsWith(" configured"));
-    }
-
-    private static void ExitOnFailure(ProcessResult result, string operation)
-    {
-        if (result.Success) return;
-
-        AnsiConsole.MarkupLine($"[red]{Markup.Escape(operation)} failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
-        Environment.Exit(result.ExitCode == 0 ? 1 : result.ExitCode);
-    }
-
-    private static void ApplyRegistryPullSecret(string kubeconfigPath, string registryHost, string secretKey)
-    {
-        var dockerConfigJson = JsonSerializer.Serialize(new
-            {
-                auths = new Dictionary<string, object>
-                {
-                    // Scaleway registry auth: the username is a fixed placeholder, the secret key
-                    // authenticates.
-                    [registryHost] = new { username = "nologin", password = secretKey }
-                }
-            }
-        );
-        var secretManifest = $"""
-                              ---
-                              apiVersion: "v1"
-                              kind: "Secret"
-                              metadata:
-                                name: "scaleway-registry-pull"
-                                namespace: "default"
-                              type: "kubernetes.io/dockerconfigjson"
-                              data:
-                                .dockerconfigjson: "{Convert.ToBase64String(Encoding.UTF8.GetBytes(dockerConfigJson))}"
-                              """;
-
-        var manifestPath = WriteSecretTempFile($"pp-registry-pull-secret-{Guid.NewGuid():N}.yaml", secretManifest);
-        var result = ProcessHelper.ExecuteQuietly($"kubectl --kubeconfig {kubeconfigPath} apply -f {manifestPath}");
-        File.Delete(manifestPath);
-        if (!result.Success)
-        {
-            AnsiConsole.MarkupLine("[red]Applying the registry pull secret failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
-            AnsiConsole.MarkupLine("[dim]The registry is private, so without the pull secret no pod can pull its image.[/]");
-            Environment.Exit(result.ExitCode);
-        }
-
-        AnsiConsole.MarkupLine("  [green]✓[/] scaleway-registry-pull applied");
-    }
-
     // The staff list is the environment's staff identity file in git (the open-source project ships it
     // empty). An environment whose list has nobody in it could never be signed in to — no staff member
     // has a password, so there is no break-glass account — so the deploy asks for the first admin and
@@ -780,148 +651,6 @@ public sealed partial class DeployCommand : Command
         File.WriteAllText(staffPath, Regex.Replace(staffIdentity, "^staff: \\[\\]$", _ => adminEntry, RegexOptions.Multiline));
 
         AnsiConsole.MarkupLine($"  [green]✓[/] {Markup.Escape(email)} added as the first admin (id {Markup.Escape(id)}). Commit {relativePath} in your fork so the next deploy keeps them.");
-    }
-
-    // The network policies ship in the chart, but clusters set up before that carry them applied by
-    // hand, and Helm refuses to take over a resource it did not create. Each hand-applied policy is
-    // labelled as owned by the release (named after the chart's internal CA ConfigMap, which every
-    // release carries), so the upgrade adopts it in place. Deleting them instead would leave the
-    // namespace allow-all until Helm recreates them.
-    private static void AdoptHandAppliedNetworkPolicies(string kubeconfigPath, string repositoryRoot)
-    {
-        var policiesPath = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "network-policies.yaml");
-        var policyNames = Regex.Matches(File.ReadAllText(policiesPath), "^kind: CiliumNetworkPolicy\nmetadata:\n  name: (\\S+)$", RegexOptions.Multiline)
-            .Select(match => match.Groups[1].Value)
-            .ToArray();
-
-        var kubectl = $"kubectl --kubeconfig {kubeconfigPath} --namespace default";
-        var existing = ProcessHelper.ExecuteQuietly($"{kubectl} get ciliumnetworkpolicies --no-headers -o custom-columns=NAME:.metadata.name,MANAGED_BY:.metadata.labels.app\\.kubernetes\\.io/managed-by");
-        if (!existing.Success)
-        {
-            AnsiConsole.MarkupLine("[red]Listing the cluster's network policies failed:[/] " + Markup.Escape(existing.GetErrorSummary("kubectl")));
-            Environment.Exit(existing.ExitCode);
-        }
-
-        var handApplied = existing.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            .Where(columns => columns[1] != "Helm" && policyNames.Contains(columns[0]))
-            .Select(columns => columns[0])
-            .ToArray();
-        if (handApplied.Length == 0)
-        {
-            return;
-        }
-
-        var release = ProcessHelper.ExecuteQuietly($"{kubectl} get configmap internal-root-ca-bundle --no-headers -o custom-columns=NAME:.metadata.annotations.meta\\.helm\\.sh/release-name,NAMESPACE:.metadata.annotations.meta\\.helm\\.sh/release-namespace");
-        var releaseColumns = release.StdOut.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!release.Success || releaseColumns.Length != 2 || releaseColumns.Contains("<none>"))
-        {
-            AnsiConsole.MarkupLine("[red]The cluster has hand-applied network policies but no release to adopt them into[/] (the internal-root-ca-bundle ConfigMap carries no Helm release name).");
-            AnsiConsole.MarkupLine("[dim]Delete them (kubectl delete cnp --all -n default) and deploy again; the chart recreates them.[/]");
-            Environment.Exit(1);
-        }
-
-        foreach (var policyName in handApplied)
-        {
-            var label = ProcessHelper.ExecuteQuietly($"{kubectl} label ciliumnetworkpolicy {policyName} app.kubernetes.io/managed-by=Helm --overwrite");
-            var annotate = ProcessHelper.ExecuteQuietly($"{kubectl} annotate ciliumnetworkpolicy {policyName} meta.helm.sh/release-name={releaseColumns[0]} meta.helm.sh/release-namespace={releaseColumns[1]} --overwrite");
-            if (!label.Success || !annotate.Success)
-            {
-                AnsiConsole.MarkupLine($"[red]Adopting the network policy {policyName} into the release failed:[/] " + Markup.Escape((label.Success ? annotate : label).GetErrorSummary("kubectl")));
-                Environment.Exit(1);
-            }
-        }
-
-        AnsiConsole.MarkupLine($"  [green]✓[/] {handApplied.Length} hand-applied network policies adopted into the release");
-    }
-
-    // The migration Jobs are pre-upgrade hooks: they run under the policies already in the cluster,
-    // before the release applies its own. The migrator policy therefore has to select the label
-    // every migration Job's pods carry (workload-role: migrator) BEFORE the rollout, or a migrator
-    // new in this release gets the namespace's default-deny and times out reaching Secret Manager
-    // (found live: back-office-migrator's first deploy). The selector set here is the one the chart
-    // sets, so Helm finds the live policy already converged; once a cluster has it, this is a no-op.
-    private static void AdmitMigrationJobsUnderTheLivePolicy(string kubeconfigPath, string repositoryRoot)
-    {
-        const string policyName = "migrators-east-west";
-        const string migratorSelector = """{"key":"k8s:workload-role","operator":"In","values":["migrator"]}""";
-
-        var policiesPath = Path.Combine(repositoryRoot, "cloud-infrastructure", "scaleway", "cluster-ops", "network-policies.yaml");
-        if (!File.ReadAllText(policiesPath).Contains("""- { key: "k8s:workload-role", operator: In, values: [migrator] }"""))
-        {
-            AnsiConsole.MarkupLine($"[red]The {policyName} policy in network-policies.yaml no longer selects workload-role: migrator.[/] Update the deploy's pre-rollout selector to match it.");
-            Environment.Exit(1);
-        }
-
-        var kubectl = $"kubectl --kubeconfig {kubeconfigPath} --namespace default";
-        var live = ProcessHelper.ExecuteQuietly($"{kubectl} get ciliumnetworkpolicy {policyName} --ignore-not-found -o jsonpath={{.spec.endpointSelector}}");
-        if (!live.Success)
-        {
-            AnsiConsole.MarkupLine($"[red]Reading the {policyName} network policy failed:[/] " + Markup.Escape(live.GetErrorSummary("kubectl")));
-            Environment.Exit(live.ExitCode);
-        }
-
-        // Absent on a first install (nothing in the namespace is denied yet), or already converged.
-        if (live.StdOut.Trim().Length == 0 || live.StdOut.Contains("k8s:workload-role"))
-        {
-            return;
-        }
-
-        var patch = """{"spec":{"endpointSelector":{"matchExpressions":[{"key":"k8s:io.kubernetes.pod.namespace","operator":"In","values":["default"]},"""
-                    + migratorSelector + "]}}}";
-        // One quoted argument with escaped quotes: the process argument parser strips bare ones.
-        var result = ProcessHelper.ExecuteQuietly($"{kubectl} patch ciliumnetworkpolicy {policyName} --type=merge -p \"{patch.Replace("\"", "\\\"")}\"");
-        if (!result.Success)
-        {
-            AnsiConsole.MarkupLine($"[red]Admitting the migration Jobs under the {policyName} policy failed:[/] " + Markup.Escape(result.GetErrorSummary("kubectl")));
-            Environment.Exit(1);
-        }
-
-        AnsiConsole.MarkupLine($"  [green]✓[/] {policyName} now admits every migration Job by its workload-role label");
-    }
-
-    // cert-manager owns a Challenge by its issuer, not by its Order, so a Challenge outlives the Order it
-    // was created for (a Certificate whose hostnames changed gets a new Order; found live: a removed
-    // hostname's challenge kept retrying its self-check, with a solver pod and HTTPRoute, long after
-    // the certificate was issued). A Challenge whose ACME URL no live Order lists belongs to nothing,
-    // whatever the certificate or issuer; deleting it lets cert-manager's finalizer remove its solver.
-    // The age floor keeps the check clear of an Order still being populated.
-    private static void ClearStaleCertificateChallenges(string kubeconfigPath)
-    {
-        var kubectl = $"kubectl --kubeconfig {kubeconfigPath}";
-        var orders = ProcessHelper.ExecuteQuietly($"{kubectl} get orders.acme.cert-manager.io --all-namespaces -o json");
-        var challenges = ProcessHelper.ExecuteQuietly($"{kubectl} get challenges.acme.cert-manager.io --all-namespaces -o json");
-
-        // A cluster without cert-manager (yet) has neither resource type, so nothing can be stale.
-        if (!orders.Success && orders.StdErr.Contains("the server doesn't have a resource type"))
-        {
-            return;
-        }
-
-        ExitOnFailure(orders, "Reading the cert-manager Orders");
-        ExitOnFailure(challenges, "Reading the cert-manager Challenges");
-
-        var listedChallengeUrls = JsonNode.Parse(orders.StdOut)!["items"]!.AsArray()
-            .SelectMany(order => order?["status"]?["authorizations"]?.AsArray() ?? [])
-            .SelectMany(authorization => authorization?["challenges"]?.AsArray() ?? [])
-            .Select(challenge => challenge?["url"]?.GetValue<string>())
-            .OfType<string>()
-            .ToHashSet();
-
-        var staleBefore = DateTimeOffset.UtcNow - StaleChallengeMinimumAge;
-        var staleChallenges = JsonNode.Parse(challenges.StdOut)!["items"]!.AsArray()
-            .OfType<JsonNode>()
-            .Where(challenge => !listedChallengeUrls.Contains(challenge["spec"]?["url"]?.GetValue<string>() ?? ""))
-            .Where(challenge => DateTimeOffset.Parse(challenge["metadata"]!["creationTimestamp"]!.GetValue<string>()) < staleBefore)
-            .Select(challenge => (Namespace: challenge["metadata"]!["namespace"]!.GetValue<string>(), Name: challenge["metadata"]!["name"]!.GetValue<string>(), Hostname: challenge["spec"]?["dnsName"]?.GetValue<string>()))
-            .ToArray();
-
-        foreach (var (challengeNamespace, name, hostname) in staleChallenges)
-        {
-            // --wait=false: cert-manager's finalizer removes the solver first, then releases the Challenge.
-            ExitOnFailure(ProcessHelper.ExecuteQuietly($"{kubectl} delete challenges.acme.cert-manager.io {name} --namespace {challengeNamespace} --wait=false"), $"Deleting the stale challenge {name}");
-            AnsiConsole.MarkupLine($"  [green]✓[/] Deleted the stale certificate challenge for {Markup.Escape(hostname ?? name)} (its order no longer exists)");
-        }
     }
 
     private static void PrintHeader(string title)
