@@ -98,7 +98,7 @@ public sealed partial class DeployCommand : Command
 
     private static async Task Execute(string aspireEnvironment, bool skipPlanCheck, bool autoApprove, bool skipDnsCheck)
     {
-        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl);
+        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Terraform, Prerequisite.Kubectl, Prerequisite.Helm);
 
         var repositoryRoot = Configuration.SourceCodeFolder;
         var environmentModuleFolder = ScalewayEnvironment.EnvironmentModuleFolder;

@@ -1,0 +1,20 @@
+# The command-line tools this repository is built and deployed with, at the versions it is verified against.
+# With mise (https://mise.jdx.dev) activated in your shell, run `mise install` in the repository; every tool below is
+# then on PATH at exactly this version whenever you work in it. Installing the tools another way works too, as long as
+# the versions match.
+#
+# Each version is held in step with another file that is the source of truth for it:
+# - node: application/.node-version (the developer CLI installs that version through fnm)
+# - aspire: the Aspire.AppHost.Sdk version in application/AppHost/AppHost.csproj and aspire.cli in
+#   application/dotnet-tools.json (the developer CLI warns when the aspire on PATH differs)
+# - kubectl: within one minor version of the clusters' Kubernetes version (Kapsule runs 1.37)
+#
+# The .NET SDK is not listed: application/global.json pins it, and a second pin could disagree with it.
+
+[tools]
+aspire = "13.6.4"
+helm = "4.2.3"
+kubectl = "1.37.2"
+node = "24.14.0"
+scaleway-cli = "2.58.3"
+terraform = "1.16.4"

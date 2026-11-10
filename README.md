@@ -120,6 +120,8 @@ Open a terminal and run the following commands (if not installed):
    brew install git gh scaleway/tap/scw terraform
    ```
 
+   Alternatively, with [mise](https://mise.jdx.dev) activated in your shell, run `mise install` in the repository: it installs Node.js, the Aspire CLI, Terraform, kubectl, Helm and the Scaleway CLI at the versions pinned in [`mise.toml`](./mise.toml), which covers steps 3 and 4 as well. The .NET SDK and Docker are still installed as above.
+
 3. Install Node.js — the version must match [`.node-version`](./application/.node-version). We recommend [fnm](https://github.com/Schniz/fnm) which auto-installs the exact version via the Developer CLI. When using an IDE like Rider, ensure the active fnm version matches [`.node-version`](./application/.node-version).
 
    ```bash

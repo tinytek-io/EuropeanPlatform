@@ -21,6 +21,9 @@ public abstract record Prerequisite
     // kubectl has no --version flag; `kubectl version --client` prints "Client Version: v1.x.y".
     public static readonly Prerequisite Kubectl = new CommandLineToolPrerequisite("kubectl", "kubectl", new Version(1, 28), "version --client");
 
+    // The Aspire Kubernetes deploy installs its chart with Helm (its check-helm-prereqs step fails without it).
+    public static readonly Prerequisite Helm = new CommandLineToolPrerequisite("helm", "Helm", new Version(3, 8), "version --short");
+
     protected abstract bool IsValid();
 
     public static void Ensure(params Prerequisite[] prerequisites)
@@ -72,7 +75,7 @@ public abstract record Prerequisite
 
         var installCommand = Configuration.IsWindows
             ? "irm https://aspire.dev/install.ps1 | iex"
-            : "curl -sSL https://aspire.dev/install.sh | bash";
+            : "mise install (the repository's mise.toml pins it), or curl -sSL https://aspire.dev/install.sh | bash";
         var current = installedVersion is null ? "not installed" : $"installed {installedVersion}";
         AnsiConsole.MarkupLine($"[yellow]Recommended: Aspire CLI {requiredVersion} (matches AppHost.csproj), {current}. Install:[/]");
         AnsiConsole.MarkupLine($"[yellow]  {installCommand}[/]");
