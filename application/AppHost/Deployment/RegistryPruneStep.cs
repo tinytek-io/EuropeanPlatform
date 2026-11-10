@@ -24,7 +24,7 @@ internal static class RegistryPruneStep
     public static void AddRegistryPruneStep(this IDistributedApplicationBuilder builder, string? registryNamespaceId, string projectId)
     {
         // After the rollout, so a tag is never deleted while a pod may still be pulling it.
-        builder.Pipeline.AddStep("prune-registry-tags", context => PruneAsync(context, registryNamespaceId, projectId), dependsOn: "helm-deploy-kubernetes", requiredBy: WellKnownPipelineSteps.Deploy);
+        builder.Pipeline.AddStep("prune-registry-tags", context => PruneAsync(context, registryNamespaceId, projectId), "helm-deploy-kubernetes", WellKnownPipelineSteps.Deploy);
     }
 
     private static async Task PruneAsync(PipelineStepContext context, string? registryNamespaceId, string projectId)

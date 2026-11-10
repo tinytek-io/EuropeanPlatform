@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled-extra
+FROM mcr.microsoft.com/dotnet/runtime:10.0.15-noble-chiseled-extra
 
 WORKDIR /app
 COPY ./Migrator/publish .
