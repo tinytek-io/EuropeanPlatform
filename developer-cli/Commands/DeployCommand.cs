@@ -7,7 +7,6 @@ using DeveloperCli.Utilities;
 using Scaleway.Sdk;
 using Spectre.Console;
 using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
-using ScwRegistry = Scaleway.Sdk.Registry.V1;
 
 namespace DeveloperCli.Commands;
 
@@ -25,15 +24,6 @@ namespace DeveloperCli.Commands;
 /// </remarks>
 public sealed partial class DeployCommand : Command
 {
-    /// <summary>
-    ///     Deletes stale deploy tags from the Container Registry, keeping the newest few per image.
-    ///     Every deploy pushes a full tag set; without pruning the registry fills its storage quota
-    ///     and pushes start failing with HTTP 500 (found live: 24 deploys filled 18 GB before the
-    ///     quota broke every subsequent deploy). The pipeline key's registry access authorizes the
-    ///     prune, so it runs as the last step of every deploy.
-    /// </summary>
-    private const int RegistryTagsToKeep = 3;
-
     // The staff identity file an environment starts from when it has none; {0} is the Terraform environment.
     private const string EmptyStaffIdentityTemplate = """
                                                       # The {0} staff identity: who may sign in to the back-office, and which tools may sign them in.
@@ -252,6 +242,8 @@ public sealed partial class DeployCommand : Command
             ("Registry__Endpoint", registryHost),
             ("Registry__Repository", registryEndpoint[(registryHost.Length + 1)..]),
             ("Registry__PullSecretKey", registryPullSecretKey),
+            // The AppHost's prune-registry-tags step deletes stale tags in this namespace after the rollout.
+            ("Registry__NamespaceId", await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_namespace_id")),
             ("Storage__Endpoint", storageEndpoint),
             ("Storage__BucketPrefix", bucketPrefix),
             // The network policies in the chart admit database egress to exactly this endpoint.
@@ -306,7 +298,6 @@ public sealed partial class DeployCommand : Command
         // checked here.
         ValidateDeployedChartImages(applicationFolder);
 
-        await PruneRegistryTagsAsync(await TerraformHelper.OutputAsync(environmentModuleFolder, "registry_namespace_id"), credentials, organizationId, projectId);
 
         // The rollout can change what Terraform reads from the cluster: the Kapsule controller creates
         // (or recreates) the gateway Load Balancer's 443 and 80 frontends, and the edge-only ACLs on
@@ -372,51 +363,6 @@ public sealed partial class DeployCommand : Command
         }
 
         AnsiConsole.MarkupLine($"[green]Chart validated:[/] {images.Count} registry-qualified image references.");
-    }
-
-    private static async Task PruneRegistryTagsAsync(string namespaceId, ScalewayCredentials credentials, string organizationId, string projectId)
-    {
-        // Registry namespace IDs are region-qualified (<region>/<uuid>): the region selects the API,
-        // which takes the bare uuid.
-        var region = namespaceId.Split('/')[0];
-        namespaceId = namespaceId.Split('/').Last();
-
-        try
-        {
-            using var scaleway = ScalewayEnvironment.CreateClient(credentials, organizationId);
-            var registry = scaleway.WithProject(ProjectId.Parse(projectId)).Registry;
-
-            var kept = 0;
-            var deleted = 0;
-            var failed = 0;
-            foreach (var image in await registry.ListImagesAsync(new ScwRegistry.ListImagesRequest { NamespaceId = namespaceId }, region))
-            {
-                var tags = await registry.ListTagsAsync(image.Id!, new ScwRegistry.ListTagsRequest { OrderBy = ScwRegistry.ListTagsOrderBy.CreatedAtDesc }, region);
-                foreach (var tag in tags.Skip(RegistryTagsToKeep))
-                {
-                    try
-                    {
-                        await registry.DeleteTagAsync(tag.Id!, region);
-                        deleted++;
-                    }
-                    catch (ScalewayApiException)
-                    {
-                        // A tag that cannot be deleted now is retried by the next deploy's prune.
-                        failed++;
-                    }
-                }
-
-                kept += Math.Min(tags.Count, RegistryTagsToKeep);
-            }
-
-            var failures = failed > 0 ? $" {failed} could not be deleted and are retried next deploy." : "";
-            AnsiConsole.MarkupLine($"[green]Registry pruned:[/] kept {kept} tags, deleted {deleted} stale tags.{failures}");
-        }
-        catch (Exception exception)
-        {
-            // Pruning is housekeeping: a failure must never fail an otherwise successful deploy.
-            AnsiConsole.MarkupLine($"[yellow]Registry prune failed[/] (the deploy itself succeeded): {Markup.Escape(exception.Message)}");
-        }
     }
 
     // Fails loud when a SPA's index.html references an asset that is not in the dist — the

@@ -79,6 +79,12 @@ var scalewayRegion = isPublishMode
       ?? throw new InvalidOperationException("Publish mode requires Scaleway:Region (the deploy passes the environment module's region).")
     : string.Empty;
 
+// Stale deploy tags are pruned once the rollout no longer needs them (see RegistryPruneStep).
+if (isPublishMode)
+{
+    builder.AddRegistryPruneStep(builder.Configuration["Registry:NamespaceId"], secretManagerProjectId);
+}
+
 // Transactional Email is sent through its HTTP API (see ScalewayTransactionalEmailClient), which
 // authenticates with the workload's IAM key — no SMTP settings or separate credentials exist.
 // Development delivers to the Mailpit container instead.
