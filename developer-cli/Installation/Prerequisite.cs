@@ -14,6 +14,8 @@ public abstract record Prerequisite
     public static readonly Prerequisite TypeScriptLanguageServer = new CommandLineToolPrerequisite("typescript-language-server", "TypeScript Language Server", new Version(4, 3, 0));
     public static readonly Prerequisite CSharpLanguageServer = new CommandLineToolPrerequisite("csharp-ls", "C# Language Server", new Version(0, 22, 0));
 
+    public static readonly Prerequisite Curl = new CommandLineToolPrerequisite("curl", "curl", new Version(7, 68));
+
     public static readonly Prerequisite Terraform = new CommandLineToolPrerequisite("terraform", "Terraform", new Version(1, 16));
 
     // kubectl has no --version flag; `kubectl version --client` prints "Client Version: v1.x.y".

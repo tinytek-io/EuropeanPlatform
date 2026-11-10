@@ -21,7 +21,7 @@ All Scaleway API calls go through `Scaleway.Sdk`, whose typed clients are genera
 4. Add or refresh a schema with a pin in `SchemaPins.All`:
    - `Slug` is Scaleway's documentation path (`load-balancer/zoned`); the file on disk is its flattened `FileName` (`load-balancer-zoned.yml`)
    - Every pin carries a rationale for its version; a pin and its file are added in the same commit, or `SchemaPinTests` fails
-   - `dotnet run --project developer-cli -- scaleway-sdk schemas` downloads the pinned schemas and gates on breaking drift. www.scaleway.com's bot protection currently rejects the .NET client, so download new schema files with curl or a browser until that is resolved
+   - `dotnet run --project developer-cli -- scaleway-sdk schemas` downloads the pinned schemas through curl and gates on breaking drift. www.scaleway.com's bot protection rejects .NET's HttpClient, and Scaleway allow-lists curl as the workaround, so never fetch the schemas with HttpClient or send curl a custom User-Agent
 5. Never edit `Generated/` or the README's coverage region by hand. Both are generator output, and `scaleway-sdk generate` must reproduce the committed files with no diff
 6. Claim a validation tier above `StructurallyConformant` (in `SchemaSource.ValidationTierFor`) only in the same change that adds the test which verifies it
 7. Record consumer-visible SDK changes in `Scaleway.Sdk/CHANGELOG.md`; renamed or retyped generated types are `BREAKING:`

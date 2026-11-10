@@ -1,8 +1,6 @@
 using System.CommandLine;
-using System.Net;
-using System.Reflection;
 using DeveloperCli.Installation;
-using Scaleway.Sdk;
+using DeveloperCli.Utilities;
 using Scaleway.Sdk.Generator;
 using Spectre.Console;
 
@@ -12,6 +10,11 @@ internal sealed class RefreshScalewaySchemasCommand : Command
 {
     private const int ProbeAttempts = 3;
 
+    // www.scaleway.com moved behind BunnyCDN, whose bot protection rejects .NET's HttpClient. Scaleway's documentation
+    // team allow-lists curl as the supported workaround, so every download and probe goes through curl with its own
+    // User-Agent. Sending a custom one would undo the allow-listing.
+    private const int CurlTimeoutSeconds = 30;
+
     // How long to wait between upstream probes, and how long to back off when one is refused. www.scaleway.com
     // rate-limits: probing the version ladder in parallel returns 429 for everything, and a 429 read as "absent"
     // reports every stale pin as current. Pacing keeps the answers real; SchemaVersionCheck's control probe is
@@ -19,15 +22,6 @@ internal sealed class RefreshScalewaySchemasCommand : Command
     private static readonly TimeSpan ProbePacing = TimeSpan.FromMilliseconds(200);
 
     private static readonly TimeSpan ProbeBackoff = TimeSpan.FromSeconds(5);
-
-    // Every request this command makes says who is making it and that it is not production traffic:
-    // "Scaleway.Sdk-dotnet/{version} development/{version}". www.scaleway.com serves the schema documents for
-    // free and has to decide what to rate-limit; a named, low-volume development tool is a decision it can make,
-    // and an unnamed one is not. The mechanism is the SDK's own, used the way a consumer would use it.
-    private static readonly HttpClient HttpClient = ScalewayUserAgent.ApplyTo(
-        new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
-        ScalewayUserAgent.ProductToken("development", Assembly.GetExecutingAssembly())
-    );
 
     public RefreshScalewaySchemasCommand() : base("schemas", "Download the pinned Scaleway OpenAPI schemas (YAML) the SDK is generated from, and report how they drifted")
     {
@@ -40,7 +34,7 @@ internal sealed class RefreshScalewaySchemasCommand : Command
 
     private static async Task Execute(bool checkOnly)
     {
-        Prerequisite.Ensure(Prerequisite.Dotnet);
+        Prerequisite.Ensure(Prerequisite.Dotnet, Prerequisite.Curl);
 
         EnsureEveryPinHasARationale();
 
@@ -53,9 +47,19 @@ internal sealed class RefreshScalewaySchemasCommand : Command
             {
                 var targetPath = Path.Combine(schemasDirectory, $"{pin.FileName}.yml");
 
-                var yaml = await HttpClient.GetStringAsync(SchemaPins.SchemaUrl(pin.Slug, pin.Version));
-                await File.WriteAllTextAsync(targetPath, yaml);
-                AnsiConsole.MarkupLine($"[green]✓[/] {pin.Slug} {pin.Version} ({yaml.Length:N0} bytes)");
+                var url = SchemaPins.SchemaUrl(pin.Slug, pin.Version);
+                var downloadPath = $"{targetPath}.download";
+                await Task.Delay(ProbePacing);
+                var statusCode = await CurlStatusAsync($"--output \"{downloadPath}\" \"{url}\"");
+                if (statusCode != 200)
+                {
+                    File.Delete(downloadPath);
+                    AnsiConsole.MarkupLine($"[red]Could not download {pin.Slug} {pin.Version}:[/] {(statusCode is null ? "curl failed" : $"HTTP {statusCode}")} from {url}");
+                    Environment.Exit(1);
+                }
+
+                File.Move(downloadPath, targetPath, true);
+                AnsiConsole.MarkupLine($"[green]✓[/] {pin.Slug} {pin.Version} ({new FileInfo(targetPath).Length:N0} bytes)");
             }
 
             AnsiConsole.MarkupLine($"[green]Downloaded {SchemaPins.All.Count} schema(s) to {schemasDirectory}[/]");
@@ -130,25 +134,15 @@ internal sealed class RefreshScalewaySchemasCommand : Command
         {
             await Task.Delay(ProbePacing);
 
-            try
+            // A curl failure (no connection, a timeout) reads as no status, which degrades to Unknown: a probe that
+            // cannot reach upstream must not be able to conclude anything, and it must not take the refresh down either.
+            var statusCode = await CurlStatusAsync($"--head --output {(Configuration.IsWindows ? "NUL" : "/dev/null")} \"{SchemaPins.SchemaUrl(slug, version)}\"");
+            switch (statusCode)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Head, SchemaPins.SchemaUrl(slug, version));
-                using var response = await HttpClient.SendAsync(request);
-
-                if (response.StatusCode is HttpStatusCode.OK)
-                {
+                case 200:
                     return SchemaVersionAvailability.Published;
-                }
-
-                if (response.StatusCode is HttpStatusCode.NotFound)
-                {
+                case 404:
                     return SchemaVersionAvailability.NotPublished;
-                }
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-            {
-                // Degrading to Unknown is the point: a probe that cannot reach upstream must not be able to
-                // conclude anything, and it must not take the refresh down either.
             }
 
             if (attempt < ProbeAttempts)
@@ -158,6 +152,16 @@ internal sealed class RefreshScalewaySchemasCommand : Command
         }
 
         return SchemaVersionAvailability.Unknown;
+    }
+
+    /// <summary>
+    ///     Runs curl with the given arguments and returns the HTTP status of the last response, or <c>null</c> when curl
+    ///     itself failed before receiving one.
+    /// </summary>
+    private static async Task<int?> CurlStatusAsync(string arguments)
+    {
+        var result = await ProcessHelper.ExecuteQuietlyAsync($"curl --silent --show-error --location --max-time {CurlTimeoutSeconds} --write-out %{{http_code}} {arguments}");
+        return int.TryParse(result.StdOut.Trim(), out var statusCode) && statusCode > 0 ? statusCode : null;
     }
 
     /// <summary>
