@@ -65,7 +65,28 @@ public sealed class CostEstimatorTests
         var estimate = await _estimator.EstimateAsync(resources);
 
         // Assert
-        estimate.Lines.Select(line => line.MonthlyCost).Should().BeEquivalentTo([0.99m, 0.005376m * 730m, 4m]);
+        estimate.Lines.Select(line => line.MonthlyCost).Should().BeEquivalentTo([0.99m, 4m, 0m], "starter includes one pipeline, so the only pipeline is free");
+    }
+
+    [Fact]
+    public async Task EstimateAsync_WhenPipelinesExceedThePlanAllowance_ShouldPriceOnlyTheAdditionalOnes()
+    {
+        // Arrange
+        TerraformResource[] resources =
+        [
+            Resource("scaleway_edge_services_plan.main", "scaleway_edge_services_plan", """{ "name": "starter" }"""),
+            Resource("scaleway_edge_services_pipeline.gateway[\"app\"]", "scaleway_edge_services_pipeline", "{}"),
+            Resource("scaleway_edge_services_pipeline.gateway[\"back-office\"]", "scaleway_edge_services_pipeline", "{}"),
+            Resource("scaleway_edge_services_pipeline.gateway[\"docs\"]", "scaleway_edge_services_pipeline", "{}")
+        ];
+
+        // Act
+        var estimate = await _estimator.EstimateAsync(resources);
+
+        // Assert
+        var pipelines = estimate.Lines.Should().ContainSingle(line => line.Description.StartsWith("3 Edge Services pipelines")).Subject;
+        pipelines.MonthlyCost.Should().Be(2 * 0.005376m * 730m);
+        pipelines.Description.Should().Be("3 Edge Services pipelines (1 included in starter, 2 additional)");
     }
 
     [Fact]

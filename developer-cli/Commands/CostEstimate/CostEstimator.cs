@@ -61,6 +61,13 @@ public sealed class CostEstimator(Func<CatalogLocality, Task<IReadOnlyList<Catal
         "scaleway_rdb_database", "scaleway_rdb_privilege", "scaleway_rdb_user", "scaleway_secret", "scaleway_vpc_gateway_network", "scaleway_vpc_private_network"
     ];
 
+    // The pipelines each Edge Services plan includes before extra ones are billed. The catalog prices an additional
+    // pipeline but does not carry the allowance; these are from scaleway.com/en/pricing/network (checked 2026-11-10).
+    private static readonly Dictionary<string, int> EdgePipelinesIncluded = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["starter"] = 1, ["professional"] = 10, ["advanced"] = 100
+    };
+
     // Providers that run on the machine applying the plan (passwords, keys, certificates) and bill nobody.
     private static readonly string[] LocalProviderPrefixes = ["random_", "tls_", "time_", "null_", "terraform_data"];
 
@@ -105,13 +112,7 @@ public sealed class CostEstimator(Func<CatalogLocality, Task<IReadOnlyList<Catal
                     await PriceAsync(resource, CatalogLocality.Global, "Edge Services", "Edge Services - Plan", 1, false, $"Edge Services {edgePlan} plan", $"- {edgePlan}");
                     break;
                 case "scaleway_edge_services_pipeline":
-                    if (edgePlan is null)
-                    {
-                        unpriced.Add(new UnpricedResource(resource.Address, "an Edge Services pipeline is priced per plan, and the resources hold no scaleway_edge_services_plan"));
-                        break;
-                    }
-
-                    await PriceAsync(resource, CatalogLocality.Global, "Edge Services", "Edge Services - Pipelines", 1, true, "Edge Services pipeline", $"- {edgePlan}");
+                    // Priced together after the loop: the plan includes some, and only the rest are billed.
                     break;
                 case "scaleway_edge_services_waf_stage":
                     // The starter plan sells the WAF as a monthly add-on; the larger plans include it and bill its
@@ -138,7 +139,30 @@ public sealed class CostEstimator(Func<CatalogLocality, Task<IReadOnlyList<Catal
             }
         }
 
+        await PriceEdgePipelinesAsync(resources.Where(resource => resource.Type == "scaleway_edge_services_pipeline").ToArray());
+
         return new MonthlyCostEstimate(lines.ToArray(), usageBilled.ToArray(), unpriced.ToArray());
+
+        async Task PriceEdgePipelinesAsync(TerraformResource[] pipelines)
+        {
+            if (pipelines.Length == 0) return;
+
+            if (edgePlan is null || !EdgePipelinesIncluded.TryGetValue(edgePlan, out var included))
+            {
+                unpriced.AddRange(pipelines.Select(pipeline => new UnpricedResource(pipeline.Address, $"Edge Services pipelines are priced against the plan's allowance, and no allowance is known for the plan '{edgePlan}'")));
+                return;
+            }
+
+            var additional = Math.Max(0, pipelines.Length - included);
+            var description = $"{pipelines.Length} Edge Services pipeline{(pipelines.Length == 1 ? "" : "s")} ({included} included in {edgePlan}{(additional > 0 ? $", {additional} additional" : "")})";
+            if (additional == 0)
+            {
+                lines.Add(new CostLine(pipelines[0].Address, description, 0m));
+                return;
+            }
+
+            await PriceAsync(pipelines[0], CatalogLocality.Global, "Edge Services", "Edge Services - Pipelines", additional, true, description, $"- {edgePlan}");
+        }
 
         async Task PriceNodePoolAsync(TerraformResource resource)
         {
@@ -234,7 +258,10 @@ public static class TerraformResources
 {
     private static readonly JsonElement EmptyObject = JsonDocument.Parse("{}").RootElement.Clone();
 
-    /// <param name="terraformJson">The output of <c>terraform show -json</c> (state) or <c>terraform show -json &lt;plan&gt;</c>.</param>
+    /// <param name="terraformJson">
+    ///     The output of <c>terraform show -json</c> (state) or
+    ///     <c>terraform show -json &lt;plan&gt;</c>.
+    /// </param>
     public static TerraformResource[] Read(string terraformJson)
     {
         using var document = JsonDocument.Parse(terraformJson);

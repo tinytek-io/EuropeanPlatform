@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Web;
 using FluentAssertions;
 using Scaleway.Sdk;
 using Xunit;
@@ -55,7 +56,7 @@ public sealed class ScalewayPricingCatalogClientTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestedUris.Add(request.RequestUri!);
-            var page = int.Parse(System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query)["page"]!);
+            var page = int.Parse(HttpUtility.ParseQueryString(request.RequestUri!.Query)["page"]!);
             var body = page <= pages.Length ? pages[page - 1] : """{ "products": [] }""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
         }
