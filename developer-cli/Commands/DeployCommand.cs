@@ -519,9 +519,11 @@ public sealed partial class DeployCommand : Command
             var hasCertificate = tlsStage?.Secrets?.Count > 0;
             if (tlsStage?.ManagedCertificate != true || hasCertificate) continue;
 
-            var customDnsStage = (await edgeServices.ListDnsStagesAsync(pipelineId)).FirstOrDefault(stage => stage.Type == ScwEdge.DNSStageType.Custom);
-            var hostname = customDnsStage?.Fqdns?.FirstOrDefault();
-            var pipelineEndpoint = customDnsStage?.DefaultFqdn?.TrimEnd('.');
+            // Found by its FQDNs, not its type: Scaleway labels the stage 'custom' only once it has verified the
+            // CNAME, and a stage whose check failed stays 'auto' (edge-health reports that case).
+            var hostnameStage = (await edgeServices.ListDnsStagesAsync(pipelineId)).FirstOrDefault(stage => stage.Fqdns is { Length: > 0 });
+            var hostname = hostnameStage?.Fqdns?.FirstOrDefault();
+            var pipelineEndpoint = hostnameStage?.DefaultFqdn?.TrimEnd('.');
             if (hostname is null || pipelineEndpoint is null) continue;
 
             var cname = (await ProcessHelper.ExecuteQuietlyAsync($"dig +short CNAME {hostname}")).StdOut.Trim().TrimEnd('.');

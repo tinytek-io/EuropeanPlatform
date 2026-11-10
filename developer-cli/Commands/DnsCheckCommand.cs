@@ -5,6 +5,7 @@ using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
 using Scaleway.Sdk;
 using Spectre.Console;
+using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
 using ScwTem = Scaleway.Sdk.Tem.V1Alpha1;
 
 namespace DeveloperCli.Commands;
@@ -12,9 +13,11 @@ namespace DeveloperCli.Commands;
 /// <summary>
 ///     Prints every DNS record the environment's hosting zone is expected to carry and verifies each
 ///     one against live DNS. The expected values are derived from the Terraform state itself (no
-///     apply, no new outputs) and the live values are resolved with dig; the only write is asking
-///     Transactional Email to validate a domain whose records resolve but which it has not validated
-///     yet (until it does, it refuses every send from that domain). The deploy runs
+///     apply, no new outputs) and the live values are resolved with dig. The only writes ask Scaleway to
+///     check again what it checks once and then trusts: Transactional Email to validate a domain whose
+///     records resolve (until it does, it refuses every send from that domain), and Edge Services to
+///     verify a hostname whose CNAME resolves (until it does, the pipeline warns and its managed
+///     certificate depends on a hostname Scaleway considers unverified). The deploy runs
 ///     it first and stops on drift; it also runs standalone at any time — a missing or wrong record is
 ///     exactly the class of silent failure that turns into "the site is down" only when someone looks.
 /// </summary>
@@ -30,7 +33,8 @@ public sealed partial class DnsCheckCommand : Command
     private static readonly ScwTem.DomainStatus[] InProgressEmailDomainStatuses = [ScwTem.DomainStatus.Unchecked, ScwTem.DomainStatus.Pending, ScwTem.DomainStatus.Autoconfiguring];
 
     private static readonly TimeSpan EmailDomainCheckTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan EmailDomainCheckPollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan CheckPollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan EdgeHostnameCheckTimeout = TimeSpan.FromMinutes(2);
 
     public DnsCheckCommand() : base(
         "dns-check",
@@ -101,6 +105,7 @@ public sealed partial class DnsCheckCommand : Command
 
         var mismatches = 0;
         var emailDomainsWithDrift = new HashSet<string>();
+        var edgePipelinesWithDrift = new HashSet<string>();
         foreach (var record in expected)
         {
             var live = digAvailable ? await ResolveRecordAsync(record) : null;
@@ -115,6 +120,7 @@ public sealed partial class DnsCheckCommand : Command
             {
                 mismatches++;
                 if (record.EmailDomainId is not null) emailDomainsWithDrift.Add(record.EmailDomainId);
+                if (record.EdgePipelineId is not null) edgePipelinesWithDrift.Add(record.EdgePipelineId);
             }
 
             table.AddRow(
@@ -132,10 +138,21 @@ public sealed partial class DnsCheckCommand : Command
             : $"[red]{mismatches} record(s) missing or mismatched.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for the exact values to create in the DNS console."
         );
 
+        if (!digAvailable) return mismatches;
+
+        using var apiClient = new ScalewayApiClient(new ScalewayCredentialConfig
+            {
+                AccessKey = credentials.AccessKey, SecretKey = credentials.SecretKey, OrganizationId = OrganizationId.Parse(organizationId)
+            }
+        );
+
+        var edgePipelineIds = expected.Select(record => record.EdgePipelineId).OfType<string>().Where(id => !edgePipelinesWithDrift.Contains(id)).Distinct().ToArray();
+        mismatches += await VerifyEdgeHostnamesAsync(new ScwEdge.EdgeServicesApi(apiClient), edgePipelineIds);
+
         var emailDomainIds = expected.Select(record => record.EmailDomainId).OfType<string>().Distinct().ToArray();
-        if (emailDomainIds.Length > 0 && digAvailable)
+        if (emailDomainIds.Length > 0)
         {
-            mismatches += await VerifyEmailDomainsAsync(credentials, organizationId, emailDomainIds, emailDomainsWithDrift);
+            mismatches += await VerifyEmailDomainsAsync(new ScwTem.TemApi(apiClient), emailDomainIds, emailDomainsWithDrift);
         }
 
         return mismatches;
@@ -146,15 +163,8 @@ public sealed partial class DnsCheckCommand : Command
     ///     not validated (invalid from.email), and it only validates when asked or on its own slow schedule. So once a
     ///     domain's records all resolve, a domain not yet validated is checked here and its outcome reported.
     /// </summary>
-    private static async Task<int> VerifyEmailDomainsAsync(ScalewayCredentials credentials, string organizationId, string[] domainIds, HashSet<string> domainsWithDrift)
+    private static async Task<int> VerifyEmailDomainsAsync(ScwTem.TemApi temApi, string[] domainIds, HashSet<string> domainsWithDrift)
     {
-        using var apiClient = new ScalewayApiClient(new ScalewayCredentialConfig
-            {
-                AccessKey = credentials.AccessKey, SecretKey = credentials.SecretKey, OrganizationId = OrganizationId.Parse(organizationId)
-            }
-        );
-        var temApi = new ScwTem.TemApi(apiClient);
-
         var failures = 0;
         foreach (var regionAndId in domainIds)
         {
@@ -203,11 +213,60 @@ public sealed partial class DnsCheckCommand : Command
         var deadline = DateTimeOffset.UtcNow + EmailDomainCheckTimeout;
         while (domain.Status != ScwTem.DomainStatus.Checked && DateTimeOffset.UtcNow < deadline)
         {
-            await Task.Delay(EmailDomainCheckPollInterval);
+            await Task.Delay(CheckPollInterval);
             domain = await temApi.GetDomainAsync(domainId, region) ?? domain;
         }
 
         return domain;
+    }
+
+    /// <summary>
+    ///     Edge Services verifies a hostname's CNAME when its DNS stage is written, and does not retry on its own
+    ///     (found live: a stage written while its record was being changed stayed unverified, type <c>auto</c>
+    ///     instead of <c>custom</c> with the pipeline in <c>dns_cname_resolve</c>, for days after the record was
+    ///     right). The API has no check action, so for a pipeline whose CNAME now resolves the hostname is written
+    ///     again unchanged: the one write short of recreating the stage that can make Scaleway look again.
+    /// </summary>
+    private static async Task<int> VerifyEdgeHostnamesAsync(ScwEdge.EdgeServicesApi edgeServices, string[] pipelineIds)
+    {
+        var failures = 0;
+        foreach (var pipelineId in pipelineIds)
+        {
+            // Found by its FQDNs, not its type: the type is exactly what an unverified stage gets wrong.
+            var hostnameStage = (await edgeServices.ListDnsStagesAsync(pipelineId)).FirstOrDefault(stage => stage.Fqdns is { Length: > 0 });
+            if (hostnameStage is null || hostnameStage.Type == ScwEdge.DNSStageType.Custom) continue;
+
+            var hostname = string.Join(", ", hostnameStage.Fqdns!);
+            AnsiConsole.MarkupLine($"[yellow]Edge Services has not verified {Markup.Escape(hostname)}[/] although its CNAME resolves; asking it to check again...");
+            await edgeServices.UpdateDnsStageAsync(hostnameStage.Id!, new ScwEdge.UpdateDnsStageRequest { Fqdns = hostnameStage.Fqdns });
+
+            if (await WaitForEdgeHostnameCheckAsync(edgeServices, hostnameStage.Id!))
+            {
+                AnsiConsole.MarkupLine($"[green]Edge Services has verified {Markup.Escape(hostname)}.[/]");
+                continue;
+            }
+
+            AnsiConsole.MarkupLine(
+                $"[red]Edge Services still has not verified {Markup.Escape(hostname)}[/] after {EdgeHostnameCheckTimeout.TotalMinutes:F0} minutes. " +
+                "Run dns-check again later; if it stays unverified, recreate the pipeline's DNS stage (terraform apply -replace on its gateway_custom stage)."
+            );
+            failures++;
+        }
+
+        return failures;
+    }
+
+    private static async Task<bool> WaitForEdgeHostnameCheckAsync(ScwEdge.EdgeServicesApi edgeServices, string dnsStageId)
+    {
+        var deadline = DateTimeOffset.UtcNow + EdgeHostnameCheckTimeout;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(CheckPollInterval);
+            var stage = await edgeServices.GetDnsStageAsync(dnsStageId);
+            if (stage?.Type == ScwEdge.DNSStageType.Custom) return true;
+        }
+
+        return false;
     }
 
     // Terraform ids regional resources as "<region>/<id>".
@@ -251,7 +310,7 @@ public sealed partial class DnsCheckCommand : Command
 
             if (pipelineId is not null && domainName is not null && pipelineIds.TryGetValue(pipelineId, out var pipelineResource))
             {
-                records.Add(new ExpectedRecord("CNAME", domainName, $"{pipelineResource}.svc.edge.scw.cloud."));
+                records.Add(new ExpectedRecord("CNAME", domainName, $"{pipelineResource}.svc.edge.scw.cloud.", EdgePipelineId: pipelineResource));
             }
         }
 
@@ -311,6 +370,7 @@ public sealed partial class DnsCheckCommand : Command
         return value.Length > 60 ? value[..57] + "..." : value;
     }
 
-    // EmailDomainId ties a record to the Transactional Email domain it validates (null for edge CNAMEs).
-    private sealed record ExpectedRecord(string Type, string Name, string Value, string? EmailDomainId = null);
+    // EmailDomainId ties a record to the Transactional Email domain it validates, EdgePipelineId to the edge pipeline
+    // whose hostname it points at; each is null for the other kind of record.
+    private sealed record ExpectedRecord(string Type, string Name, string Value, string? EmailDomainId = null, string? EdgePipelineId = null);
 }

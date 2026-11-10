@@ -82,12 +82,12 @@ public sealed class EdgeHealthCommand : Command
 
             failures += RenderChecks(pipelineChecks);
 
-            var customDnsStages = stages.DnsStages.Where(stage => stage.Type == ScwEdge.DNSStageType.Custom).ToList();
-            var hostnames = customDnsStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
+            var hostnameStages = HostnameStages(stages.DnsStages);
+            var hostnames = hostnameStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
 
             // The pipeline's endpoint: recreated pipelines get a new one, which silently orphans
             // every CNAME still pointing at the old endpoint (the API exposes no stable alias).
-            var pipelineEndpoint = customDnsStages.Select(stage => stage.DefaultFqdn).FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
+            var pipelineEndpoint = hostnameStages.Select(stage => stage.DefaultFqdn).FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
 
             foreach (var hostname in hostnames)
             {
@@ -160,21 +160,43 @@ public sealed class EdgeHealthCommand : Command
             : ("head stage", false, $"head points at DNS stage '{headDnsStageId}' which does not exist (stale head)");
     }
 
+    /// <summary>
+    ///     The DNS stages carrying the hostnames a pipeline serves, found by their FQDNs rather than their type.
+    ///     Scaleway reports such a stage as <c>custom</c> only once it has verified the hostname's CNAME, and it
+    ///     never verifies again after a failed check (found live: a stage created while its record was being
+    ///     changed stayed <c>auto</c>, with the pipeline in <c>dns_cname_resolve</c>, long after the CNAME was
+    ///     correct). Selecting by type would skip that hostname's DNS, certificate and endpoint checks silently.
+    /// </summary>
+    private static List<ScwEdge.DNSStage> HostnameStages(IEnumerable<ScwEdge.DNSStage> dnsStages)
+    {
+        return dnsStages.Where(stage => stage.Fqdns is { Length: > 0 }).ToList();
+    }
+
     private static IEnumerable<(string Check, bool Passed, string Detail)> StageChecks(PipelineStages stages)
     {
-        // DNS: the custom stage carries the FQDNs this pipeline serves; it must be active.
-        var customDns = stages.DnsStages.Where(stage => stage.Type == ScwEdge.DNSStageType.Custom).ToList();
-        if (customDns.Count == 0)
+        // DNS: the hostname stage carries the FQDNs this pipeline serves; it must be active and verified.
+        var hostnameStages = HostnameStages(stages.DnsStages);
+        if (hostnameStages.Count == 0)
         {
-            yield return ("dns stage", false, "no custom DNS stage");
+            yield return ("dns stage", false, "no DNS stage carries a hostname");
         }
         else
         {
-            var fqdns = customDns.SelectMany(stage => stage.Fqdns ?? []).ToList();
-            var active = customDns.All(stage => stage.Status == ScwEdge.StageStatus.Active);
-            yield return active && fqdns.Count > 0
-                ? ("dns stage", true, $"active, serving {string.Join(", ", fqdns)}")
-                : ("dns stage", false, $"status '{string.Join(",", customDns.Select(stage => stage.Status))}', fqdns: [{string.Join(", ", fqdns)}]");
+            var fqdns = hostnameStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
+            var active = hostnameStages.All(stage => stage.Status == ScwEdge.StageStatus.Active);
+            var unverified = hostnameStages.Where(stage => stage.Type != ScwEdge.DNSStageType.Custom).ToList();
+            if (!active)
+            {
+                yield return ("dns stage", false, $"status '{string.Join(",", hostnameStages.Select(stage => stage.Status))}', fqdns: [{string.Join(", ", fqdns)}]");
+            }
+            else if (unverified.Count > 0)
+            {
+                yield return ("dns stage", false, $"serving {string.Join(", ", fqdns)}, but Scaleway has not verified the CNAME (stage type '{unverified[0].Type}', expected 'custom'); it does not check again on its own");
+            }
+            else
+            {
+                yield return ("dns stage", true, $"active, serving {string.Join(", ", fqdns)}");
+            }
         }
 
         // TLS: active is not enough — the managed certificate must have materialized as a secret
