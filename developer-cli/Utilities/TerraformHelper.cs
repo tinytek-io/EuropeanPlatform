@@ -38,7 +38,16 @@ public static partial class TerraformHelper
     ///     after confirmation (or right away with <paramref name="autoApprove" />). Without a terminal
     ///     and without auto-approve, pending changes stop the command.
     /// </summary>
-    public static async Task ApplyChangesAsync(string moduleFolder, string planArguments, bool autoApprove, string declinedMessage)
+    /// <param name="moduleFolder">The Terraform module to plan and apply.</param>
+    /// <param name="planArguments">Arguments for terraform plan (var files and -var values).</param>
+    /// <param name="autoApprove">Apply without asking.</param>
+    /// <param name="declinedMessage">Printed when the changes are declined, before the command stops.</param>
+    /// <param name="reviewPlan">
+    ///     Given the saved plan as JSON (<c>terraform show -json</c>) before the confirmation, to judge what it would
+    ///     do beyond the listed changes (the deploy prices it); it stops the command itself if the plan must not apply.
+    /// </param>
+    /// <returns>Whether the plan had changes.</returns>
+    public static async Task<bool> ApplyChangesAsync(string moduleFolder, string planArguments, bool autoApprove, string declinedMessage, Func<string, Task>? reviewPlan = null)
     {
         // A saved plan holds every sensitive value in plain text, so it lives in an owner-only
         // folder that is removed even when the command exits early.
@@ -53,7 +62,7 @@ public static partial class TerraformHelper
         {
             DeleteFolder(planFolder);
             AnsiConsole.MarkupLine("[green]Infrastructure matches the configuration.[/]");
-            return;
+            return false;
         }
 
         if (plan.ExitCode != 2)
@@ -63,6 +72,12 @@ public static partial class TerraformHelper
         }
 
         PrintPlanChanges(plan);
+
+        if (reviewPlan is not null)
+        {
+            // The plan JSON carries every sensitive value in plain text, so it is held in memory only.
+            await reviewPlan(await RunSensitiveAsync(moduleFolder, $"show -json {planFile}", "read the saved plan"));
+        }
 
         if (!autoApprove)
         {
@@ -84,6 +99,7 @@ public static partial class TerraformHelper
         ProcessHelper.StartProcess($"terraform apply -input=false {planFile}", moduleFolder);
         DeleteFolder(planFolder);
         AnsiConsole.MarkupLine("[green]Infrastructure changes applied.[/]");
+        return true;
     }
 
     private static void PrintPlanChanges(ProcessResult plan)

@@ -16,6 +16,7 @@
         <Compile Include="..\Commands\SecurityCheck\SecurityInventory.cs" Link="Commands\SecurityCheck\SecurityInventory.cs" />
         <Compile Include="..\Commands\SecurityCheck\SecurityCheckEvaluator.cs" Link="Commands\SecurityCheck\SecurityCheckEvaluator.cs" />
         <Compile Include="..\Commands\SecurityCheck\SecurityInventoryReader.cs" Link="Commands\SecurityCheck\SecurityInventoryReader.cs" />
+        <Compile Include="..\Commands\CostEstimate\CostEstimator.cs" Link="Commands\CostEstimate\CostEstimator.cs" />
     </ItemGroup>
 
     <ItemGroup>

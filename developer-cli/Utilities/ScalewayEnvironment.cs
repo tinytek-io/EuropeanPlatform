@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
@@ -34,6 +35,9 @@ public static partial class ScalewayEnvironment
     [GeneratedRegex("""^prefix\s*=\s*"([a-z0-9]{2,6})"\s*$""", RegexOptions.Multiline)]
     private static partial Regex PrefixPattern { get; }
 
+    [GeneratedRegex(@"^monthly_budget_eur\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*(?:#.*)?$", RegexOptions.Multiline)]
+    private static partial Regex MonthlyBudgetPattern { get; }
+
     public static string ScalewayFolder => Path.Combine(Configuration.SourceCodeFolder, "cloud-infrastructure", "scaleway");
 
     public static string EnvironmentModuleFolder => Path.Combine(ScalewayFolder, "environment");
@@ -69,6 +73,27 @@ public static partial class ScalewayEnvironment
         AnsiConsole.MarkupLine($"[red]No backend configuration found at {Markup.Escape(backendConfiguration)}.[/] Every environment declares its state bucket there (see environments/stage.backend.hcl).");
         Environment.Exit(1);
         return null!;
+    }
+
+    /// <summary>
+    ///     The tier file's monthly_budget_eur, overridden by the operator's git-ignored &lt;environment&gt;.local.tfvars
+    ///     when that sets one (the deploy layers it over the tier file the same way).
+    /// </summary>
+    public static decimal ReadMonthlyBudget(string terraformEnvironment)
+    {
+        var tierFile = TierFileOf(terraformEnvironment);
+        var localOverrides = Path.Combine(EnvironmentModuleFolder, "environments", $"{terraformEnvironment}.local.tfvars");
+        var budget = new[] { tierFile, localOverrides }
+            .Where(File.Exists)
+            .Select(file => MonthlyBudgetPattern.Match(File.ReadAllText(file)))
+            .Where(match => match.Success)
+            .Select(match => decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture))
+            .LastOrDefault();
+        if (budget > 0) return budget;
+
+        AnsiConsole.MarkupLine($"[red]{Markup.Escape(tierFile)} sets no monthly_budget_eur.[/] Add a line like monthly_budget_eur = 100 (euros per month, excluding VAT).");
+        Environment.Exit(1);
+        return 0;
     }
 
     public static string ReadPrefix(string terraformEnvironment)

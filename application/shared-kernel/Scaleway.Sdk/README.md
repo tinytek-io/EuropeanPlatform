@@ -56,7 +56,7 @@ Two hand-written clients wrap paths where the generated surface is awkward to us
 | Client | Why it is hand-written |
 |---|---|
 | `ScalewaySecretClient` | Read/write helpers over Secret Manager: find-by-name, read latest version, create-or-add-version. |
-| `ScalewayPricingCatalogClient` | The public product catalog, with paging and a 24-hour on-disk cache. |
+| `ScalewayPricingCatalogClient` | The public product catalog per region, zone or globally, with paging and a 24-hour on-disk cache. |
 
 Object Storage is also in the package — it is S3-compatible and publishes no OpenAPI schema, so it is
 hand-written with its own SigV4 signing — but it is **internal**, reachable only by the hosting package and the

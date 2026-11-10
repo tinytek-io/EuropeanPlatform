@@ -178,6 +178,14 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Changed
 
+- `BREAKING:` `ScalewayPricingCatalogClient` returns the catalog's product records instead of a name-to-hourly-price
+  map. `GetProductsAsync(CatalogLocality)` lists a region's, a zone's or the global products (Instances, Load
+  Balancers and Public Gateways are zonal; Edge Services is global, and the old region-only fetch could not see
+  them), and each `CatalogProduct` carries its SKU, category, product, locality, price and the unit the price is per.
+  `GetCatalogAsync`, `FindPrice`, `FindMultiAzPrice` and `CatalogUnavailable` are gone: the catalog does not say
+  whether a price is per hour or per month, so turning products into an estimate belongs to the caller. A catalog
+  that cannot be read now throws instead of returning an empty list.
+
 - The identifier parameter of a resource group whose name starts with an acronym is lower-cased as a whole:
   `apiKeyId` instead of `aPIKeyId` on IAM's API key operations, `vpcId` instead of `vPCId` on VPC's. Only callers
   that pass the identifier as a named argument are affected.

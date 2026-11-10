@@ -373,7 +373,10 @@ dotnet run --project developer-cli -- deploy -e staging
 
 The command verifies the infrastructure matches the Terraform configuration (refusing to deploy
 over drift), resolves the cluster kubeconfig and the per-workload deploy keys from Terraform
-outputs, and runs the Aspire build/publish/deploy pipeline with live progress. It ends with
+outputs, and runs the Aspire build/publish/deploy pipeline with live progress. Every infrastructure plan is
+priced from Scaleway's public catalog first, and a plan that would take the environment over its
+`monthly_budget_eur` (set in the tier file) needs confirming; `cost-estimate` prints the same estimate for the
+running environment. It ends with
 `security-check`, which fails the deploy if anything lets traffic reach the cluster around the edge
 WAF. Afterwards, run `edge-health` for a read-only health check of the edge and the public endpoints.
 

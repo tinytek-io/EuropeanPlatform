@@ -93,7 +93,19 @@ public sealed partial class DeployCommand : Command
         if (!skipPlanCheck)
         {
             PrintHeader("Applying pending infrastructure changes");
-            await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "Deploy cancelled before anything rolled out.");
+
+            // A plan is priced before it is confirmed, so a change that would take the environment over its budget
+            // is seen while it can still be declined. With nothing to change, the running environment is priced.
+            const string overBudgetDeclined = "Deploy cancelled before anything rolled out. Raise monthly_budget_eur in the tier file if the cost is intended.";
+            var monthlyBudget = ScalewayEnvironment.ReadMonthlyBudget(terraformEnvironment);
+            var changed = await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "Deploy cancelled before anything rolled out.",
+                reviewPlan: plan => CostEstimateCommand.ConfirmWithinBudgetAsync(plan, monthlyBudget, ScalewayEnvironment.Region, autoApprove, overBudgetDeclined)
+            );
+            if (!changed)
+            {
+                var state = await TerraformHelper.RunSensitiveAsync(ScalewayEnvironment.EnvironmentModuleFolder, "show -json", "read the Terraform state");
+                await CostEstimateCommand.ConfirmWithinBudgetAsync(state, monthlyBudget, ScalewayEnvironment.Region, autoApprove, overBudgetDeclined);
+            }
         }
 
         // DNS drift is invisible to Terraform (the public zone lives at an external provider), and a
@@ -415,7 +427,7 @@ public sealed partial class DeployCommand : Command
     ///     configuration contract; an operator's git-ignored &lt;environment&gt;.local.tfvars (a test
     ///     domain, say) is layered on top of it, and Terraform lets the later var file win.
     /// </summary>
-    private static async Task ApplyEnvironmentChangesAsync(string terraformEnvironment, string projectId, bool autoApprove, string declinedMessage, string additionalPlanArguments = "")
+    private static async Task<bool> ApplyEnvironmentChangesAsync(string terraformEnvironment, string projectId, bool autoApprove, string declinedMessage, string additionalPlanArguments = "", Func<string, Task>? reviewPlan = null)
     {
         var varFiles = $"-var-file={ScalewayEnvironment.TierFileOf(terraformEnvironment)}";
         var localOverrides = Path.Combine(ScalewayEnvironment.EnvironmentModuleFolder, "environments", $"{terraformEnvironment}.local.tfvars");
@@ -425,11 +437,12 @@ public sealed partial class DeployCommand : Command
             AnsiConsole.MarkupLine($"[yellow]Using the local overrides in environments/{terraformEnvironment}.local.tfvars.[/]");
         }
 
-        await TerraformHelper.ApplyChangesAsync(
+        return await TerraformHelper.ApplyChangesAsync(
             ScalewayEnvironment.EnvironmentModuleFolder,
             $"{varFiles} -var environment={terraformEnvironment} -var project_id={projectId} {additionalPlanArguments}".TrimEnd(),
             autoApprove,
-            $"{declinedMessage} Run the deploy again to apply them, or pass --skip-plan-check to deploy without them."
+            $"{declinedMessage} Run the deploy again to apply them, or pass --skip-plan-check to deploy without them.",
+            reviewPlan
         );
     }
 

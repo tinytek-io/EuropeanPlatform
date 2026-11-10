@@ -111,6 +111,15 @@ variable "node_count" {
   default     = 2
 }
 
+variable "monthly_budget_eur" {
+  description = "What the environment may cost per month in euros, excluding VAT and usage-billed charges. Terraform does not use it: the developer CLI's cost-estimate prices the plan against it, and the deploy asks for confirmation before applying a plan that would exceed it."
+  type        = number
+  validation {
+    condition     = var.monthly_budget_eur > 0
+    error_message = "monthly_budget_eur must be a positive number of euros."
+  }
+}
+
 variable "database_node_type" {
   description = "Managed PostgreSQL node type. db-dev-s (2 vCPU / 2 GB) is the development tier: fine for staging and a starting point for production, with no SLA. Production should move to db-s or larger."
   type        = string

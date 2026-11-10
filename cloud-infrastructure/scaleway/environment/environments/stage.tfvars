@@ -16,6 +16,10 @@
 # environment never changes it, because every resource would be renamed.
 prefix = "ep"
 
+# The fixed monthly cost the environment may reach (euros, excluding VAT; storage, traffic and emails are billed
+# by use on top). The deploy prices every infrastructure change against it and asks before exceeding it.
+monthly_budget_eur = 100
+
 node_count = 1 # Staging is for development: a node replacement or upgrade may briefly interrupt it
 node_type  = "PLAY2-NANO"
 
