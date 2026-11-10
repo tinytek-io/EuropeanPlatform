@@ -21,6 +21,9 @@ internal static class ClusterPreparationSteps
     private const string GatewayApiVersion = "v1.6.1";
     private const string CiliumVersion = "v1.20.2";
 
+    // How kubectl apply names a CRD in its per-resource output ("customresourcedefinition.apiextensions.k8s.io/x").
+    private const string CustomResourceDefinitionKind = "customresourcedefinition.apiextensions.k8s.io/";
+
     private const string RegistryPullSecretName = "scaleway-registry-pull";
     private const string MigratorsPolicyName = "migrators-east-west";
 
@@ -60,10 +63,13 @@ internal static class ClusterPreparationSteps
             $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumenvoyconfigs.yaml",
             $"https://raw.githubusercontent.com/cilium/cilium/{CiliumVersion}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwideenvoyconfigs.yaml"
         ];
+        // Only a changed CRD needs Cilium restarted. The Gateway API install also carries a ValidatingAdmissionPolicy
+        // and its binding (safe-upgrades.gateway.networking.k8s.io) that kubectl reports as "configured" on every
+        // apply although nothing differs (found live), and counting them restarted Cilium on every deploy.
         var changed = false;
         foreach (var manifest in customResourceDefinitions)
         {
-            changed |= Kubectl.AppliedChanges(await Kubectl.RequireAsync($"Applying the CRDs from {manifest}", ["apply", "-f", manifest], cancellationToken));
+            changed |= Kubectl.AppliedChanges(await Kubectl.RequireAsync($"Applying the CRDs from {manifest}", ["apply", "-f", manifest], cancellationToken), CustomResourceDefinitionKind);
         }
 
         var configuration = await Kubectl.RequireAsync("Reading cilium-config", ["get", "configmap", "cilium-config", "-n", "kube-system", "-o", "jsonpath={.data}"], cancellationToken);

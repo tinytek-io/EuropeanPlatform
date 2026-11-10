@@ -57,9 +57,13 @@ internal static class Kubectl
     }
 
     /// <summary>Whether a <c>kubectl apply</c> created or changed anything, from its per-resource output lines.</summary>
-    public static bool AppliedChanges(string applyOutput)
+    /// <param name="applyOutput">kubectl apply's standard output.</param>
+    /// <param name="resourcePrefix">Count only resources whose output line starts with this (a kind), or every resource.</param>
+    public static bool AppliedChanges(string applyOutput, string resourcePrefix = "")
     {
-        return applyOutput.Split('\n').Any(line => line.EndsWith(" created") || line.EndsWith(" configured"));
+        return applyOutput.Split('\n')
+            .Where(line => line.StartsWith(resourcePrefix, StringComparison.Ordinal))
+            .Any(line => line.EndsWith(" created") || line.EndsWith(" configured"));
     }
 }
 
