@@ -34,4 +34,7 @@
     <Project Path="AppGateway\AppGateway.csproj"/>
     <Project Path="AppGateway.Tests\AppGateway.Tests.csproj"/>
     <Project Path="AppHost\AppHost.csproj"/>
+    <Folder Name="/developer-cli/">
+        <Project Path="..\developer-cli\Tests\DeveloperCli.Tests.csproj"/>
+    </Folder>
 </Solution>

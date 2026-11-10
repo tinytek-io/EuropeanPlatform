@@ -372,7 +372,7 @@ spec:
               protocol: TCP
 ---
 # back-office-workers: no inbound callers; the back-office database (its data migrations and
-# housekeeping), Secret Manager, the Scaleway API for the security checks, and telemetry.
+# housekeeping), Secret Manager, and telemetry.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

@@ -1,18 +1,20 @@
 using System.Net;
 using System.Text;
-using BackOffice.Features.SecurityChecks;
+using DeveloperCli.Commands.SecurityCheck;
 using FluentAssertions;
-using Microsoft.Extensions.Options;
+using Scaleway.Sdk;
 using Xunit;
+using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
+using ScwLb = Scaleway.Sdk.Lb.V1;
 
-namespace BackOffice.Tests.SecurityChecks;
+namespace DeveloperCli.Tests.SecurityCheck;
 
 /// <summary>
-///     Feeds the inventory client Scaleway-shaped responses for every path it reads, so a mapping mistake between the
-///     generated Load Balancer and Edge Services models and the snapshots the checks evaluate fails here rather than in a
-///     deployed worker.
+///     Feeds the inventory reader Scaleway-shaped responses for every path it reads, so a mapping mistake between the
+///     generated Load Balancer and Edge Services models and the snapshots the checks evaluate fails here rather than
+///     against a live environment.
 /// </summary>
-public sealed class ScalewaySecurityInventoryClientTests
+public sealed class SecurityInventoryReaderTests
 {
     private const string ProjectId = "22222222-2222-2222-2222-222222222222";
     private const string GatewayId = "fr-par-1/11111111-1111-1111-1111-111111111111";
@@ -21,7 +23,6 @@ public sealed class ScalewaySecurityInventoryClientTests
     {
         ["/lb/v1/zones/fr-par-1/lbs"] = """{ "lbs": [{ "id": "11111111-1111-1111-1111-111111111111", "name": "gateway", "ip": [{ "ip_address": "51.15.0.1" }] }], "total_count": 1 }""",
         ["/lb/v1/zones/fr-par-2/lbs"] = """{ "lbs": [], "total_count": 0 }""",
-        ["/lb/v1/zones/fr-par-3/lbs"] = """{ "lbs": [], "total_count": 0 }""",
         ["/lb/v1/zones/fr-par-1/lbs/11111111-1111-1111-1111-111111111111/frontends"] = """{ "frontends": [{ "id": "frontend-443", "name": "app-https", "inbound_port": 443 }], "total_count": 1 }""",
         ["/lb/v1/zones/fr-par-1/frontends/frontend-443/acls"] =
             """{ "acls": [{ "name": "edge-only", "index": 0, "action": { "type": "deny" }, "match": { "ips_edge_services": true, "invert": true, "ip_subnet": [] } }], "total_count": 1 }""",
@@ -36,16 +37,14 @@ public sealed class ScalewaySecurityInventoryClientTests
     public async Task ReadAsync_WhenScalewayReturnsTheGateway_ShouldMapLoadBalancersFrontendsAclsAndEdgePipelines()
     {
         // Arrange
-        Environment.SetEnvironmentVariable("SCW_DEFAULT_PROJECT_ID", ProjectId);
-        Environment.SetEnvironmentVariable("SCW_DEFAULT_REGION", "fr-par");
         var handler = new RecordedResponsesHandler(Responses);
-        var client = new ScalewaySecurityInventoryClient(
-            new HttpClient(handler) { BaseAddress = new Uri("https://api.scaleway.com/") },
-            Options.Create(new SecurityChecksOptions { GatewayLoadBalancerId = GatewayId })
-        );
+        using var httpClient = new HttpClient(handler);
+        httpClient.BaseAddress = new Uri("https://api.scaleway.com/");
+        using var transport = new ScalewayApiClient(httpClient);
+        var reader = new SecurityInventoryReader(new ScwLb.LbApi(transport), new ScwEdge.EdgeServicesApi(transport), ProjectId, "fr-par");
 
         // Act
-        var inventory = await client.ReadAsync(CancellationToken.None);
+        var inventory = await reader.ReadAsync(GatewayId, CancellationToken.None);
 
         // Assert
         inventory.LoadBalancers.Should().BeEquivalentTo([new LoadBalancerSnapshot(GatewayId, "gateway", ["51.15.0.1"])]);

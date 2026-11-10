@@ -371,8 +371,9 @@ dotnet run --project developer-cli -- deploy -e staging
 
 The command verifies the infrastructure matches the Terraform configuration (refusing to deploy
 over drift), resolves the cluster kubeconfig and the per-workload deploy keys from Terraform
-outputs, and runs the Aspire build/publish/deploy pipeline with live progress. Afterwards, run
-`edge-health` for a read-only health check of the edge and the public endpoints.
+outputs, and runs the Aspire build/publish/deploy pipeline with live progress. It ends with
+`security-check`, which fails the deploy if anything lets traffic reach the cluster around the edge
+WAF. Afterwards, run `edge-health` for a read-only health check of the edge and the public endpoints.
 
 Workloads push OpenTelemetry metrics, logs, and traces to the project's Cockpit. For a new
 environment, open the Cockpit Grafana once in the Scaleway console (the project's
@@ -677,7 +678,7 @@ in Terraform and deployed through the Aspire pipeline:
 - **Infrastructure as Code everywhere**: every resource from the state bucket to the edge
   pipelines is owned by Terraform; application deployment is owned by the Aspire
   publish/deploy pipeline. Nothing is created by hand, and `terraform plan` + the
-  `edge-health` developer-cli command verify the environment.
+  `edge-health` and `security-check` developer-cli commands verify the environment.
 - **Enterprise-grade security with zero secrets in the codebase**:
   - **Per-workload identities**: every workload runs with its own IAM application whose policy
     grants access to exactly its Secret Manager path — a compromised workload cannot read

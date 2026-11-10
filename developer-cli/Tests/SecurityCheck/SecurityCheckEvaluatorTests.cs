@@ -1,8 +1,8 @@
-using BackOffice.Features.SecurityChecks;
+using DeveloperCli.Commands.SecurityCheck;
 using FluentAssertions;
 using Xunit;
 
-namespace BackOffice.Tests.SecurityChecks;
+namespace DeveloperCli.Tests.SecurityCheck;
 
 public sealed class SecurityCheckEvaluatorTests
 {

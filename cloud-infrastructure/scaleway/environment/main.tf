@@ -950,11 +950,9 @@ locals {
       InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
     }
     # The back-office workers migrate nothing when deployed (the migrator Job does) but run its
-    # data migrations and housekeeping on the back-office database. The security checks they run
-    # need the gateway LB they verify (zone-qualified, as Terraform reports it).
+    # data migrations and housekeeping on the back-office database.
     back-office-workers = {
       ConnectionStrings__back-office-database = local.back_office_database_connection_string
-      SecurityChecks__GatewayLoadBalancerId   = scaleway_lb.gateway.id
     }
   }
 
@@ -1026,16 +1024,6 @@ resource "scaleway_iam_policy" "workload" {
     for_each = startswith(each.key, "account-") || each.key == "back-office-api" ? [1] : []
     content {
       permission_set_names = ["TransactionalEmailEmailFullAccess"]
-      project_ids          = [var.project_id]
-    }
-  }
-
-  # The back-office security checks read the project's public entry points: Load Balancers with
-  # their frontends and ACLs, and the Edge Services pipelines with their WAF stages. Read-only.
-  dynamic "rule" {
-    for_each = each.key == "back-office-workers" ? [1] : []
-    content {
-      permission_set_names = ["LoadBalancersReadOnly", "EdgeServicesReadOnly"]
       project_ids          = [var.project_id]
     }
   }
@@ -1117,7 +1105,7 @@ moved {
 # captured by hand: a frontend the CCM recreates gets a new id, the plan then replaces its ACL, and
 # the deploy applies that (after confirmation) in the same run. The ports are fixed, not discovered,
 # so the plan stays computable while the LB itself has pending changes; any other frontend that
-# appears on the LB fails the back-office worker's security check (gateway-frontends-edge-only).
+# appears on the LB fails the deploy's security check (gateway-frontends-edge-only).
 #
 # The CCM only replaces the ACLs it generates itself (named "<frontend-id>-lb-source-range-*",
 # from the Service's loadBalancerSourceRanges), so these Terraform-owned ACLs survive its

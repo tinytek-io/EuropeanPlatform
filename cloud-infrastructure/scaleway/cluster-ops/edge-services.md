@@ -108,11 +108,12 @@ Rules that keep it closed:
   cluster-ops README.)
 - A frontend on any other port is not covered; the security check below reports it.
 
-## Continuous security check (back-office worker)
+## Security check (developer CLI)
 
-The back-office worker (`SecurityCheckWorker`) re-verifies this every 15 minutes with a read-only
-key (`LoadBalancersReadOnly` + `EdgeServicesReadOnly`) and logs one line per check: information on
-pass, error on fail, naming the offending resource. Rules: `SecurityCheckEvaluator`.
+`dotnet run --project developer-cli -- security-check -e staging` verifies this with the
+environment's operator key, read-only, and prints one line per check, naming the offending resource
+on a failure. The deploy runs it as its last step, after the pass that re-applies the edge-only
+ACLs, and fails on a finding. Rules: `developer-cli/Commands/SecurityCheck/SecurityCheckEvaluator.cs`.
 
 | Check | Holds when |
 |---|---|
@@ -120,10 +121,11 @@ pass, error on fail, naming the offending resource. Rules: `SecurityCheckEvaluat
 | `only-gateway-load-balancer-is-public` | No other Load Balancer in the project's region has a public IP. |
 | `edge-waf-enforced` | Every pipeline has a WAF stage in `enable` mode with no exclusion rules, and no TLS or cache stage targets the backend directly. |
 
-An unreadable inventory (API outage, missing permission) is logged as an error too, never as a
-pass. Alerting on these errors comes with the operations work. The checks run inside Scaleway, so
-they cannot prove the LB refuses internet traffic; that needs the external probe in the
-verification step above, run from outside Scaleway.
+An unreadable inventory (API outage, missing permission) fails the check too, never passes it. The
+checks read the configuration through the API, so they cannot prove the LB refuses internet
+traffic; that needs the external probe below, run from outside Scaleway. Changes made in the
+console between deploys are caught only by running the command; a scheduled CI run will cover that
+once CI is restored.
 
 Verify after apply (from outside Scaleway):
 

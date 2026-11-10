@@ -335,6 +335,15 @@ public sealed partial class DeployCommand : Command
             await ReissueFailedEdgeCertificatesAsync(terraformEnvironment, organizationId, projectId, credentials, autoApprove);
         }
 
+        // Last, once the second pass has re-applied the edge-only ACLs: a frontend the rollout recreated without one,
+        // or anything else that lets traffic around the edge WAF, fails the deploy instead of going unnoticed.
+        PrintHeader("Verifying that nothing bypasses the edge WAF");
+        if (await SecurityCheckCommand.PrintSecurityReportAsync(credentials, organizationId, projectId) > 0)
+        {
+            AnsiConsole.MarkupLine("[red]The rollout succeeded, but a security check failed.[/] Fix the findings above; security-check repeats the checks without deploying.");
+            Environment.Exit(1);
+        }
+
         AnsiConsole.MarkupLine($"[green]Deployment of {aspireEnvironment} succeeded.[/] Run [cyan]dotnet run --project developer-cli -- edge-health -e {aspireEnvironment}[/] for a read-only health check of the edge and the public endpoints.");
     }
 

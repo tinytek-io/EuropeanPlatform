@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AssemblyName>DeveloperCli.Tests</AssemblyName>
+        <RootNamespace>DeveloperCli.Tests</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The CLI is a self-rebuilding single-file executable, so this project compiles the files it tests instead
+             of referencing it. Only console-free logic belongs here; it runs in the application solution's test run. -->
+        <Compile Include="..\Commands\SecurityCheck\SecurityInventory.cs" Link="Commands\SecurityCheck\SecurityInventory.cs" />
+        <Compile Include="..\Commands\SecurityCheck\SecurityCheckEvaluator.cs" Link="Commands\SecurityCheck\SecurityCheckEvaluator.cs" />
+        <Compile Include="..\Commands\SecurityCheck\SecurityInventoryReader.cs" Link="Commands\SecurityCheck\SecurityInventoryReader.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\application\shared-kernel\Scaleway.Sdk\Scaleway.Sdk.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Outside the application folder, so the versions are not centrally managed; they match
+             application/Directory.Packages.props. -->
+        <PackageReference Include="coverlet.collector" Version="10.0.1">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="FluentAssertions" Version="7.2.2" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

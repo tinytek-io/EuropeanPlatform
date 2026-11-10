@@ -1,6 +1,9 @@
-namespace BackOffice.Features.SecurityChecks;
+// DeveloperCli.Tests compiles this file from outside its folder; the namespace matches its place in the CLI.
+// ReSharper disable once CheckNamespace
 
-/// <param name="Name">Stable check name: the log and alert key.</param>
+namespace DeveloperCli.Commands.SecurityCheck;
+
+/// <param name="Name">Stable check name, as the command prints it.</param>
 /// <param name="Findings">Why the check failed, one entry per offending resource; empty when it passed.</param>
 public sealed record SecurityCheckResult(string Name, string[] Findings)
 {

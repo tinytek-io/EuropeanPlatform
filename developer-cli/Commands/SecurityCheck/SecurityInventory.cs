@@ -1,4 +1,7 @@
-namespace BackOffice.Features.SecurityChecks;
+// DeveloperCli.Tests compiles this file from outside its folder; the namespace matches its place in the CLI.
+// ReSharper disable once CheckNamespace
+
+namespace DeveloperCli.Commands.SecurityCheck;
 
 /// <summary>
 ///     What the security checks evaluate: a read-only snapshot of the project's public entry points, taken from the

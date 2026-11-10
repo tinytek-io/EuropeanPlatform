@@ -1,7 +1,5 @@
 using BackOffice.Database;
-using BackOffice.Features.SecurityChecks;
 using BackOffice.StaffIdentity;
-using BackOffice.Workers;
 using SharedKernel.Configuration;
 using SharedKernel.Database;
 
@@ -21,27 +19,6 @@ builder.Services.AddTransient<DataMigrationRunner<BackOfficeDbContext>>();
 // The staff OIDC provider's client list (committed in the staff identity file) is synced into its store here: the
 // workers run as one replica, so there is a single writer, and they hold the client secrets the API does not need.
 builder.Services.AddStaffIdentityClientSync();
-
-// The security checks read the deployed environment's Scaleway resources, so they run only in the
-// cloud; locally there is no edge or Load Balancer to check.
-if (SharedInfrastructureConfiguration.IsRunningInCloud)
-{
-    builder.Services.AddOptions<SecurityChecksOptions>()
-        .BindConfiguration(SecurityChecksOptions.SectionName)
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
-
-    builder.Services.AddHttpClient<ScalewaySecurityInventoryClient>(client =>
-        {
-            // The SDK builds absolute API paths on top of the API host.
-            client.BaseAddress = new Uri("https://api.scaleway.com/");
-            client.DefaultRequestHeaders.Add("X-Auth-Token", Environment.GetEnvironmentVariable("SCW_SECRET_KEY"));
-            client.Timeout = TimeSpan.FromSeconds(30);
-        }
-    );
-
-    builder.Services.AddHostedService<SecurityCheckWorker>();
-}
 
 var host = builder.Build();
 
