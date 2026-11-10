@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Diagnostics;
 using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
@@ -240,58 +239,26 @@ public sealed class EdgeHealthCommand : Command
     {
         var checks = new List<(string Check, bool Passed, string Detail)>();
 
-        try
+        var cnames = await PublicDns.ResolveAsync("CNAME", hostname);
+        if (cnames is null)
         {
-            var cname = await ResolveCnameAsync(hostname);
-            if (string.IsNullOrWhiteSpace(cname))
-            {
-                checks.Add(("dns record", false, $"no CNAME record for {hostname} — point it at {endpoint}"));
-                return checks;
-            }
-
-            if (string.Equals(cname, endpoint.TrimEnd('.'), StringComparison.OrdinalIgnoreCase))
-            {
-                checks.Add(("dns record", true, $"CNAME points at the pipeline endpoint ({endpoint})"));
-            }
-            else
-            {
-                checks.Add((
-                        "dns record",
-                        false,
-                        $"CNAME points at {cname} but the pipeline endpoint is {endpoint} — the pipeline was recreated; update the DNS record"
-                    )
-                );
-            }
-        }
-        catch (Exception exception)
-        {
-            checks.Add(("dns record", false, $"CNAME lookup failed: {exception.Message}"));
+            checks.Add(("dns record", false, "CNAME lookup failed: the public resolver did not answer"));
+            return checks;
         }
 
-        return checks;
-    }
+        var cname = cnames.FirstOrDefault()?.TrimEnd('.');
+        if (string.IsNullOrWhiteSpace(cname))
+        {
+            checks.Add(("dns record", false, $"no CNAME record for {hostname} — point it at {endpoint}"));
+            return checks;
+        }
 
-    /// <summary>
-    ///     Resolves the CNAME target of a hostname through `dig` (.NET's DNS client cannot see the
-    ///     CNAME chain, only the final addresses).
-    /// </summary>
-    private static async Task<string> ResolveCnameAsync(string hostname)
-    {
-        var output = await Task.Run(() => ProcessHelper.StartProcess(
-                new ProcessStartInfo
-                {
-                    FileName = "dig",
-                    Arguments = $"+short {hostname} CNAME",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                },
-                exitOnError: false
-            )
+        checks.Add(string.Equals(cname, endpoint.TrimEnd('.'), StringComparison.OrdinalIgnoreCase)
+            ? ("dns record", true, $"CNAME points at the pipeline endpoint ({endpoint})")
+            : ("dns record", false, $"CNAME points at {cname} but the pipeline endpoint is {endpoint} — the pipeline was recreated; update the DNS record")
         );
 
-        return output.Split('\n').FirstOrDefault(line => !string.IsNullOrWhiteSpace(line))?.Trim().TrimEnd('.') ?? "";
+        return checks;
     }
 
     private static async Task<List<(string Check, bool Passed, string Detail)>> CheckPublicEndpointAsync(string hostname)

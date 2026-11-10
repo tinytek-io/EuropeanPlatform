@@ -13,7 +13,8 @@ namespace DeveloperCli.Commands;
 /// <summary>
 ///     Prints every DNS record the environment's hosting zone is expected to carry and verifies each
 ///     one against live DNS. The expected values are derived from the Terraform state itself (no
-///     apply, no new outputs) and the live values are resolved with dig. The only writes ask Scaleway to
+///     apply, no new outputs) and the live values are resolved through a public resolver (PublicDns). The only writes ask
+///     Scaleway to
 ///     check again what it checks once and then trusts: Transactional Email to validate a domain whose
 ///     records resolve (until it does, it refuses every send from that domain), and Edge Services to
 ///     verify a hostname whose CNAME resolves (until it does, the pipeline warns and its managed
@@ -90,12 +91,6 @@ public sealed partial class DnsCheckCommand : Command
             return 0;
         }
 
-        var digAvailable = (await ProcessHelper.ExecuteQuietlyAsync("which dig")).Success;
-        if (!digAvailable)
-        {
-            AnsiConsole.MarkupLine("[yellow]dig is not installed — printing the expected records without live verification (install dig for the full check).[/]");
-        }
-
         var table = new Table().Title("[bold] Expected DNS records[/]");
         table.AddColumn("Type");
         table.AddColumn("Name");
@@ -104,21 +99,33 @@ public sealed partial class DnsCheckCommand : Command
         table.AddColumn("Status");
 
         var mismatches = 0;
+        var uncheckedRecords = 0;
+
+        // Records that are wrong, or that could not be looked up: the domains and pipelines they belong to are not
+        // asked to verify, since Scaleway would check them against the same records.
         var emailDomainsWithDrift = new HashSet<string>();
         var edgePipelinesWithDrift = new HashSet<string>();
         foreach (var record in expected)
         {
-            var live = digAvailable ? await ResolveRecordAsync(record) : null;
-            var status = !digAvailable
+            var live = await ResolveRecordAsync(record);
+            var status = live is null
                 ? "[yellow]not checked[/]"
-                : live is null || live.Count == 0
+                : live.Count == 0
                     ? "[red]missing[/]"
                     : live.Contains(record.Value, StringComparer.OrdinalIgnoreCase)
                         ? "[green]ok[/]"
                         : "[red]mismatch[/]";
-            if (status.Contains("missing") || status.Contains("mismatch"))
+            if (live is null || !status.Contains("ok"))
             {
-                mismatches++;
+                if (live is null)
+                {
+                    uncheckedRecords++;
+                }
+                else
+                {
+                    mismatches++;
+                }
+
                 if (record.EmailDomainId is not null) emailDomainsWithDrift.Add(record.EmailDomainId);
                 if (record.EdgePipelineId is not null) edgePipelinesWithDrift.Add(record.EdgePipelineId);
             }
@@ -133,12 +140,15 @@ public sealed partial class DnsCheckCommand : Command
         }
 
         AnsiConsole.Write(table);
+        if (uncheckedRecords > 0)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{uncheckedRecords} record(s) could not be looked up[/] (the public resolver did not answer); run dns-check again to verify them.");
+        }
+
         AnsiConsole.MarkupLine(mismatches == 0
-            ? "[green]All DNS records resolve as expected.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for how to fix any record by hand."
+            ? "[green]Every record that was looked up resolves as expected.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for how to fix any record by hand."
             : $"[red]{mismatches} record(s) missing or mismatched.[/] See cloud-infrastructure/scaleway/docs/dns-guide.md for the exact values to create in the DNS console."
         );
-
-        if (!digAvailable) return mismatches;
 
         using var apiClient = new ScalewayApiClient(new ScalewayCredentialConfig
             {
@@ -346,19 +356,17 @@ public sealed partial class DnsCheckCommand : Command
         return records;
     }
 
-    private static async Task<List<string>> ResolveRecordAsync(ExpectedRecord record)
+    // Null when the resolver could not be reached, so the record reads as unchecked rather than missing.
+    private static async Task<List<string>?> ResolveRecordAsync(ExpectedRecord record)
     {
-        // ProcessHelper runs dig directly (no shell), so record names from state are plain arguments.
-        var result = await ProcessHelper.ExecuteQuietlyAsync($"dig +short +time=3 +tries=1 {record.Type} {record.Name}");
-        if (!result.Success) return [];
+        var values = await PublicDns.ResolveAsync(record.Type, record.Name);
 
-        // dig prints CNAME chains one per line, and TXT values as quoted strings — a value over 255
-        // characters (a 2048-bit DKIM key) as several quoted chunks on one line ("part1" "part2").
-        // Joining the chunks yields the record value, which compares directly against the expected one.
-        return result.StdOut
-            .Split('\n')
-            .Select(line => TxtChunkSeparator().Replace(line.Trim(), "").Trim('"'))
-            .Where(line => line.Length > 0)
+        // TXT values arrive as quoted strings — a value over 255 characters (a 2048-bit DKIM key) as several quoted
+        // chunks ("part1" "part2"). Joining the chunks yields the record value, which compares directly against the
+        // expected one.
+        return values?
+            .Select(value => TxtChunkSeparator().Replace(value.Trim(), "").Trim('"'))
+            .Where(value => value.Length > 0)
             .ToList();
     }
 

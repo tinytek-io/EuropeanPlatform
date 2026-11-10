@@ -526,7 +526,7 @@ public sealed partial class DeployCommand : Command
             var pipelineEndpoint = hostnameStage?.DefaultFqdn?.TrimEnd('.');
             if (hostname is null || pipelineEndpoint is null) continue;
 
-            var cname = (await ProcessHelper.ExecuteQuietlyAsync($"dig +short CNAME {hostname}")).StdOut.Trim().TrimEnd('.');
+            var cname = (await PublicDns.ResolveAsync("CNAME", hostname))?.FirstOrDefault()?.TrimEnd('.');
             if (!string.Equals(cname, pipelineEndpoint, StringComparison.OrdinalIgnoreCase))
             {
                 AnsiConsole.MarkupLine($"[yellow]The certificate for {hostname} did not issue, and its CNAME does not point at the pipeline ({pipelineEndpoint}) yet.[/] Fix the record (dns-check lists it) and deploy again; the deploy then requests a new certificate.");
