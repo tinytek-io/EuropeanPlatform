@@ -98,13 +98,14 @@ public sealed partial class DeployCommand : Command
             // is seen while it can still be declined. With nothing to change, the running environment is priced.
             const string overBudgetDeclined = "Deploy cancelled before anything rolled out. Raise monthly_budget_eur in the tier file if the cost is intended.";
             var monthlyBudget = ScalewayEnvironment.ReadMonthlyBudget(terraformEnvironment);
+            var subscriptions = await CostEstimateCommand.ReadLiveSubscriptionsAsync(credentials, organizationId, projectId);
             var changed = await ApplyEnvironmentChangesAsync(terraformEnvironment, projectId, autoApprove, "Deploy cancelled before anything rolled out.",
-                reviewPlan: plan => CostEstimateCommand.ConfirmWithinBudgetAsync(plan, monthlyBudget, ScalewayEnvironment.Region, autoApprove, overBudgetDeclined)
+                reviewPlan: plan => CostEstimateCommand.ConfirmWithinBudgetAsync(plan, monthlyBudget, ScalewayEnvironment.Region, subscriptions, autoApprove, overBudgetDeclined)
             );
             if (!changed)
             {
                 var state = await TerraformHelper.RunSensitiveAsync(ScalewayEnvironment.EnvironmentModuleFolder, "show -json", "read the Terraform state");
-                await CostEstimateCommand.ConfirmWithinBudgetAsync(state, monthlyBudget, ScalewayEnvironment.Region, autoApprove, overBudgetDeclined);
+                await CostEstimateCommand.ConfirmWithinBudgetAsync(state, monthlyBudget, ScalewayEnvironment.Region, subscriptions, autoApprove, overBudgetDeclined);
             }
         }
 

@@ -172,4 +172,19 @@ public sealed class TemApi(IScalewayApiClient client, ScalewayRequestScope? scop
         var response = await client.CreateResourceAsync($"transactional-email/v1alpha1/regions/{region}/domains/{domainId}/check", region, new { }, cancellationToken);
         return response.Deserialize<Domain>(JsonOptions)!;
     }
+
+    /// <summary>Get information about subscribed offers</summary>
+    /// <param name="query">Names the target of the action through the query string. Required by the schema, so it carries no default.</param>
+    /// <param name="region">The region to address. Falls back to the client scope's default when null; a client created without one must pass it.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>ListOfferSubscriptions</c> — <c>GET /transactional-email/v1alpha1/regions/{region}/offer-subscriptions</c> (V1Alpha1).
+    /// </remarks>
+    public async Task<ListOfferSubscriptionsResponse?> ListOfferSubscriptionsAsync(ListOfferSubscriptionsRequest query, string? region = null, CancellationToken cancellationToken = default)
+    {
+        region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
+        query = scope?.ApplyProject(query) ?? query;
+        var response = await client.GetAsync($"transactional-email/v1alpha1/regions/{region}/offer-subscriptions", region, query.ToQueryParameters(), cancellationToken);
+        return response?.Deserialize<ListOfferSubscriptionsResponse>(JsonOptions);
+    }
 }

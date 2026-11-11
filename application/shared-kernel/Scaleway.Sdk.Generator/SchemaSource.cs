@@ -116,7 +116,13 @@ public static class SchemaSource
             // its find-then-access lookup either way — see the note on ScalewaySecretClient.FindByNameAsync.
             "secret" => ["AccessSecretVersion"],
             "rdb" => ["GetInstanceCertificate"],
-            "tem" => ["GetDomainLastStatus", "CheckDomain"],
+            // ListOfferSubscriptions tells the cost estimate which Transactional Email offer the project pays for (the
+            // subscription is outside Terraform). UpdateOfferSubscription is a PATCH on the collection with a body, so
+            // ScalewayEnvironment.EnsureEmailOfferAsync still subscribes through the transport.
+            "tem" => ["GetDomainLastStatus", "CheckDomain", "ListOfferSubscriptions"],
+            // GetCurrentPlan reports the Edge Services plan Scaleway bills, for the cost estimate's check against
+            // the Terraform-owned plan.
+            "edge_services" => ["GetCurrentPlan"],
             "k8s" => ["GetClusterKubeConfig"],
             // StartJobDefinition is absent by capability, not by scope: it is a POST carrying a real body
             // (startup_command, args, environment_variables, replicas), and the action emitter supports only

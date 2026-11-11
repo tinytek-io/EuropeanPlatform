@@ -118,7 +118,9 @@
           ]
         }
       ],
-      "actions": []
+      "actions": [
+        "GetCurrentPlan"
+      ]
     },
     {
       "service": "iam",
@@ -499,7 +501,8 @@
       ],
       "actions": [
         "GetDomainLastStatus",
-        "CheckDomain"
+        "CheckDomain",
+        "ListOfferSubscriptions"
       ]
     },
     {

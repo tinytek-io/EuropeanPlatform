@@ -11,6 +11,9 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Added
 
+- `TemApi.ListOfferSubscriptionsAsync` (the project's Transactional Email offer) and
+  `EdgeServicesApi.GetCurrentPlanAsync` (the Edge Services plan Scaleway bills), as actions.
+
 - **Edge Services** (`v1beta1`) — `ScalewayProjectClient.EdgeServices` (`Scaleway.Sdk.EdgeServices.V1Beta1`):
   pipelines and their DNS, TLS, cache, WAF and backend stages with full CRUD, plus the list-only head stages. Each
   stage is listed and created under its pipeline and addressed at its own path. The API is global, so no call takes
@@ -141,6 +144,10 @@ may include breaking changes in minor releases; each is called out under `Change
   collections (routes, subnets, vpc-connectors, ingress-rules).
 
 ### Fixed
+
+- An action whose response is a list wrapper (`List…Response`) returns the wrapper. It was typed as the list's element,
+  as a CRUD List is, but an action is sent with the plain GET and returns the body as Scaleway sends it, so the
+  wrapper deserialized into an empty element record.
 
 - An array field declared without `items` takes the element type the same-named typed array elsewhere in the schema
   agrees on, instead of being dropped. Scaleway's OpenAPI 3.1 documents mark nullable arrays `[array, "null"]` and

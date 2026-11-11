@@ -400,6 +400,35 @@ public readonly record struct PipelineStatus(string Value) : IScalewayEnumValue<
 ///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
 /// </summary>
 /// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
+[JsonConverter(typeof(ScalewayEnumValueConverter<PlanName>))]
+public readonly record struct PlanName(string Value) : IScalewayEnumValue<PlanName>
+{
+    /// <remarks>Scaleway value <c>unknown_name</c>.</remarks>
+    public static readonly PlanName UnknownName = new("unknown_name");
+    /// <remarks>Scaleway value <c>starter</c>.</remarks>
+    public static readonly PlanName Starter = new("starter");
+    /// <remarks>Scaleway value <c>professional</c>.</remarks>
+    public static readonly PlanName Professional = new("professional");
+    /// <remarks>Scaleway value <c>advanced</c>.</remarks>
+    public static readonly PlanName Advanced = new("advanced");
+
+    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static PlanName FromValue(string value) => new(value);
+
+    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static implicit operator PlanName(string value) => new(value);
+
+    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
+    public override string ToString() => Value;
+}
+
+/// <summary>
+///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
+///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
+/// </summary>
+/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
 [JsonConverter(typeof(ScalewayEnumValueConverter<StageStatus>))]
 public readonly record struct StageStatus(string Value) : IScalewayEnumValue<StageStatus>
 {
@@ -688,6 +717,13 @@ public sealed record PipelineError
     public string? Message { get; init; }
     /// <remarks>Scaleway field <c>type</c>.</remarks>
     public PipelineErrorType? Type { get; init; }
+}
+
+/// <remarks>Scaleway schema component <c>scaleway.edge_services.v1beta1.Plan</c>.</remarks>
+public sealed record Plan
+{
+    /// <remarks>Scaleway field <c>plan_name</c>.</remarks>
+    public PlanName? PlanName { get; init; }
 }
 
 /// <remarks>Scaleway schema component <c>scaleway.edge_services.v1beta1.TLSSecret</c>.</remarks>

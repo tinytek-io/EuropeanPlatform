@@ -20,10 +20,22 @@ public sealed record CostLine(string Address, string Description, decimal Monthl
 /// <param name="Reason">Why, so the pricing rule can be added or corrected.</param>
 public sealed record UnpricedResource(string Address, string Reason);
 
+/// <summary>
+///     What the project is subscribed to outside Terraform, as Scaleway reports it, or null where it was not read.
+/// </summary>
+/// <param name="EdgeServicesPlan">The Edge Services plan Scaleway bills (<c>professional</c>).</param>
+/// <param name="TransactionalEmailOffer">
+///     The Transactional Email offer the project subscribes to (<c>essential</c>,
+///     <c>scale</c>).
+/// </param>
+/// <param name="TransactionalEmailRegion">The region the offer is subscribed in.</param>
+public sealed record LiveSubscriptions(string? EdgeServicesPlan, string? TransactionalEmailOffer, string TransactionalEmailRegion);
+
 /// <param name="Lines">The fixed monthly costs: what the environment costs before anyone uses it.</param>
 /// <param name="UsageBilled">What is billed by use (storage, traffic, emails, requests), named but not estimated.</param>
 /// <param name="Unpriced">Resources no rule covers; while any exist the total is a lower bound, not an estimate.</param>
-public sealed record MonthlyCostEstimate(CostLine[] Lines, string[] UsageBilled, UnpricedResource[] Unpriced)
+/// <param name="Warnings">Where Scaleway bills something other than Terraform describes; the estimate follows Scaleway.</param>
+public sealed record MonthlyCostEstimate(CostLine[] Lines, string[] UsageBilled, UnpricedResource[] Unpriced, string[] Warnings)
 {
     public decimal MonthlyTotal => Lines.Sum(line => line.MonthlyCost);
 }
@@ -71,14 +83,24 @@ public sealed class CostEstimator(Func<CatalogLocality, Task<IReadOnlyList<Catal
     // Providers that run on the machine applying the plan (passwords, keys, certificates) and bill nobody.
     private static readonly string[] LocalProviderPrefixes = ["random_", "tls_", "time_", "null_", "terraform_data"];
 
-    public async Task<MonthlyCostEstimate> EstimateAsync(IReadOnlyList<TerraformResource> resources)
+    /// <param name="resources">The environment's resources, from its state or a saved plan.</param>
+    /// <param name="subscriptions">What Scaleway reports the project subscribes to outside Terraform, when it was read.</param>
+    public async Task<MonthlyCostEstimate> EstimateAsync(IReadOnlyList<TerraformResource> resources, LiveSubscriptions? subscriptions = null)
     {
         var lines = new List<CostLine>();
         var unpriced = new List<UnpricedResource>();
         var usageBilled = new SortedSet<string>(StringComparer.Ordinal);
+        var warnings = new List<string>();
 
-        // Edge Services products are priced per plan, and a project has one plan.
+        // Edge Services products are priced per plan, and a project has one plan. Terraform owns it, but the plan
+        // Scaleway bills is the one that costs money: a console change shows up here before the next apply reverts it.
         var edgePlan = resources.Where(resource => resource.Type == "scaleway_edge_services_plan").Select(resource => String(resource, "name")).FirstOrDefault();
+        if (subscriptions?.EdgeServicesPlan is { Length: > 0 } livePlan && edgePlan is not null && !livePlan.Equals(edgePlan, StringComparison.OrdinalIgnoreCase))
+        {
+            warnings.Add($"Scaleway bills the Edge Services {livePlan} plan, but Terraform configures {edgePlan}; the estimate prices {livePlan}, and the next apply moves it back to {edgePlan}.");
+            edgePlan = livePlan;
+        }
+
         var edgeWafPriced = false;
 
         foreach (var resource in resources)
@@ -141,7 +163,35 @@ public sealed class CostEstimator(Func<CatalogLocality, Task<IReadOnlyList<Catal
 
         await PriceEdgePipelinesAsync(resources.Where(resource => resource.Type == "scaleway_edge_services_pipeline").ToArray());
 
-        return new MonthlyCostEstimate(lines.ToArray(), usageBilled.ToArray(), unpriced.ToArray());
+        if (subscriptions?.TransactionalEmailOffer is { Length: > 0 } emailOffer)
+        {
+            await PriceEmailOfferAsync(emailOffer, subscriptions.TransactionalEmailRegion);
+        }
+
+        return new MonthlyCostEstimate(lines.ToArray(), usageBilled.ToArray(), unpriced.ToArray(), warnings.ToArray());
+
+        // The offer subscription is not a Terraform resource (the deploy subscribes to the free essential offer when
+        // there is none), so it is priced from what Scaleway reports. An offer with a monthly fee has a plan line in the
+        // catalog (/paas/tem/scale_plan/<region>); one with only per-email lines has no fixed cost.
+        async Task PriceEmailOfferAsync(string offer, string region)
+        {
+            const string address = "Transactional Email offer (outside Terraform)";
+            var products = await catalogProducts(CatalogLocality.ForRegion(region));
+            var plan = products.FirstOrDefault(product => product.Sku.Equals($"/paas/tem/{offer}_plan/{region}", StringComparison.OrdinalIgnoreCase));
+            if (plan is not null)
+            {
+                lines.Add(new CostLine(address, $"Transactional Email {offer} offer", plan.Price));
+                return;
+            }
+
+            if (products.Any(product => product.Sku.Equals($"/paas/tem/{offer}_emails/{region}", StringComparison.OrdinalIgnoreCase)))
+            {
+                lines.Add(new CostLine(address, $"Transactional Email {offer} offer (no monthly fee)", 0m));
+                return;
+            }
+
+            unpriced.Add(new UnpricedResource(address, $"the catalog lists neither a plan nor per-email pricing for the Transactional Email '{offer}' offer in {region}"));
+        }
 
         async Task PriceEdgePipelinesAsync(TerraformResource[] pipelines)
         {

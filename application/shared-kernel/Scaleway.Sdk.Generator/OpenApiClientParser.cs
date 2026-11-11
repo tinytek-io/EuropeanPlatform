@@ -195,7 +195,7 @@ public static class OpenApiClientParser
                         );
                     }
 
-                    var responseTypeName = ReadResponseType(operation.Value, resolver)
+                    var responseTypeName = ReadActionResponseType(operation.Value, resolver)
                                            ?? throw new NotSupportedException($"Action operation '{actionId}' has no resolvable response type.");
                     var summary = operation.Value.TryGetProperty("summary", out var summaryElement) ? summaryElement.GetString() : null;
                     parsed = new ParsedActionOperation(
@@ -366,6 +366,34 @@ public static class OpenApiClientParser
     // the transport unwraps to the array, so the generated method deals in the element DTO, not the wrapper.
     private static string? ReadResponseType(JsonElement operation, RecordResolver resolver)
     {
+        var name = ReadResponseComponent(operation);
+        if (name is null) return null;
+
+        if (name.StartsWith("List", StringComparison.Ordinal) && name.EndsWith("Response", StringComparison.Ordinal))
+        {
+            return resolver.ResolveListElement(name);
+        }
+
+        resolver.EnsureComponentRecord(name);
+        return name;
+    }
+
+    // An action is sent with the transport's plain GET or POST, which returns the body as Scaleway sends it, so its
+    // response is the declared component even when that is a list wrapper (ListOfferSubscriptions answers
+    // "{ offer_subscriptions: [...], total_count }"). Unwrapping it as a List does would deserialize the wrapper into
+    // its element type and silently yield an empty record.
+    private static string? ReadActionResponseType(JsonElement operation, RecordResolver resolver)
+    {
+        var name = ReadResponseComponent(operation);
+        if (name is null) return null;
+
+        resolver.EnsureComponentRecord(name);
+        return name;
+    }
+
+    // The short name of the component a 2xx JSON response references, or null when it references none.
+    private static string? ReadResponseComponent(JsonElement operation)
+    {
         if (!operation.TryGetProperty("responses", out var responses))
         {
             return null;
@@ -385,19 +413,7 @@ public static class OpenApiClientParser
             }
         }
 
-        if (!found || !schema.TryGetProperty("$ref", out var refElement))
-        {
-            return null;
-        }
-
-        var name = ShortName(refElement.GetString()!);
-        if (name.StartsWith("List", StringComparison.Ordinal) && name.EndsWith("Response", StringComparison.Ordinal))
-        {
-            return resolver.ResolveListElement(name);
-        }
-
-        resolver.EnsureComponentRecord(name);
-        return name;
+        return found && schema.TryGetProperty("$ref", out var refElement) ? ShortName(refElement.GetString()!) : null;
     }
 
     // YamlDotNet's JSON-compatible serializer renders YAML booleans as strings, so a raw GetBoolean() throws.

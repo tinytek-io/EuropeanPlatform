@@ -135,6 +135,41 @@ public sealed class GenerationGuardTests
     }
 
     [Fact]
+    public void ActionWhoseResponseIsAListWrapper_ReturnsTheWrapper_NotItsElement()
+    {
+        // An action is sent with the plain GET, which returns the body as Scaleway sends it. ListOfferSubscriptions is
+        // the live case: typed as the element, "{ offer_subscriptions: [...] }" deserialized into an empty record.
+        const string json = """
+                            {
+                              "components": { "schemas": {
+                                "scaleway.widget.v1.Widget": { "type": "object", "properties": { "id": { "type": "string" } } },
+                                "scaleway.widget.v1.ListWidgetsResponse": {
+                                  "type": "object",
+                                  "properties": { "widgets": { "type": "array", "items": { "$ref": "#/components/schemas/scaleway.widget.v1.Widget" } }, "total_count": { "type": "integer" } }
+                                }
+                              } },
+                              "paths": {
+                                "/widget/v1/regions/{region}/widgets": { "get": {
+                                  "operationId": "ListWidgets",
+                                  "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/scaleway.widget.v1.ListWidgetsResponse" } } } } }
+                                } },
+                                "/widget/v1/regions/{region}/widget-subscriptions": { "get": {
+                                  "operationId": "ListWidgetSubscriptions",
+                                  "responses": { "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/scaleway.widget.v1.ListWidgetsResponse" } } } } }
+                                } }
+                              }
+                            }
+                            """;
+
+        var api = OpenApiClientParser.Parse("widget", json, [("Widget", "Widgets")], ["ListWidgetSubscriptions"]);
+        var client = ClientEmitter.EmitClient(api, "Test.Ns", "WidgetApi");
+
+        client.Should().Contain("public async Task<ListWidgetsResponse?> ListWidgetSubscriptionsAsync(");
+        client.Should().Contain("public async Task<IReadOnlyList<Widget>> ListWidgetsAsync(", "the CRUD List keeps unwrapping to the element");
+        api.Records.Should().Contain(record => record.Name == "ListWidgetsResponse");
+    }
+
+    [Fact]
     public void ActionQueryGuard_FailsGeneration_WhenAPostActionDeclaresQueryParameters()
     {
         // The empty-body POST trigger goes through CreateResourceAsync, which sends a body and no query string.

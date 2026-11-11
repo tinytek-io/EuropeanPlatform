@@ -5,6 +5,7 @@ using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
 using Scaleway.Sdk;
 using Spectre.Console;
+using ScwTem = Scaleway.Sdk.Tem.V1Alpha1;
 
 namespace DeveloperCli.Commands;
 
@@ -40,14 +41,18 @@ public sealed class CostEstimateCommand : Command
     /// <param name="terraformJson">The output of <c>terraform show -json</c>, for the state or a saved plan.</param>
     /// <param name="monthlyBudget">The tier file's monthly_budget_eur.</param>
     /// <param name="region">The environment's region, which prices the catalog lines.</param>
-    public static async Task<bool> PrintEstimateAsync(string terraformJson, decimal monthlyBudget, string region)
+    /// <param name="subscriptions">
+    ///     What Scaleway reports the project subscribes to outside Terraform (see
+    ///     ReadLiveSubscriptionsAsync).
+    /// </param>
+    public static async Task<bool> PrintEstimateAsync(string terraformJson, decimal monthlyBudget, string region, LiveSubscriptions? subscriptions)
     {
         var estimator = new CostEstimator(locality => PricingCatalog.GetProductsAsync(locality));
 
         MonthlyCostEstimate estimate;
         try
         {
-            estimate = await estimator.EstimateAsync(TerraformResources.Read(terraformJson));
+            estimate = await estimator.EstimateAsync(TerraformResources.Read(terraformJson), subscriptions);
         }
         catch (HttpRequestException exception)
         {
@@ -78,6 +83,11 @@ public sealed class CostEstimateCommand : Command
             }
         }
 
+        foreach (var warning in estimate.Warnings)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(warning)}[/]");
+        }
+
         foreach (var unpriced in estimate.Unpriced)
         {
             AnsiConsole.MarkupLine($"[red]Not priced:[/] {Markup.Escape(unpriced.Address)}: {Markup.Escape(unpriced.Reason)}");
@@ -101,9 +111,9 @@ public sealed class CostEstimateCommand : Command
     ///     Prints the estimate and, when it exceeds the budget or is incomplete, asks before going on: with
     ///     <paramref name="autoApprove" /> it goes on with the warning, and without a terminal it stops the command.
     /// </summary>
-    public static async Task ConfirmWithinBudgetAsync(string terraformJson, decimal monthlyBudget, string region, bool autoApprove, string declinedMessage)
+    public static async Task ConfirmWithinBudgetAsync(string terraformJson, decimal monthlyBudget, string region, LiveSubscriptions? subscriptions, bool autoApprove, string declinedMessage)
     {
-        if (await PrintEstimateAsync(terraformJson, monthlyBudget, region) || autoApprove) return;
+        if (await PrintEstimateAsync(terraformJson, monthlyBudget, region, subscriptions) || autoApprove) return;
 
         if (Console.IsInputRedirected)
         {
@@ -118,6 +128,40 @@ public sealed class CostEstimateCommand : Command
         }
     }
 
+    /// <summary>
+    ///     Reads what the project subscribes to outside Terraform: the Transactional Email offer, which nothing in the
+    ///     state records, and the Edge Services plan Scaleway bills, to compare with the one Terraform configures.
+    ///     What cannot be read is left null with a warning, and the estimate goes on without it.
+    /// </summary>
+    public static async Task<LiveSubscriptions> ReadLiveSubscriptionsAsync(ScalewayCredentials credentials, string organizationId, string projectId)
+    {
+        using var scaleway = ScalewayEnvironment.CreateClient(credentials, organizationId);
+        var project = scaleway.WithProject(ProjectId.Parse(projectId));
+
+        string? emailOffer = null;
+        try
+        {
+            var offers = await project.Tem.ListOfferSubscriptionsAsync(new ScwTem.ListOfferSubscriptionsRequest { ProjectId = projectId }, ScalewayEnvironment.Region);
+            emailOffer = offers?.OfferSubscriptions?.FirstOrDefault()?.OfferName?.Value;
+        }
+        catch (Exception exception) when (exception is ScalewayApiException or ScalewayTransientException)
+        {
+            AnsiConsole.MarkupLine($"[yellow]The Transactional Email offer could not be read ({Markup.Escape(exception.Message)}); a monthly offer fee would be missing from the estimate.[/]");
+        }
+
+        string? edgePlan = null;
+        try
+        {
+            edgePlan = (await project.EdgeServices.GetCurrentPlanAsync(projectId))?.PlanName?.Value;
+        }
+        catch (Exception exception) when (exception is ScalewayApiException or ScalewayTransientException)
+        {
+            AnsiConsole.MarkupLine($"[yellow]The Edge Services plan Scaleway bills could not be read ({Markup.Escape(exception.Message)}); the estimate uses the plan Terraform configures.[/]");
+        }
+
+        return new LiveSubscriptions(edgePlan, emailOffer, ScalewayEnvironment.Region);
+    }
+
     private static async Task ExecuteAsync(string environment)
     {
         Prerequisite.Ensure(Prerequisite.Terraform);
@@ -127,7 +171,8 @@ public sealed class CostEstimateCommand : Command
 
         // The state carries every secret, so it is held in memory only.
         var state = await TerraformHelper.RunSensitiveAsync(ScalewayEnvironment.EnvironmentModuleFolder, "show -json", "read the Terraform state");
-        if (!await PrintEstimateAsync(state, monthlyBudget, ScalewayEnvironment.Region))
+        var subscriptions = await ReadLiveSubscriptionsAsync(resolved.Credentials, resolved.OrganizationId, resolved.ProjectId);
+        if (!await PrintEstimateAsync(state, monthlyBudget, ScalewayEnvironment.Region, subscriptions))
         {
             Environment.Exit(1);
         }

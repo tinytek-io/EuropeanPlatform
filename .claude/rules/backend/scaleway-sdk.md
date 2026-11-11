@@ -29,7 +29,7 @@ All Scaleway API calls go through `Scaleway.Sdk`, whose typed clients are genera
 
 Known exceptions to rule 1, each to be removed rather than copied:
 
-- Transactional Email offer subscriptions in `ScalewayEnvironment.EnsureEmailOfferAsync`: a `PATCH` on the collection itself, which the CRUD matcher does not model; it uses the SDK transport
+- Subscribing to a Transactional Email offer in `ScalewayEnvironment.EnsureEmailOfferAsync`: a `PATCH` with a body on the collection itself, which neither the CRUD matcher nor the action emitter models; it uses the SDK transport (reading the subscriptions is the generated `ListOfferSubscriptionsAsync`)
 - `ScalewayPricingCatalogClient`'s product-catalog path
 
 ## Examples

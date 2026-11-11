@@ -18,7 +18,10 @@ public sealed class CostEstimatorTests
         ],
         ["region-fr-par"] =
         [
-            new CatalogProduct("/k8s/control-plane/fr-par", "Kubernetes", "Kapsule Mutualized", "Kubernetes Kapsule Mutualized - fr-par", "fr-par", 0m, "hour", 1, "general_availability")
+            new CatalogProduct("/k8s/control-plane/fr-par", "Kubernetes", "Kapsule Mutualized", "Kubernetes Kapsule Mutualized - fr-par", "fr-par", 0m, "hour", 1, "general_availability"),
+            new CatalogProduct("/paas/tem/scale_plan/fr-par", "Transactional Email", "Transactional Email Plan", "Transactional Email Plan - fr-par", "fr-par", 80m, "plan", 1, "general_availability"),
+            new CatalogProduct("/paas/tem/scale_emails/fr-par", "Transactional Email", "Transactional Emails", "Transactional Emails - fr-par", "fr-par", 0.0002m, "email", 1, "general_availability"),
+            new CatalogProduct("/paas/tem/essential_emails/fr-par", "Transactional Email", "Transactional Emails", "Transactional Emails - fr-par", "fr-par", 0.00025m, "email", 1, "general_availability")
         ],
         ["global"] =
         [
@@ -105,6 +108,33 @@ public sealed class CostEstimatorTests
         // Assert
         estimate.Lines.Should().ContainSingle().Which.MonthlyCost.Should().Be(12.99m);
         estimate.UsageBilled.Should().Contain("Edge Services WAF: per request inspected");
+    }
+
+    [Theory]
+    [InlineData("scale", 80)]
+    [InlineData("essential", 0)]
+    public async Task EstimateAsync_WhenScalewayReportsAnEmailOffer_ShouldPriceItsMonthlyFee(string offer, int expectedMonthlyCost)
+    {
+        // Act
+        var estimate = await _estimator.EstimateAsync([], new LiveSubscriptions(null, offer, "fr-par"));
+
+        // Assert
+        estimate.Lines.Should().ContainSingle().Which.MonthlyCost.Should().Be(expectedMonthlyCost);
+        estimate.Unpriced.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task EstimateAsync_WhenScalewayBillsAnotherEdgePlanThanTerraform_ShouldPriceTheBilledPlanAndWarn()
+    {
+        // Arrange
+        var plan = Resource("scaleway_edge_services_plan.main", "scaleway_edge_services_plan", """{ "name": "starter" }""");
+
+        // Act
+        var estimate = await _estimator.EstimateAsync([plan], new LiveSubscriptions("professional", null, "fr-par"));
+
+        // Assert
+        estimate.Lines.Should().ContainSingle().Which.MonthlyCost.Should().Be(12.99m);
+        estimate.Warnings.Should().ContainSingle().Which.Should().Contain("Scaleway bills the Edge Services professional plan, but Terraform configures starter");
     }
 
     [Fact]

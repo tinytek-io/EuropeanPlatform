@@ -461,4 +461,16 @@ public sealed class EdgeServicesApi(IScalewayApiClient client, ScalewayRequestSc
         var items = await client.ListResourcesAsync($"edge-services/v1beta1/pipelines/{pipelineId}/head-stages", string.Empty, query?.ToQueryParameters(), cancellationToken);
         return items.Select(item => item.Deserialize<ListHeadStagesResponseHeadStage>(JsonOptions)!).ToList();
     }
+
+    /// <summary>Get plan</summary>
+    /// <param name="projectId">Binds the <c>{project_id}</c> segment of the path.</param>
+    /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
+    /// <remarks>
+    ///     Scaleway operation <c>GetCurrentPlan</c> — <c>GET /edge-services/v1beta1/current-plan/{project_id}</c> (V1Beta1).
+    /// </remarks>
+    public async Task<Plan?> GetCurrentPlanAsync(string projectId, CancellationToken cancellationToken = default)
+    {
+        var response = await client.GetAsync($"edge-services/v1beta1/current-plan/{projectId}", string.Empty, cancellationToken);
+        return response?.Deserialize<Plan>(JsonOptions);
+    }
 }

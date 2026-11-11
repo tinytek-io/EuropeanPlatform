@@ -6,6 +6,7 @@ using Scaleway.Sdk;
 using Spectre.Console;
 using ScwAccount = Scaleway.Sdk.Account.V3;
 using ScwIam = Scaleway.Sdk.Iam.V1Alpha1;
+using ScwTem = Scaleway.Sdk.Tem.V1Alpha1;
 
 namespace DeveloperCli.Utilities;
 
@@ -220,16 +221,16 @@ public static partial class ScalewayEnvironment
     ///     Subscribes the project to Transactional Email's free Essential offer when it has no offer
     ///     yet; email domains are refused without one ("No active offer subscription for the
     ///     project"), and no Terraform resource manages it. An existing offer is never changed.
-    ///     The SDK does not generate offer subscriptions (the collection is updated in place with a PATCH,
-    ///     which the generator's CRUD matcher does not model), so this goes through its transport.
+    ///     The subscriptions are read through the generated ListOfferSubscriptions action; subscribing is a PATCH
+    ///     on the collection itself, which the generator does not model, so that write goes through the transport.
     /// </summary>
     public static async Task EnsureEmailOfferAsync(ScalewayCredentials credentials, string projectId)
     {
         const string regionPath = $"transactional-email/v1alpha1/regions/{Region}";
         var subscriptions = await CallAsync(credentials, "read the project's Transactional Email offer",
-            async transport => await transport.ListResourcesAsync($"{regionPath}/offer-subscriptions", Region, [new KeyValuePair<string, string>("project_id", projectId)])
+            async transport => await new ScwTem.TemApi(transport).ListOfferSubscriptionsAsync(new ScwTem.ListOfferSubscriptionsRequest { ProjectId = projectId }, Region)
         );
-        if (subscriptions.Length > 0)
+        if (subscriptions.OfferSubscriptions is { Count: > 0 })
         {
             AnsiConsole.MarkupLine("[green]The project already has a Transactional Email offer.[/]");
             return;

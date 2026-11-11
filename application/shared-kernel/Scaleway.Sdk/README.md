@@ -74,12 +74,12 @@ upward on its own is the failure this package went out of its way to make imposs
 
 <!-- coverage:start — generated from Generated/manifest.json; do not edit by hand -->
 
-**13 services, 32 resource groups, 147 operations** — 141 on resource groups plus 6 declared actions.
+**13 services, 32 resource groups, 149 operations** — 141 on resource groups plus 8 declared actions.
 
 | Service | API version | Namespace | Entry point | Actions |
 |---|---|---|---|---|
 | `account` | `v3` | `Scaleway.Sdk.Account.V3` | `ScalewayClient.Projects` | — |
-| `edge_services` | `v1beta1` | `Scaleway.Sdk.EdgeServices.V1Beta1` | `ScalewayProjectClient.EdgeServices` | — |
+| `edge_services` | `v1beta1` | `Scaleway.Sdk.EdgeServices.V1Beta1` | `ScalewayProjectClient.EdgeServices` | `GetCurrentPlan` |
 | `iam` | `v1alpha1` | `Scaleway.Sdk.Iam.V1Alpha1` | `ScalewayClient.Iam` | — |
 | `k8s` | `v1` | `Scaleway.Sdk.K8s.V1` | `ScalewayProjectClient.Kubernetes` | `GetClusterKubeConfig` |
 | `lb` | `v1` | `Scaleway.Sdk.Lb.V1` | `ScalewayProjectClient.LoadBalancers` | — |
@@ -89,7 +89,7 @@ upward on its own is the failure this package went out of its way to make imposs
 | `secret` | `v1beta1` | `Scaleway.Sdk.Secret.V1Beta1` | `ScalewayProjectClient.Secrets` | `AccessSecretVersion` |
 | `container` | `v1` | `Scaleway.Sdk.ServerlessContainer.V1` | `ScalewayProjectClient.Containers` | — |
 | `jobs` | `v1alpha2` | `Scaleway.Sdk.Jobs.V1Alpha2` | `ScalewayProjectClient.Jobs` | `StopJobRun` |
-| `tem` | `v1alpha1` | `Scaleway.Sdk.Tem.V1Alpha1` | `ScalewayProjectClient.Tem` | `GetDomainLastStatus`, `CheckDomain` |
+| `tem` | `v1alpha1` | `Scaleway.Sdk.Tem.V1Alpha1` | `ScalewayProjectClient.Tem` | `GetDomainLastStatus`, `CheckDomain`, `ListOfferSubscriptions` |
 | `vpc` | `v2` | `Scaleway.Sdk.Vpc.V2` | `ScalewayProjectClient.Vpc` | — |
 
 | Service | Resource group | Tier | Operations |

@@ -362,6 +362,33 @@ public readonly record struct ListEmailsOrderBy(string Value) : IScalewayEnumVal
     public override string ToString() => Value;
 }
 
+/// <summary>
+///     An extensible enum. A value Scaleway adds after this was generated still deserializes and round-trips
+///     rather than throwing, so an unrecognised value is one you have not seen — not an error.
+/// </summary>
+/// <param name="Value">The string as it travels on the wire, which is what equality and serialization use.</param>
+[JsonConverter(typeof(ScalewayEnumValueConverter<OfferSubscriptionOfferName>))]
+public readonly record struct OfferSubscriptionOfferName(string Value) : IScalewayEnumValue<OfferSubscriptionOfferName>
+{
+    /// <remarks>Scaleway value <c>unknown_name</c>.</remarks>
+    public static readonly OfferSubscriptionOfferName UnknownName = new("unknown_name");
+    /// <remarks>Scaleway value <c>essential</c>.</remarks>
+    public static readonly OfferSubscriptionOfferName Essential = new("essential");
+    /// <remarks>Scaleway value <c>scale</c>.</remarks>
+    public static readonly OfferSubscriptionOfferName Scale = new("scale");
+
+    /// <summary>Wraps a wire value this SDK declares no member for, so a value newer than the SDK stays usable.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static OfferSubscriptionOfferName FromValue(string value) => new(value);
+
+    /// <summary>Lets a wire value stand in for a member, so a value newer than this SDK can still be sent.</summary>
+    /// <param name="value">The wire value, as Scaleway spells it.</param>
+    public static implicit operator OfferSubscriptionOfferName(string value) => new(value);
+
+    /// <summary>The wire value — not the C# member name, which differs wherever Scaleway's spelling does not fit .NET casing.</summary>
+    public override string ToString() => Value;
+}
+
 /// <remarks>Body of <c>POST /transactional-email/v1alpha1/regions/{region}/domains</c> (Scaleway operation <c>CreateDomain</c>).</remarks>
 public sealed record CreateDomainRequest : IProjectScopedRequest<CreateDomainRequest>
 {
@@ -693,6 +720,42 @@ public sealed record EmailTry
     public string? Message { get; init; }
 }
 
+/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.ListOfferSubscriptionsResponse</c>.</remarks>
+public sealed record ListOfferSubscriptionsResponse
+{
+    /// <summary>Number of offer-subscriptions matching the requested criteria.</summary>
+    public long? TotalCount { get; init; }
+    /// <summary>Single page of offer-subscriptions matching the requested criteria.</summary>
+    public List<OfferSubscription>? OfferSubscriptions { get; init; }
+}
+
+/// <remarks>Scaleway schema component <c>scaleway.transactional_email.v1alpha1.OfferSubscription</c>.</remarks>
+public sealed record OfferSubscription
+{
+    /// <summary>ID of the offer-subscription Organization.</summary>
+    public string? OrganizationId { get; init; }
+    /// <summary>ID of the offer-subscription Project.</summary>
+    public string? ProjectId { get; init; }
+    /// <summary>Name of the offer associated with the Project.</summary>
+    public OfferSubscriptionOfferName? OfferName { get; init; }
+    /// <summary>Date and time of the subscription. (RFC 3339 format)</summary>
+    public DateTimeOffset? SubscribedAt { get; init; }
+    /// <summary>Date and time of the end of the offer-subscription commitment. (RFC 3339 format)</summary>
+    public DateTimeOffset? CancellationAvailableAt { get; init; }
+    /// <summary>Service Level Agreement percentage of the offer-subscription.</summary>
+    public double? Sla { get; init; }
+    /// <summary>Max number of domains that can be associated with the offer-subscription for a particular Project.</summary>
+    public long? MaxDomains { get; init; }
+    /// <summary>Max number of dedicated IPs that can be associated with the offer-subscription for a particular Project.</summary>
+    public long? MaxDedicatedIps { get; init; }
+    /// <summary>Max number of webhooks that can be associated with the offer-subscription for a particular Project.</summary>
+    public long? MaxWebhooksPerDomain { get; init; }
+    /// <summary>Max number of custom blocklists that can be associated with the offer-subscription for a particular Project.</summary>
+    public long? MaxCustomBlocklistsPerDomain { get; init; }
+    /// <summary>Number of emails included in the offer-subscription per month.</summary>
+    public long? IncludedMonthlyEmails { get; init; }
+}
+
 /// <remarks>Body of <c>PATCH /transactional-email/v1alpha1/regions/{region}/domains/{id}</c> (Scaleway operation <c>UpdateDomain</c>).</remarks>
 public sealed record UpdateDomainRequest
 {
@@ -808,4 +871,27 @@ public sealed record ListEmailsRequest : IProjectScopedRequest<ListEmailsRequest
         return parameters;
     }
 #pragma warning restore CS0618
+}
+
+/// <remarks>Query parameters of <c>GET /transactional-email/v1alpha1/regions/{region}/offer-subscriptions</c> (Scaleway operation <c>ListOfferSubscriptions</c>).</remarks>
+public sealed record ListOfferSubscriptionsRequest : IProjectScopedRequest<ListOfferSubscriptionsRequest>
+{
+    /// <summary>ID of the Project. (UUID format)</summary>
+    public string? ProjectId { get; init; }
+
+    /// <summary>Returns a copy carrying <c>project_id</c>. A scoped client calls this before sending, so a caller never repeats the id.</summary>
+    /// <param name="projectId">The value to stamp on the copy. An explicit value already on this record is not overwritten by the client.</param>
+    public ListOfferSubscriptionsRequest WithProjectId(string projectId) => this with { ProjectId = projectId };
+
+    /// <summary>
+    ///     Flattens the properties that are set into the pairs the transport sends; an unset property is omitted.
+    ///     A list rather than a dictionary because an array parameter is repeated per element rather than joined —
+    ///     Scaleway reads a comma-joined value as one literal and matches nothing.
+    /// </summary>
+    public List<KeyValuePair<string, string>> ToQueryParameters()
+    {
+        var parameters = new List<KeyValuePair<string, string>>();
+        if (ProjectId is not null) parameters.Add(new KeyValuePair<string, string>("project_id", ProjectId));
+        return parameters;
+    }
 }
