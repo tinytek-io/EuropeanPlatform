@@ -455,6 +455,21 @@ if (isPublishMode)
         .WithKubernetesProbes("/openapi", "/openapi");
 }
 
+// Memory per deployed workload. The limits sit above what each used on staging's single PLAY2-NANO node under
+// Server GC (account-api about 200Mi, the other APIs about 150Mi, the workers and gateway 90-140Mi); the requests stay
+// low so a rollout's replacement pods, started before the old ones stop, still fit beside them. Raise the requests to
+// the measured footprint once it is known under Workstation GC; the migration Jobs carry their own in jobTemplate.
+if (isPublishMode)
+{
+    accountApi.WithKubernetesMemory("96Mi", "512Mi");
+    mainApi.WithKubernetesMemory("96Mi", "384Mi");
+    backOfficeApi.WithKubernetesMemory("96Mi", "384Mi");
+    appGateway.WithKubernetesMemory("96Mi", "256Mi");
+    accountWorkers.WithKubernetesMemory("96Mi", "256Mi");
+    mainWorkers.WithKubernetesMemory("96Mi", "256Mi");
+    backOfficeWorkers.WithKubernetesMemory("96Mi", "256Mi");
+}
+
 // Dedicated database migrators: run-once console apps applying schema + data migrations with the
 // structure-owner role. Publish-only (local development migrates at worker startup) and deployed
 // as Jobs, not Deployments: the chart patch turns the generated workload into a pre-upgrade Job.
@@ -633,6 +648,13 @@ const string jobTemplate = """
                                        - secretRef:
                                            name: "RESOURCE-secrets"
                                      imagePullPolicy: "IfNotPresent"
+                                     # A migration loads the EF Core model and runs once: the limit leaves room for a
+                                     # large data migration, the low request keeps it schedulable beside a running release.
+                                     resources:
+                                       requests:
+                                         memory: "96Mi"
+                                       limits:
+                                         memory: "384Mi"
                            """;
 
 // Hook annotations for a migrator's config map and secret (inserted into their metadata): hook

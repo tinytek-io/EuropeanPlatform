@@ -866,9 +866,18 @@ locals {
   # The application connects as the readwrite user (it can never change database structure);
   # the migrator connection string reaches only the workers' Secret Manager paths, where the
   # pre-upgrade migration Job (MIGRATE_ONLY) resolves it.
-  database_host                          = "${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port}"
-  app_database_credentials               = "Username=${scaleway_rdb_user.app.name};Password=${random_password.app_user.result};SSL Mode=Require"
-  migrator_database_credentials          = "Username=${scaleway_rdb_user.migrator.name};Password=${random_password.migrator_user.result};SSL Mode=Require"
+  database_host                 = "${scaleway_rdb_instance.main.private_network[0].ip};Port=${scaleway_rdb_instance.main.private_network[0].port}"
+  app_database_credentials      = "Username=${scaleway_rdb_user.app.name};Password=${random_password.app_user.result};SSL Mode=Require"
+  migrator_database_credentials = "Username=${scaleway_rdb_user.migrator.name};Password=${random_password.migrator_user.result};SSL Mode=Require"
+
+  # Every workload shares the instance's max_connections (100 on db-dev-s, a few of them reserved for superusers), and
+  # Npgsql's default pool lets each one open 100, so a burst in any workload could exhaust the database for all of
+  # them (found live: "too many clients"). The caps keep the worst case under the limit: three APIs at 8 and three
+  # workers at 4 is 36, doubled while a rollout runs old and new pods side by side is 72, and the migration Jobs add 2
+  # each. A larger database tier raises max_connections, and these can grow with it.
+  api_database_pool                      = ";Maximum Pool Size=8"
+  worker_database_pool                   = ";Maximum Pool Size=4"
+  migrator_database_pool                 = ";Maximum Pool Size=2"
   account_database_connection_string     = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
   main_database_connection_string        = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
   account_migrator_connection_string     = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
@@ -886,7 +895,7 @@ locals {
   # Secret NAME = .NET configuration key (double underscore flattens to a section separator).
   base_workload_secrets = {
     account-api = {
-      ConnectionStrings__account-database = local.account_database_connection_string
+      ConnectionStrings__account-database = "${local.account_database_connection_string}${local.api_database_pool}"
       ConnectionStrings__blob-storage     = local.blob_storage_connection_string
       # The back-office blob proxy resolves a SECOND keyed storage client by this connection name
       # (AddNamedBlobStorages("account-storage")); without it the proxy 500s on first use.
@@ -898,12 +907,12 @@ locals {
       InternalTls__KeyPem                = tls_private_key.workload["account-api"].private_key_pem
     }
     account-workers = {
-      ConnectionStrings__account-database = local.account_database_connection_string
+      ConnectionStrings__account-database = "${local.account_database_connection_string}${local.worker_database_pool}"
       ConnectionStrings__blob-storage     = local.blob_storage_connection_string
       Authentication__TokenSigning__Key   = local.signing_key
     }
     main-api = {
-      ConnectionStrings__main-database  = local.main_database_connection_string
+      ConnectionStrings__main-database  = "${local.main_database_connection_string}${local.api_database_pool}"
       ConnectionStrings__blob-storage   = local.blob_storage_connection_string
       Authentication__TokenSigning__Key = local.signing_key
       data-protection-encryption-key    = local.data_protection_encryption_key
@@ -911,7 +920,7 @@ locals {
       InternalTls__KeyPem               = tls_private_key.workload["main-api"].private_key_pem
     }
     main-workers = {
-      ConnectionStrings__main-database = local.main_database_connection_string
+      ConnectionStrings__main-database = "${local.main_database_connection_string}${local.worker_database_pool}"
       ConnectionStrings__blob-storage  = local.blob_storage_connection_string
     }
     # The dedicated migrator workloads (pre-upgrade Jobs): the SAME logical connection name as
@@ -921,15 +930,15 @@ locals {
     # (Database__ApplicationUser): the readwrite privilege covers only tables that existed when
     # it was set, which on a new environment is none.
     account-migrator = {
-      ConnectionStrings__account-database = local.account_migrator_connection_string
+      ConnectionStrings__account-database = "${local.account_migrator_connection_string}${local.migrator_database_pool}"
       Database__ApplicationUser           = scaleway_rdb_user.app.name
     }
     main-migrator = {
-      ConnectionStrings__main-database = local.main_migrator_connection_string
+      ConnectionStrings__main-database = "${local.main_migrator_connection_string}${local.migrator_database_pool}"
       Database__ApplicationUser        = scaleway_rdb_user.app.name
     }
     back-office-migrator = {
-      ConnectionStrings__back-office-database = local.back_office_migrator_connection_string
+      ConnectionStrings__back-office-database = "${local.back_office_migrator_connection_string}${local.migrator_database_pool}"
       Database__ApplicationUser               = scaleway_rdb_user.app.name
     }
     app-gateway = {
@@ -947,7 +956,7 @@ locals {
       # deployed environments) — hence the blob-storage connection string. It holds the private
       # delegation key but NOT the platform token signing key: the BFF never receives application
       # tokens, so a compromised back-office cannot mint them.
-      ConnectionStrings__back-office-database = local.back_office_database_connection_string
+      ConnectionStrings__back-office-database = "${local.back_office_database_connection_string}${local.api_database_pool}"
       ConnectionStrings__blob-storage         = local.blob_storage_connection_string
       BackOfficeDelegation__SigningKeyPem     = tls_private_key.back_office_delegation.private_key_pem_pkcs8
       StaffIdentity__SigningKeyPem            = tls_private_key.staff_identity_signing.private_key_pem_pkcs8
@@ -961,7 +970,7 @@ locals {
     # The back-office workers migrate nothing when deployed (the migrator Job does) but run its
     # data migrations and housekeeping on the back-office database.
     back-office-workers = {
-      ConnectionStrings__back-office-database = local.back_office_database_connection_string
+      ConnectionStrings__back-office-database = "${local.back_office_database_connection_string}${local.worker_database_pool}"
     }
   }
 
