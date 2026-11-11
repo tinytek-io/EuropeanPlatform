@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - "developer-cli/**"
+      - "application/shared-kernel/Scaleway.Sdk/**"
       - ".github/workflows/developer-cli.yml"
       - "!**.md"
   pull_request:
     paths:
       - "developer-cli/**"
+      - "application/shared-kernel/Scaleway.Sdk/**"
       - ".github/workflows/developer-cli.yml"
       - "!**.md"
   workflow_dispatch:
@@ -29,14 +31,14 @@ jobs:
 
     env:
       # Skip the CLI's self-rebuild on every invocation; we build explicitly below.
-      DEVELOPERCLI_SKIP_CHANGE_DETECTION: "1"
+      PP_SKIP_CHANGE_DETECTION: "1"
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
 
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: developer-cli/global.json
 
@@ -51,6 +53,11 @@ jobs:
       - name: Build Developer CLI
         working-directory: developer-cli
         run: dotnet build DeveloperCli.slnx --no-restore
+
+      # DeveloperCli.Tests compiles the CLI's console-free logic (the security checks, the cost estimate) on its own,
+      # since the CLI is a self-rebuilding executable that a test project cannot reference.
+      - name: Run Developer CLI Tests
+        run: dotnet test developer-cli/Tests/DeveloperCli.Tests.csproj
 
       - name: Run Code Linting
         working-directory: developer-cli

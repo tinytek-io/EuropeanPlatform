@@ -22,9 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  id-token: write
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   detect-scope:
@@ -55,6 +54,7 @@ jobs:
 
           account=false
           main=false
+          back_office=false
           other=false
 
           while IFS= read -r path; do
@@ -63,6 +63,8 @@ jobs:
                 account=true ;;
               application/main/Api/*|application/main/Core/*|application/main/Workers/*|application/main/Tests/*)
                 main=true ;;
+              application/back-office/Api/*|application/back-office/Core/*|application/back-office/Workers/*|application/back-office/Tests/*)
+                back_office=true ;;
               application/AppGateway/*|application/shared-kernel/*|developer-cli/*)
                 other=true ;;
               application/*)
@@ -72,7 +74,8 @@ jobs:
             esac
           done <<< "$changed"
 
-          if [[ "$other" == "true" ]] || { [[ "$account" == "true" ]] && [[ "$main" == "true" ]]; }; then
+          systems=$(( $([[ "$account" == "true" ]] && echo 1 || echo 0) + $([[ "$main" == "true" ]] && echo 1 || echo 0) + $([[ "$back_office" == "true" ]] && echo 1 || echo 0) ))
+          if [[ "$other" == "true" ]] || (( systems > 1 )); then
             echo "backend_scope=" >> "$GITHUB_OUTPUT"
             echo "backend_label=full backend (PlatformPlatform.slnx)" >> "$GITHUB_OUTPUT"
           elif [[ "$account" == "true" ]]; then
@@ -81,6 +84,9 @@ jobs:
           elif [[ "$main" == "true" ]]; then
             echo "backend_scope=--self-contained-system main" >> "$GITHUB_OUTPUT"
             echo "backend_label=main only" >> "$GITHUB_OUTPUT"
+          elif [[ "$back_office" == "true" ]]; then
+            echo "backend_scope=--self-contained-system back-office" >> "$GITHUB_OUTPUT"
+            echo "backend_label=back-office only" >> "$GITHUB_OUTPUT"
           else
             echo "backend_scope=" >> "$GITHUB_OUTPUT"
             echo "backend_label=full backend (default — no backend paths matched)" >> "$GITHUB_OUTPUT"
@@ -113,16 +119,16 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: application/.node-version
 
       - name: Install Node Modules
         working-directory: application
         run: npm ci
 
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: application/global.json
 
@@ -185,16 +191,16 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: application/.node-version
 
       - name: Install Node Modules
         working-directory: application
         run: npm ci
 
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: application/global.json
 
@@ -234,6 +240,50 @@ jobs:
             exit 1
           }
 
+  tests:
+    name: Backend Tests
+    needs: detect-scope
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: application/.node-version
+
+      - name: Install Node Modules
+        working-directory: application
+        run: npm ci
+
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: application/global.json
+
+      - name: Restore .NET Tools
+        working-directory: application
+        run: dotnet tool restore
+
+      - name: Generate and Set User Secret for Token Signing Key
+        working-directory: application/shared-kernel/SharedKernel
+        run: |
+          # The tests sign authentication tokens; a throwaway key is enough, and none is committed.
+          USER_SECRETS_ID=$(grep -oP '(?<=<UserSecretsId>).*?(?=</UserSecretsId>)' SharedKernel.csproj)
+          dotnet user-secrets set "authentication-token-signing-key" "$(openssl rand -base64 64)" --id $USER_SECRETS_ID
+
+      - name: Build Backend Solution
+        working-directory: developer-cli
+        run: dotnet run -- build --backend ${{ needs.detect-scope.outputs.backend_scope }} --quiet
+
+      # The developer CLI runs the test assemblies the way they run locally (including DeveloperCli.Tests, which is in
+      # the application solution); the GitHub-hosted runner provides the Docker the integration tests need.
+      - name: Run Backend Tests
+        working-directory: developer-cli
+        run: dotnet run -- test --no-build ${{ needs.detect-scope.outputs.backend_scope }} --quiet
+
   sonarcloud:
     name: SonarCloud Analysis
     needs: detect-scope
@@ -244,16 +294,16 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js Environment
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: application/.node-version
 
       - name: Install Node Modules
         working-directory: application
         run: npm ci
 
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: application/global.json
 
