@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
 import { t } from "@lingui/core/macro";
-import heroDesktopBlurImage from "@repo/ui/images/hero-desktop-blur.webp";
-import heroDesktopImage from "@repo/ui/images/hero-desktop-xl.webp";
+import { HeroImage } from "@repo/ui/components/HeroImage";
 
 import { LoginFooterControls } from "@/routes/-components/LoginFooterControls";
 
@@ -26,17 +25,7 @@ export function HorizontalHeroLayout({ children }: Readonly<HorizontalHeroLayout
           </div>
         </div>
         <div className="hidden items-center justify-center bg-input-background p-6 lg:flex lg:w-1/2 lg:px-28 lg:py-12">
-          <div
-            className="h-auto w-full max-w-[64rem] bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${heroDesktopBlurImage})`, aspectRatio: "1000/760" }}
-          >
-            <img
-              src={heroDesktopImage}
-              alt={t`Screenshots of the dashboard project with desktop and mobile versions`}
-              fetchPriority="high"
-              className="h-auto w-full"
-            />
-          </div>
+          <HeroImage alt={t`Screenshots of the dashboard project with desktop and mobile versions`} />
         </div>
       </div>
     </main>
