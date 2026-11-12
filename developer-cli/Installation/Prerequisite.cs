@@ -9,13 +9,24 @@ public abstract record Prerequisite
 {
     public static readonly Prerequisite Dotnet = new CommandLineToolPrerequisite("dotnet", "dotnet", new Version(10, 0, 404));
     public static readonly Prerequisite Docker = new CommandLineToolPrerequisite("docker", "Docker", new Version(27, 0, 0));
-    public static readonly Prerequisite Curl = new CommandLineToolPrerequisite("curl", "curl", new Version(7, 68));
     public static readonly Prerequisite Node = new NodePrerequisite();
     public static readonly Prerequisite GithubCli = new CommandLineToolPrerequisite("gh", "GitHub CLI", new Version(2, 83));
     public static readonly Prerequisite TypeScriptLanguageServer = new CommandLineToolPrerequisite("typescript-language-server", "TypeScript Language Server", new Version(4, 3, 0));
     public static readonly Prerequisite CSharpLanguageServer = new CommandLineToolPrerequisite("csharp-ls", "C# Language Server", new Version(0, 22, 0));
 
+    public static readonly Prerequisite Curl = new CommandLineToolPrerequisite("curl", "curl", new Version(7, 68));
+
     public static readonly Prerequisite Terraform = new CommandLineToolPrerequisite("terraform", "Terraform", new Version(1, 16));
+
+    // kubectl has no --version flag; `kubectl version --client` prints "Client Version: v1.x.y".
+    public static readonly Prerequisite Kubectl = new CommandLineToolPrerequisite("kubectl", "kubectl", new Version(1, 28), "version --client");
+
+    // The Aspire Kubernetes deploy installs its chart with Helm (its check-helm-prereqs step fails without it).
+    public static readonly Prerequisite Helm = new CommandLineToolPrerequisite("helm", "Helm", new Version(3, 8), "version --short");
+
+    private static string AspireCliInstallCommand => Configuration.IsWindows
+        ? "irm https://aspire.dev/install.ps1 | iex"
+        : "mise install (the repository's mise.toml pins it), or curl -sSL https://aspire.dev/install.sh | bash";
 
     protected abstract bool IsValid();
 
@@ -48,37 +59,52 @@ public abstract record Prerequisite
         AnsiConsole.WriteLine();
     }
 
-    // Warns if the Aspire CLI is missing or its version does not match Aspire.AppHost.Sdk in
-    // AppHost.csproj. Soft warning -- the CLI is only required for the Aspire MCP integration,
-    // not for running the AppHost.
+    // Warns if the Aspire CLI is missing or its version does not match Aspire.AppHost.Sdk in AppHost.csproj. Soft
+    // warning: running the AppHost locally does not need the CLI, only the Aspire MCP server and the deploy do.
     public static void WarnIfAspireCliDoesNotMatchSdk()
     {
+        var mismatch = FindAspireCliMismatch();
+        if (mismatch is null) return;
+
+        AnsiConsole.MarkupLine($"[yellow]Recommended: {mismatch}. Install:[/]");
+        AnsiConsole.MarkupLine($"[yellow]  {AspireCliInstallCommand}[/]");
+        AnsiConsole.WriteLine();
+    }
+
+    // The deploy runs the Aspire CLI on PATH against the AppHost, so it must be the SDK's version: the CLI and the SDK
+    // are released together, and the AppHost.csproj SDK line is the one version the repository deploys with.
+    public static void EnsureAspireCliMatchesSdk()
+    {
+        var mismatch = FindAspireCliMismatch();
+        if (mismatch is null) return;
+
+        AnsiConsole.MarkupLine($"[red]The deploy requires {mismatch}. Install:[/]");
+        AnsiConsole.MarkupLine($"[red]  {AspireCliInstallCommand}[/]");
+        Environment.Exit(1);
+    }
+
+    private static string? FindAspireCliMismatch()
+    {
         var appHostCsproj = Path.Combine(Configuration.ApplicationFolder, "AppHost", "AppHost.csproj");
-        if (!File.Exists(appHostCsproj)) return;
+        if (!File.Exists(appHostCsproj)) return null;
 
         var sdkMatch = Regex.Match(File.ReadAllText(appHostCsproj), @"<Project\s+Sdk=""Aspire\.AppHost\.Sdk/(\d+\.\d+\.\d+)""");
-        if (!sdkMatch.Success) return;
+        if (!sdkMatch.Success) return null;
         var requiredVersion = sdkMatch.Groups[1].Value;
 
         var versionOutput = ProcessHelper.StartProcess("aspire --version", Configuration.ApplicationFolder, true, exitOnError: false, throwOnError: false);
         var installedMatch = Regex.Match(versionOutput, @"\d+\.\d+\.\d+");
         var installedVersion = installedMatch.Success ? installedMatch.Value : null;
+        if (installedVersion == requiredVersion) return null;
 
-        if (installedVersion == requiredVersion) return;
-
-        var installCommand = Configuration.IsWindows
-            ? "irm https://aspire.dev/install.ps1 | iex"
-            : "curl -sSL https://aspire.dev/install.sh | bash";
         var current = installedVersion is null ? "not installed" : $"installed {installedVersion}";
-        AnsiConsole.MarkupLine($"[yellow]Recommended: Aspire CLI {requiredVersion} (matches AppHost.csproj), {current}. Install:[/]");
-        AnsiConsole.MarkupLine($"[yellow]  {installCommand}[/]");
-        AnsiConsole.WriteLine();
+        return $"Aspire CLI {requiredVersion} (matches AppHost.csproj), {current}";
     }
 
     protected abstract bool CheckExists();
 }
 
-file sealed record CommandLineToolPrerequisite(string Command, string DisplayName, Version MinVersion) : Prerequisite
+file sealed record CommandLineToolPrerequisite(string Command, string DisplayName, Version MinVersion, string VersionArguments = "--version") : Prerequisite
 {
     protected override bool IsValid()
     {
@@ -92,7 +118,7 @@ file sealed record CommandLineToolPrerequisite(string Command, string DisplayNam
         var output = ProcessHelper.StartProcess(new ProcessStartInfo
             {
                 FileName = Configuration.IsWindows ? "cmd.exe" : "/bin/bash",
-                Arguments = Configuration.IsWindows ? $"/c {Command} --version" : $"-c \"{Command} --version\"",
+                Arguments = Configuration.IsWindows ? $"/c {Command} {VersionArguments}" : $"-c \"{Command} {VersionArguments}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             }

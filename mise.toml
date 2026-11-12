@@ -5,11 +5,14 @@
 #
 # Each version is held in step with another file that is the source of truth for it:
 # - node: application/.node-version (the developer CLI installs that version through fnm)
+# - aspire: the Aspire.AppHost.Sdk version in application/AppHost/AppHost.csproj (the deploy and the Aspire MCP server
+#   run this CLI; the deploy refuses a CLI that differs from the SDK, and update-packages bumps this line with the SDK)
 # - kubectl: within one minor version of the clusters' Kubernetes version (Kapsule runs 1.37)
 #
 # The .NET SDK is not listed: application/global.json pins it, and a second pin could disagree with it.
 
 [tools]
+aspire = "13.6.5"
 helm = "4.2.3"
 kubectl = "1.37.2"
 node = "24.14.0"

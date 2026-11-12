@@ -14,6 +14,7 @@ public class InstallCommand : Command
 
          [green]The CLI can be used to:[/]
          * Start all {Configuration.AliasName} services locally in one command
+         * Deploy an environment to Scaleway through the Aspire pipeline in one command
          * Run static code analysis on your codebase to ensure it does not fail when running in CI
          * Run tests and show code coverage reports locally
          * Much more is coming soon!

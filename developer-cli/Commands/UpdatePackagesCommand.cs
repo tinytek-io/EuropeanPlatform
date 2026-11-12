@@ -109,6 +109,7 @@ public sealed class UpdatePackagesCommand : Command
             }
 
             UpdateAspireSdkVersion(dryRun);
+            UpdateMiseAspireVersion(dryRun);
             Prerequisite.WarnIfAspireCliDoesNotMatchSdk();
             await UpdateDotnetToolsAsync(dryRun);
         }
@@ -1182,6 +1183,41 @@ public sealed class UpdatePackagesCommand : Command
         }
     }
 
+    // mise.toml pins the Aspire CLI that the deploy and the Aspire MCP server run; it follows Aspire.Hosting like the
+    // AppHost SDK does, because the CLI and the SDK are released together.
+    private static void UpdateMiseAspireVersion(bool dryRun)
+    {
+        var miseConfigurationPath = Path.Combine(Configuration.SourceCodeFolder, "mise.toml");
+        if (!File.Exists(miseConfigurationPath)) return;
+
+        var miseConfiguration = File.ReadAllText(miseConfigurationPath);
+        var aspireMatch = Regex.Match(miseConfiguration, @"^aspire = ""([^""]+)""", RegexOptions.Multiline);
+        if (!aspireMatch.Success) return;
+        var currentVersion = aspireMatch.Groups[1].Value;
+
+        var packagesXml = XDocument.Load(Path.Combine(Configuration.ApplicationFolder, "Directory.Packages.props"));
+        var targetVersion = packagesXml.Descendants("PackageVersion")
+            .FirstOrDefault(e => e.Attribute("Include")?.Value == "Aspire.Hosting")?
+            .Attribute("Version")?.Value;
+        if (targetVersion is null || targetVersion == currentVersion) return;
+
+        if (_quietMode)
+        {
+            Console.WriteLine($"backend {GetUpdateType(currentVersion, targetVersion).ToString().ToLowerInvariant()} aspire-cli {currentVersion} -> {targetVersion} (mise.toml)");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine(dryRun
+                ? $"[blue]Would update the Aspire CLI in mise.toml from {currentVersion} to {targetVersion} (dry-run mode)[/]"
+                : $"[green]Updated the Aspire CLI in mise.toml from {currentVersion} to {targetVersion}; run mise install[/]"
+            );
+        }
+
+        if (dryRun) return;
+
+        File.WriteAllText(miseConfigurationPath, miseConfiguration.Replace(aspireMatch.Value, $@"aspire = ""{targetVersion}"""));
+    }
+
     private static async Task UpdateDotnetToolsAsync(bool dryRun)
     {
         // Find all dotnet-tools.json files
@@ -1335,7 +1371,7 @@ public sealed class UpdatePackagesCommand : Command
 
                 // Restore the manifest so the newly pinned tool versions are installed and available to later commands
                 var manifestDirectory = Path.GetDirectoryName(dotnetToolsPath)!;
-                ProcessHelper.StartProcess("dotnet tool restore", manifestDirectory, redirectOutput: _quietMode);
+                ProcessHelper.StartProcess("dotnet tool restore", manifestDirectory, _quietMode);
             }
             else if (dotnetToolUpdatesToApply.Count > 0 && !_quietMode)
             {
