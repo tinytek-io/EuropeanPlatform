@@ -7,19 +7,26 @@ namespace SharedKernel.StronglyTypedIds;
 ///     This is a strongly typed ID for string values. It uses a custom string value with an optional prefix.
 ///     IDs can be prefixed with the value of the <see cref="IdPrefixAttribute" /> inspired by Stripe's API.
 /// </summary>
-public abstract record StronglyTypedString<T>(string Value) : StronglyTypedId<string, T>(Value)
+public abstract record StronglyTypedString<T>(string Value) : StronglyTypedId<string, T>(Value), IParsable<T>
     where T : StronglyTypedString<T>
 {
-    public static T NewId(string value)
+    // IParsable lets ASP.NET Core bind the ID from a plain value, such as a form part, and the JSON converter parse it
+    // without reflection. Both delegate to TryParse.
+    public static T Parse(string value, IFormatProvider? provider)
     {
-        var prefixWithUnderscore = PrefixCache.GetPrefixWithUnderscore(typeof(T));
-        if (prefixWithUnderscore is not null && !IsValidPrefixedValue(value, prefixWithUnderscore))
+        return TryParse(value, out var result) ? result : throw new FormatException($"'{value}' is not a valid {typeof(T).Name}.");
+    }
+
+    public static bool TryParse([NotNullWhen(true)] string? value, IFormatProvider? provider, [MaybeNullWhen(false)] out T result)
+    {
+        if (TryParse(value, out var parsed))
         {
-            var prefix = PrefixCache.GetPrefix(typeof(T));
-            throw new ArgumentException($"Value must start with prefix '{prefix}_' followed by at least one character", nameof(value));
+            result = parsed;
+            return true;
         }
 
-        return CreateInstance(value);
+        result = null;
+        return false;
     }
 
     public static bool TryParse(string? value, [NotNullWhen(true)] out T? result)
@@ -33,6 +40,18 @@ public abstract record StronglyTypedString<T>(string Value) : StronglyTypedId<st
 
         result = CreateInstance(value);
         return true;
+    }
+
+    public static T NewId(string value)
+    {
+        var prefixWithUnderscore = PrefixCache.GetPrefixWithUnderscore(typeof(T));
+        if (prefixWithUnderscore is not null && !IsValidPrefixedValue(value, prefixWithUnderscore))
+        {
+            var prefix = PrefixCache.GetPrefix(typeof(T));
+            throw new ArgumentException($"Value must start with prefix '{prefix}_' followed by at least one character", nameof(value));
+        }
+
+        return CreateInstance(value);
     }
 
     private static bool IsValidPrefixedValue(string value, string prefixWithUnderscore)
