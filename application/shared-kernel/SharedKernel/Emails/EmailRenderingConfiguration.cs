@@ -45,7 +45,7 @@ public static class EmailRenderingConfiguration
 
             services.AddSingleton<ScriptObject>(_ => EmailHelpers.CreateScriptObject(publicUrl));
 
-            services.AddSingleton<IEmailTemplateLoader>(_ => new FileSystemEmailTemplateLoader(emailsDistPath, !SharedInfrastructureConfiguration.IsRunningInAzure));
+            services.AddSingleton<IEmailTemplateLoader>(_ => new FileSystemEmailTemplateLoader(emailsDistPath, !SharedInfrastructureConfiguration.IsRunningInCloud));
             services.AddSingleton<IEmailRenderer, ScribanEmailRenderer>();
 
             return services;

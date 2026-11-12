@@ -43,6 +43,25 @@ public sealed class RouteConfigurationTests(AppGatewayApplicationFactory factory
     }
 
     [Fact]
+    public void StorageRoutes_ShouldRemoveAuthorizationAndCookieHeaders()
+    {
+        // Arrange
+        using var scope = factory.Services.CreateScope();
+        var provider = scope.ServiceProvider.GetRequiredService<IProxyConfigProvider>();
+
+        // Act
+        var storageRoutes = provider.GetConfig().Routes.Where(r => r.ClusterId!.EndsWith("-storage", StringComparison.Ordinal)).ToArray();
+
+        // Assert
+        storageRoutes.Select(r => r.RouteId).Should().BeEquivalentTo("avatars", "logos");
+        foreach (var route in storageRoutes)
+        {
+            var removedHeaders = route.Transforms!.Where(t => t.ContainsKey("RequestHeaderRemove")).Select(t => t["RequestHeaderRemove"]).ToArray();
+            removedHeaders.Should().Contain(["Authorization", "Cookie"], $"route '{route.RouteId}' must not forward the user's tokens to object storage");
+        }
+    }
+
+    [Fact]
     public void EveryConfiguredRoute_ShouldDeclareHostnameKeyMetadata()
     {
         // Arrange

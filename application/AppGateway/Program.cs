@@ -1,9 +1,9 @@
 using AppGateway;
 using AppGateway.ApiAggregation;
 using AppGateway.Filters;
+using AppGateway.InternalTls;
 using AppGateway.Middleware;
 using AppGateway.Transformations;
-using Azure.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
@@ -12,9 +12,14 @@ using SharedKernel.Platform;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Wire OpenTelemetry, Azure Monitor exporter, and Application Insights so AppGateway requests,
-// dependencies, traces, and logs surface in the cluster's Application Insights workspace alongside the APIs.
+// Wire OpenTelemetry so AppGateway requests, dependencies, traces, and logs surface in the
+// cluster's Cockpit (Grafana) alongside the APIs.
 builder.AddSharedTelemetry();
+
+// The gateway has no DbContext, so AddSharedInfrastructure never ran for it — but deployed it
+// still reads configuration from Scaleway Secret Manager (the internal CA, the token signing
+// key). A no-op locally and in tests.
+builder.Configuration.AddScalewaySecretManager(TimeSpan.FromMinutes(5));
 
 builder.Services
     .AddOptions<HostnamesOptions>()
@@ -24,14 +29,16 @@ builder.Services
     .ValidateOnStart();
 
 // PortAllocation reads .workspace/port.txt by walking up to the repo root for .git, which doesn't
-// exist in Azure Container Apps (working dir /app). Locally we load the real allocation; in Azure we
-// register a sentinel so downstream consumers (YARP filters, middleware, HttpClient factories) still
+// exist in containers (working dir /app). Locally we load the real allocation; deployed we register
+// a sentinel so downstream consumers (YARP filters, middleware, HttpClient factories) still
 // resolve the dependency, while their {SERVICE}_API_URL env-var paths take priority over the unused
 // port values.
-builder.Services.AddSingleton(SharedInfrastructureConfiguration.IsRunningInAzure
-    ? new PortAllocation(0)
-    : PortAllocation.Load()
-);
+builder.Services.AddSingleton(SharedInfrastructureConfiguration.IsRunningInCloud ? new PortAllocation(0) : PortAllocation.Load());
+
+// In-cluster TLS: serve HTTPS only (Terraform-managed certificate from Secret Manager), and
+// validate the APIs' internal-CA certificates when proxying or aggregating.
+builder.AddInternalTls();
+builder.Services.AddInternalCaTrust(builder.Configuration).AddInternalCaForwarder();
 
 var reverseProxyBuilder = builder.Services
     .AddReverseProxy()
@@ -39,30 +46,27 @@ var reverseProxyBuilder = builder.Services
     .AddConfigFilter<ClusterDestinationConfigFilter>()
     .AddConfigFilter<ApiExplorerRouteFilter>()
     .AddConfigFilter<HostMatchConfigFilter>()
+    .AddConfigFilter<StorageBucketPrefixConfigFilter>()
     .AddTransforms(context => context.RequestTransforms.Add(context.Services.GetRequiredService<BlockInternalApiTransform>()));
 
-if (SharedInfrastructureConfiguration.IsRunningInAzure)
+// account-api serves two host-scoped SPAs (the app host and the back-office host) and
+// disambiguates them by Request.Host; its endpoints therefore require the public host to be
+// delivered intact. YARP's default suppresses the original host, so the account routes in
+// appsettings.json set "RequestHeaderOriginalHost": true. The account-storage routes are
+// excluded: they target S3, which needs the bucket's own host.
+
+// Avatars and logos live in public-read S3 buckets, so the proxy forwards unsigned requests and
+// needs no storage credentials. The storage routes in appsettings.json strip the Authorization
+// header (set from the session cookie by AuthenticationCookieMiddleware) and the Cookie header, so
+// the user's tokens never reach the external storage service. HSTS applies when TLS terminates at
+// the cluster gateway in front of this proxy; it is skipped in local development.
+if (SharedInfrastructureConfiguration.IsRunningInCloud)
 {
-    builder.Services.AddSingleton<TokenCredential>(SharedInfrastructureConfiguration.DefaultAzureCredential);
-    builder.Services.AddSingleton<ManagedIdentityTransform>();
-    builder.Services.AddSingleton<ApiVersionHeaderTransform>();
     builder.Services.AddSingleton<HttpStrictTransportSecurityTransform>();
     reverseProxyBuilder.AddTransforms(context =>
-        {
-            context.RequestTransforms.Add(context.Services.GetRequiredService<ManagedIdentityTransform>());
-            context.RequestTransforms.Add(context.Services.GetRequiredService<ApiVersionHeaderTransform>());
-            context.ResponseTransforms.Add(context.Services.GetRequiredService<HttpStrictTransportSecurityTransform>());
-        }
+        context.ResponseTransforms.Add(context.Services.GetRequiredService<HttpStrictTransportSecurityTransform>())
     );
 }
-else
-{
-    builder.Services.AddSingleton<SharedAccessSignatureRequestTransform>();
-    reverseProxyBuilder.AddTransforms(context => context.RequestTransforms.Add(context.Services.GetRequiredService<SharedAccessSignatureRequestTransform>())
-    );
-}
-
-builder.AddNamedBlobStorages([("account-storage", "ACCOUNT_STORAGE_URL")]);
 
 builder.WebHost.UseKestrel(option => option.AddServerHeader = false);
 
@@ -85,7 +89,7 @@ builder.Services
     .AddOutputCache();
 
 builder.Services
-    .AddSingleton(SharedDependencyConfiguration.GetTokenSigningService())
+    .AddSingleton(SharedDependencyConfiguration.GetTokenSigningService(builder.Configuration))
     .AddSingleton<BlockInternalApiTransform>()
     .AddSingleton<LocalhostRedirectMiddleware>()
     .AddSingleton<AuthenticationCookieMiddleware>()
@@ -114,9 +118,9 @@ app.MapReverseProxy();
 app.MapFallback((HttpContext context, IOptions<HostnamesOptions> hostnameOptions, PortAllocation ports) =>
     {
         var hostnames = hostnameOptions.Value;
-        // Port is only meaningful for local Aspire stacks (non-standard ports). In Azure both the
+        // Port is only meaningful for local Aspire stacks (non-standard ports). Deployed both the
         // request Host.Port and the sentinel PortAllocation(0) leave us at 0; drop the suffix so the
-        // canonical URLs resolve to the standard https port behind ACA ingress.
+        // canonical URLs resolve to the standard https port behind the cluster ingress.
         var port = context.Request.Host.Port ?? ports.AppGateway;
         var portSuffix = port == 0 ? string.Empty : $":{port}";
         var problemDetails = new ProblemDetails

@@ -23,9 +23,9 @@ public class SinglePageAppConfiguration
 
     // Source directory for SPA static assets that rsbuild copies into BuildRootPath at build time.
     // Used by UseSinglePageAppFallback to layer public/ assets over the bundle in local dev where
-    // rsbuild's dev server holds them. Null in Azure: published images only contain ./dist/, so the
-    // upward walk for the public/ marker would terminate at the filesystem root and throw.
-    public static readonly string? PublicRootPath = SharedInfrastructureConfiguration.IsRunningInAzure
+    // rsbuild's dev server holds them. Null when deployed: published images only contain ./dist/,
+    // so the upward walk for the public/ marker would terminate at the filesystem root and throw.
+    public static readonly string? PublicRootPath = SharedInfrastructureConfiguration.IsRunningInCloud
         ? null
         : GetWebAppDistRoot(DefaultWebAppProjectName, "public");
 
@@ -58,7 +58,7 @@ public class SinglePageAppConfiguration
         string webAppProjectName,
         string? publicUrlOverride,
         string? cdnUrlOverride,
-        bool? isRunningInAzure
+        bool? isDeployed
     )
     {
         // Per-host overrides win over the process-wide env vars so a single process can host multiple SPAs
@@ -96,8 +96,9 @@ public class SinglePageAppConfiguration
 
         _isDevelopment = isDevelopment;
         BundleDirectory = webAppProjectName == DefaultWebAppProjectName ? BuildRootPath : GetWebAppDistRoot(webAppProjectName, "dist");
-        // Null in Azure: published images only ship ./dist/, so the upward walk would throw.
-        PublicDirectory = isRunningInAzure ?? SharedInfrastructureConfiguration.IsRunningInAzure
+        // Null when deployed: published images only ship ./dist/, so the upward walk would throw.
+        var isDeployedEnvironment = isDeployed ?? SharedInfrastructureConfiguration.IsRunningInCloud;
+        PublicDirectory = isDeployedEnvironment
             ? null
             : GetWebAppDistRoot(webAppProjectName, "public");
         _htmlTemplatePath = Path.Combine(BundleDirectory, "index.html");
@@ -109,10 +110,10 @@ public class SinglePageAppConfiguration
     public string BundleDirectory { get; }
 
     // Source directory for SPA static assets that rsbuild copies into BundleDirectory at build time
-    // (manifest.json, favicon.ico, apple-touch-icon.png, etc.). In Azure these assets live alongside
+    // (manifest.json, favicon.ico, apple-touch-icon.png, etc.). Deployed these assets live alongside
     // the bundle, but in local dev rsbuild's dev server holds them and they never reach BundleDirectory.
     // Layering this directory under the bundle file provider closes that gap without per-asset rules.
-    // Null in Azure (see constructor).
+    // Null when deployed (see constructor).
     public string? PublicDirectory { get; }
 
     private string CdnUrl { get; }
@@ -164,7 +165,7 @@ public class SinglePageAppConfiguration
         // Walk up looking for <webAppProjectName>/main.tsx (the React entry point, source-controlled in every
         // SPA) or <webAppProjectName>/<dist>/index.html (production deployments where main.tsx is gone but the
         // built bundle is). Either marker reliably identifies the SPA folder across local dev, CI before the
-        // frontend build, and the deployed Azure container. Matching just on the bare folder name would stop
+        // frontend build, and the deployed container. Matching just on the bare folder name would stop
         // at unrelated same-named directories like account/Tests/BackOffice.
         var assemblyPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
 

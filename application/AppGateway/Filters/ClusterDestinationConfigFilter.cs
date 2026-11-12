@@ -52,6 +52,6 @@ public class ClusterDestinationConfigFilter(PortAllocation ports) : IProxyConfig
     {
         var productionUrl = Environment.GetEnvironmentVariable(productionUrlEnvironmentVariableName);
         if (!string.IsNullOrEmpty(productionUrl)) return productionUrl;
-        return $"http://127.0.0.1:{blobPort}/devstoreaccount1";
+        return $"http://127.0.0.1:{blobPort}";
     }
 }

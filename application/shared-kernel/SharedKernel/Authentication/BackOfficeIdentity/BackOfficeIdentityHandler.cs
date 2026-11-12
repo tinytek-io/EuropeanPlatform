@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using SharedKernel.Configuration;
 
 namespace SharedKernel.Authentication.BackOfficeIdentity;
 
@@ -45,6 +46,14 @@ public sealed class BackOfficeIdentityHandler(
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        // Azure Easy Auth set these headers and stripped any a client sent. Deployed environments have no such
+        // identity provider in front of the back-office, so a header there could only come from the client: they are
+        // trusted locally only, where the mock identity middleware sets them.
+        if (SharedInfrastructureConfiguration.IsRunningInCloud)
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         var headerName = Context.Request.Headers[BackOfficeIdentityDefaults.PrincipalNameHeader].ToString();
         if (string.IsNullOrWhiteSpace(headerName))
         {

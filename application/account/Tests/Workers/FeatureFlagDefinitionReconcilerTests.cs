@@ -4,7 +4,6 @@ using Account.Features.FeatureFlags.Domain;
 using Account.Features.Subscriptions.Domain;
 using Account.Features.Users.Shared;
 using FluentAssertions;
-using Microsoft.ApplicationInsights;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharedKernel.Telemetry;

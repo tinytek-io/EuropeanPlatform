@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using NSubstitute;
 using SharedKernel.Authentication;
 using SharedKernel.Authentication.TokenGeneration;
@@ -197,6 +198,36 @@ public sealed class OpenTelemetryEnricherTests
             // Assert
             activity.Tags.Should().NotContain(t => t.Key.StartsWith("user.feature_flags.", StringComparison.Ordinal));
             activity.Tags.Should().NotContain(t => t.Key.StartsWith("tenant.feature_flags.", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Apply_AfterPublicHostEnrichment_ShouldKeepTheTruncatedClientAddress()
+    {
+        // Arrange
+        var userInfo = new UserInfo { IsAuthenticated = true, Id = UserId.NewId(), TenantId = new TenantId(12345), Locale = "en-US", Role = "Admin" };
+        var executionContext = Substitute.For<IExecutionContext>();
+        executionContext.UserInfo.Returns(userInfo);
+        executionContext.TenantId.Returns(userInfo.TenantId);
+        executionContext.ClientIpAddress.Returns(IPAddress.Parse("203.0.113.77"));
+        var enricher = new OpenTelemetryEnricher(executionContext);
+        var httpContext = new DefaultHttpContext { Request = { Host = new HostString("app.dev.localhost"), Headers = { ["X-Forwarded-For"] = "203.0.113.77" } } };
+
+        using var activitySource = new ActivitySource("TestSource");
+        var listener = new ActivityListener { ShouldListenTo = _ => true, Sample = SampleAllData };
+        using (listener)
+        {
+            ActivitySource.AddActivityListener(listener);
+
+            using var activity = activitySource.StartActivity();
+            activity.Should().NotBeNull();
+
+            // Act
+            PublicHostTelemetryEnricher.Enrich(activity, httpContext.Request);
+            enricher.Apply();
+
+            // Assert
+            activity.GetTagItem("client.address").Should().Be("203.0.113.0");
         }
     }
 
