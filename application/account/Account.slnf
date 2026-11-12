@@ -6,6 +6,7 @@
       "AppGateway\\AppGateway.csproj",
       "shared-kernel\\SharedKernel\\SharedKernel.csproj",
       "shared-kernel\\Tests\\SharedKernel.Tests.csproj",
+      "shared-kernel\\Scaleway.Sdk.Generator.Tests\\Scaleway.Sdk.Generator.Tests.csproj",
       "account\\Core\\Account.csproj",
       "account\\Workers\\Account.Workers.csproj",
       "account\\Api\\Account.Api.csproj",

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Xml.Linq;
 using DeveloperCli.Utilities;
 using Spectre.Console;
 
@@ -185,6 +186,10 @@ public static class ChangeDetection
             .Where(f => !f.Contains("artifacts"))
             .ToList();
 
+        // Include the source files the project links in from outside the CLI folder (shared-kernel's port
+        // allocation, the SDK generator's schema pins): they compile into the CLI, so editing one must rebuild it.
+        solutionFiles.AddRange(LinkedCompileFiles());
+
         // Include shipped git hooks so editing one triggers the rebuild + sync flow.
         var gitHooksDirectory = Path.Combine(Configuration.CliFolder, "git-hooks");
         if (Directory.Exists(gitHooksDirectory))
@@ -207,6 +212,20 @@ public static class ChangeDetection
 
         combinedStream.Position = 0;
         return BitConverter.ToString(sha256.ComputeHash(combinedStream));
+    }
+
+    private static IEnumerable<string> LinkedCompileFiles()
+    {
+        var projectFile = Path.Combine(Configuration.CliFolder, "DeveloperCli.csproj");
+        if (!File.Exists(projectFile)) return [];
+
+        return XDocument.Load(projectFile)
+            .Descendants("Compile")
+            .Select(item => item.Attribute("Include")?.Value)
+            .Where(include => include is not null && include.StartsWith(".."))
+            .Select(include => Path.GetFullPath(Path.Combine(Configuration.CliFolder, include!.Replace('\\', Path.DirectorySeparatorChar))))
+            .Where(File.Exists)
+            .OrderBy(path => path, StringComparer.Ordinal);
     }
 
     private static void PublishDeveloperCli(string currentHash)

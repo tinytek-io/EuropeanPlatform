@@ -1,0 +1,1982 @@
+openapi: 3.1.0
+info:
+  title: Product Catalog API
+  description: |-
+    The Product Catalog API provides methods to retrieve Scaleway's catalog of products and features.
+
+    ## Quickstart
+
+    <Message type="note">
+    This API does not require authentication to be used.
+    </Message>
+
+    Run the request below to list all available Scaleway products:
+
+      ```bash
+      curl -X GET "https://api.scaleway.com/product-catalog/v2alpha1/public-catalog/products?page_size=5"
+      ```
+
+      You can add the following parameters to your endpoint:
+
+      | Parameter        | Description                                   |
+      | :--------------- | :--------------------------------------       |
+      | `page`           | Number of the page. Value must be greater or equal to 1. |
+      | `page_size`| The number of products per page. Value must be greater or equal to 1. |
+
+      In the example above, we specify a `page_size` of 5 products per page.
+
+    If the request was successful you will see a response like the following:
+
+      ```json
+      {
+        "products": [
+          {
+            "sku": "/compute/pop2_hc_2c_4g/run_fr-par-2",
+            "service_category": "Compute",
+            "product": "POP2-HC-2C-4G Instance",
+            "variant": "Compute POP2-HC-2C-4G Instance - fr-par-2",
+            "description": "Compute POP2-HC-2C-4G Instance - fr-par-2 (0.0532€ per hour)",
+            "locality": {
+              "zone": "fr-par-2"
+            },
+            "price": {
+              "retail_price": {
+                "currency_code": "EUR",
+                "units": 0,
+                "nanos": 53200000
+              }
+            },
+            "properties": {
+              "hardware": {
+                "cpu": {
+                  "description": "AMD EPYC™ 7543 (2.8 GHz), x64, vCPUs: 2",
+                  "arch": "x64",
+                  "type": "AMD EPYC™ 7543 (2.8 GHz)",
+                  "virtual": {
+                    "count": 2
+                  },
+                  "threads": 2
+                },
+                "ram": {
+                  "description": "4 GiB",
+                  "size": 4294967296,
+                  "type": ""
+                },
+                "storage": {
+                  "description": "Block",
+                  "total": 0
+                },
+                "network": {
+                  "description": "Internal: 400 Mb/s, Public: 400 Mb/s",
+                  "internal_bandwidth": 400000000,
+                  "public_bandwidth": 400000000,
+                  "max_public_bandwidth": 400000000
+                }
+              },
+              "instance": {
+                "range": "Workload-Optimized"
+              }
+            },
+            "environmental_impact_estimation": {
+              "kg_co2_equivalent": 0.00080852455,
+              "m3_water_usage": 1.9658212e-7
+            },
+            "unit_of_measure": {
+              "unit": "hour",
+              "size": 1
+            }
+          },
+          {
+            "sku": "/apple-silicon/m4-s/run_par1",
+            "service_category": "Bare Metal",
+            "product": "Mac Mini M4 - S",
+            "variant": "Mac Mini M4 - S - Hourly - fr-par-1",
+            "description": "Mac Mini M4 - S - Hourly - fr-par-1 (0.22€ per hour)",
+            "locality": {
+              "zone": "fr-par-1"
+            },
+            "price": {
+              "retail_price": {
+                "currency_code": "EUR",
+                "units": 0,
+                "nanos": 220000000
+              }
+            },
+            "properties": {
+              "hardware": {
+                "cpu": {
+                  "description": "Apple M4, apple_silicon, Sockets: 1, Cores per socket: 10, Threads per core: 1, Frequency: 4.4 GHz",
+                  "arch": "apple_silicon",
+                  "type": "Apple M4",
+                  "physical": {
+                    "sockets": 1,
+                    "cores_per_socket": 10,
+                    "threads_per_core": 1,
+                    "frequency": 4400000000,
+                    "benchmark": 0
+                  },
+                  "threads": 10
+                },
+                "ram": {
+                  "description": "16 GiB LPDDR5X",
+                  "size": 17179869184,
+                  "type": "LPDDR5X"
+                },
+                "storage": {
+                  "description": "Fixed local: 1 x 256 GB SSD",
+                  "total": 256000000000
+                },
+                "network": {
+                  "description": "Internal: 1 Gb/s, Public: 1 Gb/s",
+                  "internal_bandwidth": 1000000000,
+                  "public_bandwidth": 1000000000,
+                  "max_public_bandwidth": 1000000000
+                },
+                "gpu": {
+                  "description": "10 x Apple M4",
+                  "count": 10,
+                  "type": "Apple M4"
+                }
+              },
+              "apple_silicon": {
+                "range": "M4"
+              }
+            },
+            "environmental_impact_estimation": {
+              "kg_co2_equivalent": 0.012052304,
+              "m3_water_usage": 0.0000010851885
+            },
+            "unit_of_measure": {
+              "unit": "hour",
+              "size": 1
+            }
+          },
+          {
+            "sku": "/storage/block/ssd/storage/fr-par1",
+            "service_category": "Storage",
+            "product": "Performance Block storage - SSD",
+            "variant": "Block Storage - fr-par-1",
+            "description": "Block Storage - fr-par-1 (0.000118€ per GB)",
+            "locality": {
+              "zone": "fr-par-1"
+            },
+            "price": {
+              "retail_price": {
+                "currency_code": "EUR",
+                "units": 0,
+                "nanos": 118000
+              }
+            },
+            "unit_of_measure": {
+              "unit": "gigabyte",
+              "size": 1
+            }
+          },
+          {
+            "sku": "/network/domain/domains/fr/register",
+            "service_category": "Network",
+            "product": "Domain Register",
+            "variant": "Domains - Register .fr",
+            "description": "Domains - Register .fr (5.99€ per year)",
+            "locality": {
+              "global": true
+            },
+            "price": {
+              "retail_price": {
+                "currency_code": "EUR",
+                "units": 5,
+                "nanos": 990000000
+              }
+            },
+            "unit_of_measure": {
+              "unit": "year",
+              "size": 1
+            }
+          }
+        ]
+      }
+      ```
+
+    The response show you the total number of products in the catalog, and provides you with the following information about each product:
+
+    <Message type="note">
+      The information displayed in the response varies according to the product. Not all elements listed below apply to every product.
+    </Message>
+
+    - **Basic information** - product name, description, category
+    - **Locality** - availability per region or zone, or global
+    - **Price** - retail price of each product
+    - **Additional information** - hardware specifications, ranges
+
+    <Message type="tip">
+      Refer to the response description of the [List all available products](#path-product-catalog-list-all-available-scaleway-products) method to find an extensive list of all possible response attributes.
+    </Message>
+
+    <Message type="requirement">
+      To perform the following steps, you must first ensure that:<br /><br />
+        - you have [installed `curl`](https://curl.se/download.html)
+    </Message>
+  version: v2alpha1
+servers:
+- url: https://api.scaleway.com
+tags:
+- name: Product catalog
+  description: |
+    Scaleway's Product Catalog is an extensive list of the Scaleway products.
+    The catalog includes details about each product including: description,
+    locations, prices and properties.
+components:
+  schemas:
+    google.type.Money:
+      type: object
+      properties:
+        currency_code:
+          type: string
+        units:
+          type: integer
+          format: int64
+        nanos:
+          type: integer
+          format: int32
+      x-properties-order:
+      - currency_code
+      - units
+      - nanos
+    scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsRequest.ProductType:
+      type: string
+      enum:
+      - unknown_product_type
+      - instance
+      - apple_silicon
+      - elastic_metal
+      - dedibox
+      - block_storage
+      - object_storage
+      - managed_inference
+      - generative_apis
+      - load_balancer
+      - secret_manager
+      - key_manager
+      - managed_redis_database
+      - kubernetes
+      - managed_relational_database
+      - managed_mongodb
+      - serverless_functions
+      - serverless_containers
+      - serverless_jobs
+      - apache_kafka
+      - open_search
+      - instance_local_ssd_snapshot
+      - instance_local_ssd_storage
+      - file_storage
+      - serverless_sql_database
+      - cockpit
+      x-enum-descriptions:
+        values:
+          unknown_product_type: Unknown product type.
+          instance: Include the Instance information in the response.
+          apple_silicon: Include the Apple Silicon information in the response.
+          elastic_metal: Include the Elastic Metal information in the response.
+          dedibox: Include the Dedibox information in the response.
+          block_storage: Include the Block Storage information in the response.
+          object_storage: Include the Object Storage information in the response.
+          managed_inference: Include the Managed Inference information in the response.
+          generative_apis: Include the Generative APIs information in the response.
+          load_balancer: Include the Load Balancer information in the response.
+          secret_manager: Include the Secret Manager information in the response.
+          key_manager: Include the Key Manager information in the response.
+          managed_redis_database: Include the Managed Redis Database information in
+            the response.
+          kubernetes: Include the Kubernetes information in the response.
+          managed_relational_database: Include the Managed Relational Database information
+            in the response
+          managed_mongodb: Include the Managed MongoDB information in the response.
+          serverless_functions: Include the Serverless Functions information in the
+            response.
+          serverless_containers: Include the Serverless Containers information in
+            the response.
+          serverless_jobs: Include the Serverless Jobs information in the response.
+          apache_kafka: Include the Kafka information in the response.
+          open_search: Include the OpenSearch DB information in the response.
+          instance_local_ssd_snapshot: Include the Instance Local SSD Snapshot information
+            in the response.
+          instance_local_ssd_storage: Include the Instance Local SSD Storage information
+            in the response.
+          file_storage: The properties of File Storage products.
+          serverless_sql_database: Include the Serverless SQL Database information
+            in the response.
+          cockpit: The properties of Cockpit products.
+      default: unknown_product_type
+    scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsRequest.Status:
+      type: string
+      enum:
+      - unknown_status
+      - public_beta
+      - preview
+      - general_availability
+      - end_of_new_features
+      - end_of_growth
+      - end_of_deployment
+      - end_of_support
+      - end_of_sale
+      - end_of_life
+      - retired
+      x-enum-descriptions:
+        values:
+          unknown_status: Unknown status.
+          public_beta: The product is available in Public Beta.
+          preview: The product is available in Preview mode.
+          general_availability: The product is generally available.
+          end_of_new_features: The product is available but no new features will be
+            added. Only bug fixes and security updates provided.
+          end_of_growth: The product is no longer available to new customers. Existing
+            resources continue to run and be supported.
+          end_of_deployment: The product must not be used for new deployments. Deprecated.
+          end_of_support: There is no longer any commercial support for this product.
+            Deprecated.
+          end_of_sale: The product is not sold anymore but is still in use.
+          end_of_life: The product is no longer supported or maintained.
+          retired: The product is deprecated and is no longer accessible.
+      default: unknown_status
+    scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsResponse:
+      type: object
+      properties:
+        products:
+          type: array
+          description: The list of products.
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct'
+        total_count:
+          type: integer
+          description: The total number of products in the catalog.
+          format: uint64
+      x-properties-order:
+      - products
+      - total_count
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct:
+      type: object
+      properties:
+        sku:
+          type: string
+          description: The unique identifier of the product.
+        service_category:
+          type: string
+          description: The category of the product.
+        product_category:
+          type: string
+          description: The product category of the product.
+        product:
+          type: string
+          description: The product name.
+        variant:
+          type: string
+          description: The product variant.
+        description:
+          type: string
+          description: The product description.
+        locality:
+          description: The locality of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Locality'
+        price:
+          description: The price of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Price'
+        properties:
+          description: The properties of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties'
+        environmental_impact_estimation:
+          description: The environmental impact estimation of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.EnvironmentalImpactEstimation'
+        unit_of_measure:
+          description: The unit of measure of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.UnitOfMeasure'
+        status:
+          description: The status of the product.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Status'
+        end_of_life_at:
+          type:
+          - string
+          - "null"
+          description: The end of life date of the product. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+        end_of_growth_at:
+          type:
+          - string
+          - "null"
+          description: The end of growth date of the product. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+        end_of_sale_at:
+          type:
+          - string
+          - "null"
+          description: The end of sale date of the product. (RFC 3339 format)
+          format: date-time
+          example: "2022-03-22T12:34:56.123456Z"
+        badges:
+          type: array
+          description: Different badges that can be associated with the product.
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.ProductBadge'
+      x-properties-order:
+      - sku
+      - service_category
+      - product_category
+      - product
+      - variant
+      - description
+      - locality
+      - price
+      - properties
+      - environmental_impact_estimation
+      - unit_of_measure
+      - status
+      - end_of_life_at
+      - end_of_growth_at
+      - end_of_sale_at
+      - badges
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.EnvironmentalImpactEstimation:
+      type: object
+      properties:
+        kg_co2_equivalent:
+          type:
+          - number
+          - "null"
+          format: float
+        m3_water_usage:
+          type:
+          - number
+          - "null"
+          format: float
+      x-properties-order:
+      - kg_co2_equivalent
+      - m3_water_usage
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Locality:
+      type: object
+      properties:
+        global:
+          type:
+          - boolean
+          - "null"
+          description: |-
+            Whether or not the product is global.
+            Precisely one of global, region, zone, datacenter can be set.
+          x-one-of: locality
+        region:
+          type:
+          - string
+          - "null"
+          description: |-
+            The region of the product.
+            Precisely one of global, region, zone, datacenter can be set.
+          x-one-of: locality
+        zone:
+          type:
+          - string
+          - "null"
+          description: |-
+            The zone of the product.
+            Precisely one of global, region, zone, datacenter can be set.
+          x-one-of: locality
+        datacenter:
+          type:
+          - string
+          - "null"
+          description: |-
+            The datacenter of the product.
+            Precisely one of global, region, zone, datacenter can be set.
+          x-one-of: locality
+      x-properties-order:
+      - global
+      - region
+      - zone
+      - datacenter
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Price:
+      type: object
+      properties:
+        retail_price:
+          description: The retail price of the product.
+          $ref: '#/components/schemas/google.type.Money'
+      x-properties-order:
+      - retail_price
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.ProductBadge:
+      type: string
+      enum:
+      - unknown_product_badge
+      - new_product
+      - best_seller
+      - best_value
+      - popular
+      - no_kvm
+      x-enum-descriptions:
+        values:
+          unknown_product_badge: Unknown badge.
+          new_product: The product is new (can be used to make a new product more
+            visible in the Console).
+          best_seller: The product is one of our best sellers.
+          best_value: The product is one of our best value.
+          popular: The product is popular.
+          no_kvm: The product doesn't have access to KVM.
+      default: unknown_product_badge
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties:
+      type: object
+      properties:
+        hardware:
+          description: The hardware properties of the product (if supported).
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware'
+        dedibox:
+          description: |-
+            The properties of Dedibox products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Dedibox'
+          - type: "null"
+        elastic_metal:
+          description: |-
+            The properties of Elastic Metal products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ElasticMetal'
+          - type: "null"
+        apple_silicon:
+          description: |-
+            The properties of Apple Silicon products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.AppleSilicon'
+          - type: "null"
+        instance:
+          description: |-
+            The properties of Instance products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Instance'
+          - type: "null"
+        block_storage:
+          description: |-
+            The properties of Block Storage products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage'
+          - type: "null"
+        object_storage:
+          description: |-
+            The properties of Object Storage products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage'
+          - type: "null"
+        managed_inference:
+          description: |-
+            The properties of Managed Inference products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference'
+          - type: "null"
+        generative_apis:
+          description: |-
+            The properties of Generative APIs products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis'
+          - type: "null"
+        load_balancer:
+          description: |-
+            The properties of Load Balancer products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer'
+          - type: "null"
+        secret_manager:
+          description: Precisely one of dedibox, elastic_metal, apple_silicon, instance,
+            block_storage, object_storage, managed_inference, generative_apis, load_balancer,
+            secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database,
+            serverless_functions, serverless_containers, managed_mongodb, serverless_jobs,
+            serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot,
+            instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.SecretManager'
+          - type: "null"
+        managed_redis_database:
+          description: |-
+            The properties of Managed Redis Database products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRedisDatabase'
+          - type: "null"
+        key_manager:
+          description: Precisely one of dedibox, elastic_metal, apple_silicon, instance,
+            block_storage, object_storage, managed_inference, generative_apis, load_balancer,
+            secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database,
+            serverless_functions, serverless_containers, managed_mongodb, serverless_jobs,
+            serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot,
+            instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.KeyManager'
+          - type: "null"
+        kubernetes:
+          description: |-
+            The properties of Kubernetes products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes'
+          - type: "null"
+        managed_relational_database:
+          description: |-
+            The properties of Managed Relational Database products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase'
+          - type: "null"
+        serverless_functions:
+          description: |-
+            The properties of Serverless Functions products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions'
+          - type: "null"
+        serverless_containers:
+          description: |-
+            The properties of Serverless Containers products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers'
+          - type: "null"
+        managed_mongodb:
+          description: Precisely one of dedibox, elastic_metal, apple_silicon, instance,
+            block_storage, object_storage, managed_inference, generative_apis, load_balancer,
+            secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database,
+            serverless_functions, serverless_containers, managed_mongodb, serverless_jobs,
+            serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot,
+            instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB'
+          - type: "null"
+        serverless_jobs:
+          description: |-
+            The properties of Serverless Jobs products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs'
+          - type: "null"
+        serverless_sql_database:
+          description: |-
+            The properties of Serverless SQL Database products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessSqlDatabase'
+          - type: "null"
+        apache_kafka:
+          description: |-
+            The properties of Apache Kafka products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka'
+          - type: "null"
+        open_search:
+          description: |-
+            The properties of OpenSearch DB products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.OpenSearch'
+          - type: "null"
+        instance_local_ssd_snapshot:
+          description: |-
+            The properties of Instance Local SSD Snapshot products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.InstanceLocalSSDSnapshot'
+          - type: "null"
+        instance_local_ssd_storage:
+          description: |-
+            The properties of Instance Local SSD Storage products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.InstanceLocalSSDStorage'
+          - type: "null"
+        file_storage:
+          description: |-
+            The properties of File Storage products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.FileStorage'
+          - type: "null"
+        cockpit:
+          description: |-
+            The properties of Cockpit products.
+            Precisely one of dedibox, elastic_metal, apple_silicon, instance, block_storage, object_storage, managed_inference, generative_apis, load_balancer, secret_manager, managed_redis_database, key_manager, kubernetes, managed_relational_database, serverless_functions, serverless_containers, managed_mongodb, serverless_jobs, serverless_sql_database, apache_kafka, open_search, instance_local_ssd_snapshot, instance_local_ssd_storage, file_storage, cockpit can be set.
+          x-one-of: properties
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Cockpit'
+          - type: "null"
+      x-properties-order:
+      - hardware
+      - dedibox
+      - elastic_metal
+      - apple_silicon
+      - instance
+      - block_storage
+      - object_storage
+      - managed_inference
+      - generative_apis
+      - load_balancer
+      - secret_manager
+      - managed_redis_database
+      - key_manager
+      - kubernetes
+      - managed_relational_database
+      - serverless_functions
+      - serverless_containers
+      - managed_mongodb
+      - serverless_jobs
+      - serverless_sql_database
+      - apache_kafka
+      - open_search
+      - instance_local_ssd_snapshot
+      - instance_local_ssd_storage
+      - file_storage
+      - cockpit
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka:
+      type: object
+      properties:
+        node:
+          description: |-
+            The properties related to Kafka node products.
+            Precisely one of node, storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.NodeType'
+          - type: "null"
+        storage:
+          description: |-
+            The properties related to Kafka storage products.
+            Precisely one of node, storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.StorageType'
+          - type: "null"
+      x-properties-order:
+      - node
+      - storage
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.AvailableVolumeType:
+      type: string
+      enum:
+      - unknown_type
+      - sbs_5k
+      - sbs_15k
+      default: unknown_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.NodeType:
+      type: object
+      properties:
+        versions:
+          type: array
+          description: The list of available versions for the Kafka node.
+          items:
+            type: string
+        vcpu_count:
+          type: integer
+          description: Number of virtual CPUs.
+          format: uint32
+        is_multi_az:
+          type: boolean
+          description: Whether or not this Kafka product is multi AZ.
+        memory_size:
+          type: integer
+          description: Memory size in bytes. (in bytes)
+          format: uint64
+      x-properties-order:
+      - versions
+      - vcpu_count
+      - is_multi_az
+      - memory_size
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.StorageType:
+      type: object
+      properties:
+        type:
+          description: The type of volume.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ApacheKafka.AvailableVolumeType'
+        min_size:
+          type: integer
+          description: The minimum size of the volume in bytes. (in bytes)
+          format: uint64
+        max_size:
+          type: integer
+          description: The maximum size of the volume in bytes. (in bytes)
+          format: uint64
+        is_multi_az:
+          type: boolean
+          description: Whether or not this Kafka product is multi AZ.
+      x-properties-order:
+      - type
+      - min_size
+      - max_size
+      - is_multi_az
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.AppleSilicon:
+      type: object
+      properties:
+        range:
+          type: string
+          description: The range of the Apple Silicon server.
+        server_type:
+          type: string
+          description: The server type of the Apple Silicon server.
+      x-properties-order:
+      - range
+      - server_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage:
+      type: object
+      properties:
+        min_volume_size:
+          type: integer
+          description: The minimum size of storage volume for this product in bytes.
+            Deprecated. (in bytes)
+          deprecated: true
+          format: uint64
+        max_volume_size:
+          type: integer
+          description: The maximum size of storage volume for this product in bytes.
+            Deprecated. (in bytes)
+          deprecated: true
+          format: uint64
+        snapshot:
+          description: |-
+            The properties related to Block Storage snapshot.
+            Precisely one of snapshot, volume can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage.SnapshotType'
+          - type: "null"
+        volume:
+          description: |-
+            The properties related to Block Storage volume.
+            Precisely one of snapshot, volume can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage.VolumeType'
+          - type: "null"
+      x-properties-order:
+      - min_volume_size
+      - max_volume_size
+      - snapshot
+      - volume
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage.SnapshotType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.BlockStorage.VolumeType:
+      type: object
+      properties:
+        min_size:
+          type: integer
+          description: The minimum size of storage volume for this product in bytes.
+            (in bytes)
+          format: uint64
+        max_size:
+          type: integer
+          description: The maximum size of storage volume for this product in bytes.
+            (in bytes)
+          format: uint64
+      x-properties-order:
+      - min_size
+      - max_size
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Cockpit:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Dedibox:
+      type: object
+      properties:
+        range:
+          type: string
+          description: The range of the Dedibox server.
+        offer_id:
+          type: integer
+          description: The offer ID of the Dedibox server.
+          format: int64
+      x-properties-order:
+      - range
+      - offer_id
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ElasticMetal:
+      type: object
+      properties:
+        range:
+          type: string
+          description: The range of the Elastic Metal server.
+        offer_id:
+          type: string
+          description: The offer ID of the Elastic Metal server.
+      x-properties-order:
+      - range
+      - offer_id
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.FileStorage:
+      type: object
+      properties:
+        min_size:
+          type: integer
+          description: The minimum size of storage volume for this product in bytes.
+            (in bytes)
+          format: uint64
+        max_size:
+          type: integer
+          description: The maximum size of storage volume for this product in bytes.
+            (in bytes)
+          format: uint64
+      x-properties-order:
+      - min_size
+      - max_size
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis:
+      type: object
+      properties:
+        reasoning:
+          type: boolean
+        supported_apis:
+          type: array
+          items:
+            type: string
+        consumption_mode:
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.ConsumptionMode'
+        provider_name:
+          type: string
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.Task'
+        token_type:
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.TokenType'
+        supported_reasoning_values:
+          type: array
+          items:
+            type: string
+        default_reasoning_value:
+          type:
+          - string
+          - "null"
+      x-properties-order:
+      - reasoning
+      - supported_apis
+      - consumption_mode
+      - provider_name
+      - tasks
+      - token_type
+      - supported_reasoning_values
+      - default_reasoning_value
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.ConsumptionMode:
+      type: string
+      enum:
+      - unknown_consumption_mode
+      - realtime
+      - batch
+      default: unknown_consumption_mode
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.Task:
+      type: string
+      enum:
+      - unknown_task
+      - chat
+      - embeddings
+      - vision
+      - audio_transcription
+      - code
+      - ocr
+      default: unknown_task
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.GenerativeApis.TokenType:
+      type: string
+      enum:
+      - unknown_token_type
+      - input_token
+      - output_token
+      - input_cached_token
+      - input_audio
+      default: unknown_token_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware:
+      type: object
+      properties:
+        cpu:
+          description: The CPU hardware properties.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU'
+        ram:
+          description: The RAM hardware properties.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.RAM'
+        storage:
+          description: The storage hardware properties.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.Storage'
+        network:
+          description: The network hardware properties.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.Network'
+        gpu:
+          description: The GPU hardware properties.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.GPU'
+      x-properties-order:
+      - cpu
+      - ram
+      - storage
+      - network
+      - gpu
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU:
+      type: object
+      properties:
+        description:
+          type: string
+          description: A human readable description of the CPU.
+        arch:
+          description: The architecture of the CPU.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Arch'
+        type:
+          type: string
+          description: The type of the CPU.
+        virtual:
+          description: |-
+            Properties if the CPU is virtual.
+            Precisely one of virtual, physical can be set.
+          x-one-of: compute_unit
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Virtual'
+          - type: "null"
+        physical:
+          description: |-
+            Properties if the CPU is physical.
+            Precisely one of virtual, physical can be set.
+          x-one-of: compute_unit
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Physical'
+          - type: "null"
+        threads:
+          type: integer
+          description: The total number of threads.
+          format: uint32
+        shared:
+          type: boolean
+          description: Indicates whether the CPU is shared or not.
+      x-properties-order:
+      - description
+      - arch
+      - type
+      - virtual
+      - physical
+      - threads
+      - shared
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Arch:
+      type: string
+      enum:
+      - unknown_arch
+      - x64
+      - arm64
+      - riscv
+      - apple_silicon
+      x-enum-descriptions:
+        values:
+          unknown_arch: Unknown architecture.
+          x64: X64.
+          arm64: ARM64.
+          riscv: RISC-V.
+          apple_silicon: Apple Silicon.
+      default: unknown_arch
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Physical:
+      type: object
+      properties:
+        sockets:
+          type: integer
+          description: The number of sockets of the CPU.
+          format: uint32
+        cores_per_socket:
+          type: integer
+          description: The number of cores per socket.
+          format: uint32
+        threads_per_core:
+          type: integer
+          description: The number of threads per core.
+          format: uint32
+        frequency:
+          type: integer
+          description: The frequency of the CPU in Hertz.
+          format: uint64
+        benchmark:
+          type: integer
+          description: The benchmark score of the CPU.
+          format: uint32
+      x-properties-order:
+      - sockets
+      - cores_per_socket
+      - threads_per_core
+      - frequency
+      - benchmark
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.CPU.Virtual:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: The number of vCPUs.
+          format: uint32
+      x-properties-order:
+      - count
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.GPU:
+      type: object
+      properties:
+        description:
+          type: string
+          description: A human-readable description of the GPU.
+        count:
+          type: integer
+          description: The number of GPUs.
+          format: uint32
+        type:
+          type: string
+          description: The type of the GPU.
+      x-properties-order:
+      - description
+      - count
+      - type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.Network:
+      type: object
+      properties:
+        description:
+          type: string
+          description: A human-readable description of the network.
+        internal_bandwidth:
+          type: integer
+          description: The internal bandwidth in bits per second.
+          format: uint64
+        public_bandwidth:
+          type: integer
+          description: The default public bandwidth in bits per second.
+          format: uint64
+        max_public_bandwidth:
+          type: integer
+          description: The maximum public bandwidth in bits per second (may require
+            subscription to options).
+          format: uint64
+      x-properties-order:
+      - description
+      - internal_bandwidth
+      - public_bandwidth
+      - max_public_bandwidth
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.RAM:
+      type: object
+      properties:
+        description:
+          type: string
+          description: A human-readable description of the RAM.
+        size:
+          type: integer
+          description: The size of the RAM in bytes. (in bytes)
+          format: uint64
+        type:
+          type: string
+          description: The type of the RAM.
+        ecc_type:
+          description: ECC type.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.RAM.ECCType'
+      x-properties-order:
+      - description
+      - size
+      - type
+      - ecc_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.RAM.ECCType:
+      type: string
+      enum:
+      - unknown_ecc_type
+      - standard
+      - on_die
+      x-enum-descriptions:
+        values:
+          unknown_ecc_type: Unknown ECC type.
+          standard: Standard ECC.
+          on_die: On Die ECC (ODECC).
+      default: unknown_ecc_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Hardware.Storage:
+      type: object
+      properties:
+        description:
+          type: string
+          description: A human-readable description of the storage.
+        total:
+          type: integer
+          description: The total size of the storage in bytes. (in bytes)
+          format: uint64
+      x-properties-order:
+      - description
+      - total
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Instance:
+      type: object
+      properties:
+        range:
+          type: string
+          description: The range of the Instance server.
+        offer_id:
+          type: string
+          description: The offer ID of the Instance server.
+        recommended_replacement_offer_ids:
+          type: array
+          description: The recommended replacement offer IDs of the Instance server.
+          items:
+            type: string
+      x-properties-order:
+      - range
+      - offer_id
+      - recommended_replacement_offer_ids
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.InstanceLocalSSDSnapshot:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.InstanceLocalSSDStorage:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.KeyManager:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes:
+      type: object
+      properties:
+        kapsule_control_plane:
+          description: |-
+            The properties related to Kapsule Control Plane products.
+            Precisely one of kapsule_control_plane, kosmos_control_plane, kosmos_node can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KapsuleControlPlaneType'
+          - type: "null"
+        kosmos_control_plane:
+          description: |-
+            The properties related to Kosmos Control Plane products.
+            Precisely one of kapsule_control_plane, kosmos_control_plane, kosmos_node can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KosmosControlPlaneType'
+          - type: "null"
+        kosmos_node:
+          description: |-
+            The properties related to Kosmos nodes.
+            Precisely one of kapsule_control_plane, kosmos_control_plane, kosmos_node can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KosmosNodeType'
+          - type: "null"
+      x-properties-order:
+      - kapsule_control_plane
+      - kosmos_control_plane
+      - kosmos_node
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KapsuleControlPlaneType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KosmosControlPlaneType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.Kubernetes.KosmosNodeType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer:
+      type: object
+      properties:
+        node:
+          description: |-
+            The properties related to Load Balancer nodes.
+            Precisely one of node, ipv4 can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer.NodeType'
+          - type: "null"
+        ipv4:
+          description: |-
+            The properties related to Load Balancer IPv4.
+            Precisely one of node, ipv4 can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer.IPV4Type'
+          - type: "null"
+      x-properties-order:
+      - node
+      - ipv4
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer.IPV4Type:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.LoadBalancer.NodeType:
+      type: object
+      properties:
+        offer_id:
+          type: string
+          description: The offer ID of the Load Balancer product.
+        multi_cloud_provider:
+          type: boolean
+          description: Whether the Load Balancer product is available for multi-cloud
+            providers.
+        bandwidth:
+          type: integer
+          description: The bandwidth of the Load Balancer product in bits per second.
+          format: uint64
+      x-properties-order:
+      - offer_id
+      - multi_cloud_provider
+      - bandwidth
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference:
+      type: object
+      properties:
+        instance_gpu_name:
+          type: string
+          description: The name of the associated instance GPU to this node type.
+            Deprecated, use `deployment.instance_gpu_name` instead.
+          deprecated: true
+        deployment:
+          description: |-
+            The properties related to Managed Inference Deployment.
+            Precisely one of deployment, custom_model_storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference.ManagedInferenceDeployment'
+          - type: "null"
+        custom_model_storage:
+          description: |-
+            The properties related to Managed Inference Custom Model Storage.
+            Precisely one of deployment, custom_model_storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference.ManagedInferenceCustomModelStorage'
+          - type: "null"
+      x-properties-order:
+      - instance_gpu_name
+      - deployment
+      - custom_model_storage
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference.ManagedInferenceCustomModelStorage:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedInference.ManagedInferenceDeployment:
+      type: object
+      properties:
+        instance_gpu_name:
+          type: string
+          description: The name of the associated instance GPU to this deployment.
+      x-properties-order:
+      - instance_gpu_name
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB:
+      type: object
+      properties:
+        management:
+          description: |-
+            The properties related to MongoDB Management type.
+            Precisely one of management, node, storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.ManagementType'
+          - type: "null"
+        node:
+          description: |-
+            The properties related to MongoDB Node type.
+            Precisely one of management, node, storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.NodeType'
+          - type: "null"
+        storage:
+          description: |-
+            The properties related to MongoDB Storage type.
+            Precisely one of management, node, storage can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.StorageType'
+          - type: "null"
+      x-properties-order:
+      - management
+      - node
+      - storage
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.ManagementType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.NodeType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.StorageType:
+      type: object
+      properties:
+        storage_class:
+          description: The type of Storage class.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.StorageType.StorageClass'
+      x-properties-order:
+      - storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedMongoDB.StorageType.StorageClass:
+      type: string
+      enum:
+      - unknown_storage_class
+      - sbs_5k
+      - sbs_5k_snapshot
+      - sbs_15k
+      - sbs_15k_snapshot
+      x-enum-descriptions:
+        values:
+          unknown_storage_class: Unknown storage class.
+          sbs_5k: Block SBS 5k type.
+          sbs_5k_snapshot: Block SBS 5k Snapshot type.
+          sbs_15k: Block SBS 15k type.
+          sbs_15k_snapshot: Block SBS 15k Snapshot type.
+      default: unknown_storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRedisDatabase:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase:
+      type: object
+      properties:
+        management:
+          description: |-
+            The properties related to Relational Database Management type.
+            Precisely one of management, node, storage, multi_az can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.ManagementType'
+          - type: "null"
+        node:
+          description: |-
+            The properties related to Relational Database Nodes.
+            Precisely one of management, node, storage, multi_az can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.NodeType'
+          - type: "null"
+        storage:
+          description: |-
+            The properties related to Relational Database Storage type.
+            Precisely one of management, node, storage, multi_az can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.StorageType'
+          - type: "null"
+        multi_az:
+          description: |-
+            The properties related to Relational Database Multi AZ type.
+            Precisely one of management, node, storage, multi_az can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.MultiAzType'
+          - type: "null"
+      x-properties-order:
+      - management
+      - node
+      - storage
+      - multi_az
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.ManagementType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.MultiAzType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.NodeType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.StorageType:
+      type: object
+      properties:
+        storage_class:
+          description: The type of Storage class.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.StorageType.StorageClass'
+      x-properties-order:
+      - storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ManagedRelationalDatabase.StorageType.StorageClass:
+      type: string
+      enum:
+      - unknown_storage_class
+      - block_ssd
+      - block_ssd_snapshot
+      - local_ssd
+      - sbs_5k
+      - sbs_5k_snapshot
+      - sbs_15k
+      - sbs_15k_snapshot
+      - backup
+      x-enum-descriptions:
+        values:
+          unknown_storage_class: Unknown storage class.
+          block_ssd: Block SSD type.
+          block_ssd_snapshot: Block SSD Snapshot type.
+          local_ssd: Local SSD type.
+          sbs_5k: Block SBS 5k type.
+          sbs_5k_snapshot: Block SBS 5k Snapshot type.
+          sbs_15k: Block SBS 15k type.
+          sbs_15k_snapshot: Block SBS 15k Snapshot type.
+          backup: Backup type.
+      default: unknown_storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage:
+      type: object
+      properties:
+        class:
+          description: |-
+            The properties related to Object Storage class.
+            Precisely one of class, restore, internet_traffic, region_traffic can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.ClassType'
+          - type: "null"
+        restore:
+          description: |-
+            The properties related to Object Storage restore operations.
+            Precisely one of class, restore, internet_traffic, region_traffic can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RestoreType'
+          - type: "null"
+        internet_traffic:
+          description: |-
+            The properties related to Object Storage internet traffic.
+            Precisely one of class, restore, internet_traffic, region_traffic can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.InternetTrafficType'
+          - type: "null"
+        region_traffic:
+          description: |-
+            The properties related to Object Storage region traffic.
+            Precisely one of class, restore, internet_traffic, region_traffic can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RegionTrafficType'
+          - type: "null"
+      x-properties-order:
+      - class
+      - restore
+      - internet_traffic
+      - region_traffic
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.ClassType:
+      type: object
+      properties:
+        storage_class:
+          description: The storage class.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.ClassType.StorageClass'
+      x-properties-order:
+      - storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.ClassType.StorageClass:
+      type: string
+      enum:
+      - unknown_storage_class
+      - standard
+      - glacier
+      - onezone_ia
+      x-enum-descriptions:
+        values:
+          unknown_storage_class: Unknown storage class.
+          standard: Standard storage class.
+          glacier: Glacier storage class.
+          onezone_ia: One Zone Infrequent Access storage class.
+      default: unknown_storage_class
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.InternetTrafficType:
+      type: object
+      properties:
+        traffic_type:
+          description: The type of internet traffic.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.InternetTrafficType.TrafficType'
+      x-properties-order:
+      - traffic_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.InternetTrafficType.TrafficType:
+      type: string
+      enum:
+      - unknown_traffic_type
+      - ingress
+      - egress
+      x-enum-descriptions:
+        values:
+          unknown_traffic_type: Unknown traffic type.
+          ingress: Ingress traffic type.
+          egress: Egress traffic type.
+      default: unknown_traffic_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RegionTrafficType:
+      type: object
+      properties:
+        region_destination:
+          type: string
+          description: The destination region for the region traffic.
+      x-properties-order:
+      - region_destination
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RestoreType:
+      type: object
+      properties:
+        restore_type:
+          description: The type of restore.
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RestoreType.RestoreType'
+      x-properties-order:
+      - restore_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ObjectStorage.RestoreType.RestoreType:
+      type: string
+      enum:
+      - unknown_restore_type
+      - standard
+      x-enum-descriptions:
+        values:
+          unknown_restore_type: Unknown restore type.
+          standard: Standard restore type.
+      default: unknown_restore_type
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.OpenSearch:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.SecretManager:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers:
+      type: object
+      properties:
+        memory:
+          description: |-
+            The properties related to Serverless containers memory products.
+            Precisely one of memory, cpu can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers.MemoryType'
+          - type: "null"
+        cpu:
+          description: |-
+            The properties related to Serverless containers CPU products.
+            Precisely one of memory, cpu can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers.CPUType'
+          - type: "null"
+      x-properties-order:
+      - memory
+      - cpu
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers.CPUType:
+      type: object
+      properties:
+        mvcpu_counts:
+          type: array
+          description: The list of available number of milli-vCPUs.
+          items:
+            type: integer
+            format: uint64
+      x-properties-order:
+      - mvcpu_counts
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessContainers.MemoryType:
+      type: object
+      properties:
+        sizes:
+          type: array
+          description: The list of available memory size in bytes. (in bytes)
+          items:
+            type: integer
+            format: uint64
+      x-properties-order:
+      - sizes
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions:
+      type: object
+      properties:
+        resources:
+          type: array
+          description: The serverless functions runtime resources sorted by memory
+            size and then by milli-vCPU count.
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.RuntimeResource'
+        consumption:
+          description: |-
+            The properties related to Serverless functions consumption products.
+            Precisely one of consumption, request, provision, free_tier can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.ConsumptionType'
+          - type: "null"
+        request:
+          description: |-
+            The properties related to Serverless functions request products.
+            Precisely one of consumption, request, provision, free_tier can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.RequestType'
+          - type: "null"
+        provision:
+          description: |-
+            The properties related to Serverless functions provision products.
+            Precisely one of consumption, request, provision, free_tier can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.ProvisionType'
+          - type: "null"
+        free_tier:
+          description: |-
+            The properties related to Serverless functions free tier products.
+            Precisely one of consumption, request, provision, free_tier can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.FreeTierType'
+          - type: "null"
+      x-properties-order:
+      - resources
+      - consumption
+      - request
+      - provision
+      - free_tier
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.ConsumptionType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.FreeTierType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.ProvisionType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.RequestType:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessFunctions.RuntimeResource:
+      type: object
+      properties:
+        memory_size:
+          type: integer
+          description: The memory size in bytes. (in bytes)
+          format: uint64
+        mvcpu_count:
+          type: integer
+          description: The number of milli-vCPUs.
+          format: uint64
+      x-properties-order:
+      - memory_size
+      - mvcpu_count
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs:
+      type: object
+      properties:
+        memory:
+          description: |-
+            The properties related to Serverless containers memory products.
+            Precisely one of memory, cpu can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs.MemoryType'
+          - type: "null"
+        cpu:
+          description: |-
+            The properties related to Serverless containers CPU products.
+            Precisely one of memory, cpu can be set.
+          x-one-of: type
+          oneOf:
+          - $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs.CPUType'
+          - type: "null"
+      x-properties-order:
+      - memory
+      - cpu
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs.CPUType:
+      type: object
+      properties:
+        mvcpu_counts:
+          type: array
+          description: The list of available number of milli-vCPUs.
+          items:
+            type: integer
+            format: uint64
+      x-properties-order:
+      - mvcpu_counts
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessJobs.MemoryType:
+      type: object
+      properties:
+        sizes:
+          type: array
+          description: The list of available memory size in bytes. (in bytes)
+          items:
+            type: integer
+            format: uint64
+      x-properties-order:
+      - sizes
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Properties.ServerlessSqlDatabase:
+      type: object
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.Status:
+      type: string
+      enum:
+      - unknown_status
+      - public_beta
+      - preview
+      - general_availability
+      - end_of_new_features
+      - end_of_growth
+      - end_of_deployment
+      - end_of_support
+      - end_of_sale
+      - end_of_life
+      - retired
+      x-enum-descriptions:
+        values:
+          unknown_status: Unknown status.
+          public_beta: The product is available in Public Beta.
+          preview: The product is available in Preview mode.
+          general_availability: The product is generally available.
+          end_of_deployment: The product must not be used for new deployments.
+          end_of_support: There is no longer any commercial support for this product.
+          end_of_sale: The product is not sold anymore but is still in use.
+          end_of_life: The product is at its end of life.
+          retired: The product is retired.
+      default: unknown_status
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.UnitOfMeasure:
+      type: object
+      properties:
+        unit:
+          $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.PublicCatalogProduct.UnitOfMeasure.CountableUnit'
+        size:
+          type: integer
+          format: uint64
+      x-properties-order:
+      - unit
+      - size
+    scaleway.product_catalog.v2alpha1.PublicCatalogProduct.UnitOfMeasure.CountableUnit:
+      type: string
+      enum:
+      - unknown_countable_unit
+      - chunk
+      - core
+      - currency
+      - device
+      - domain
+      - email
+      - gb_s
+      - gigabyte
+      - hour
+      - iops_gigabyte
+      - ip
+      - month
+      - node
+      - plan
+      - query
+      - request
+      - session
+      - vcpu_s
+      - version
+      - year
+      - key
+      - token
+      - minute
+      - setup
+      - day
+      - second
+      - sample_day
+      - gigabyte_day
+      - mvcpu
+      - gigabyte_hour
+      x-enum-descriptions:
+        values:
+          unknown_countable_unit: Unknown countable unit.
+          chunk: Chunk.
+          core: Core.
+          currency: Currency.
+          device: Device.
+          domain: Domain.
+          email: Email.
+          gb_s: GB/s.
+          gigabyte: Gigabyte.
+          hour: Hour.
+          iops_gigabyte: IOPS gigabyte.
+          ip: IP.
+          month: Month.
+          node: Node.
+          plan: Plan.
+          query: Query.
+          request: Request.
+          session: Session.
+          vcpu_s: VCPU/s.
+          version: Version.
+          year: Year.
+          key: Key.
+          token: Token.
+          minute: Minute.
+          setup: The installation of a resource (software or hardware).
+          day: Day.
+          second: Second.
+          sample_day: Sample per day.
+          gigabyte_day: Gigabyte per day.
+          mvcpu: Milli-vCPU.
+          gigabyte_hour: Gigabyte per hour.
+      default: unknown_countable_unit
+  securitySchemes:
+    scaleway:
+      in: header
+      name: X-Auth-Token
+      type: apiKey
+paths:
+  /product-catalog/v2alpha1/public-catalog/products:
+    get:
+      tags:
+      - Product catalog
+      operationId: ListPublicCatalogProducts
+      summary: List all available products
+      description: List all available products in the Scaleway catalog. Returns a
+        complete list of products with their corresponding description, locations,
+        prices and properties. You can define the `page` number and `page_size` for
+        your query in the request.
+      parameters:
+      - in: query
+        name: page
+        description: Number of the page. Value must be greater or equal to 1.
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: page_size
+        description: The number of products per page. Value must be greater or equal
+          to 1.
+        schema:
+          type: integer
+          format: uint32
+      - in: query
+        name: product_types
+        description: The list of filtered product categories.
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsRequest.ProductType'
+      - in: query
+        name: status
+        description: The lists of filtered product status, if empty only products
+          with status public_beta, general_availability, preview, end_of_new_features,
+          end_of_growth, end_of_deployment, end_of_support, end_of_sale, end_of_life
+          or retired will be returned.
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsRequest.Status'
+      - in: query
+        name: api_ids
+        description: 'Filter products by API IDs. Each ID is matched against product-specific
+          identifiers: `dedibox.offer_id` (converted to string), `elastic_metal.offer_id`,
+          `apple_silicon.server_type`, `instance.offer_id`, and `load_balancer.node.offer_id`.
+          Products that do not support API ID filtering are excluded from the results.
+          If empty, no filtering is applied.'
+        schema:
+          type: array
+          items:
+            type: string
+      - in: query
+        name: global
+        description: |-
+          Filter global products.
+          Precisely one of global, region, zone, datacenter can be set.
+        schema:
+          type: boolean
+          x-one-of: locality
+      - in: query
+        name: region
+        description: |-
+          Filter products by region.
+          Precisely one of global, region, zone, datacenter can be set.
+        schema:
+          type: string
+          x-one-of: locality
+      - in: query
+        name: zone
+        description: |-
+          Filter products by zone.
+          Precisely one of global, region, zone, datacenter can be set.
+        schema:
+          type: string
+          x-one-of: locality
+      - in: query
+        name: datacenter
+        description: |-
+          Filter products by datacenter.
+          Precisely one of global, region, zone, datacenter can be set.
+        schema:
+          type: string
+          x-one-of: locality
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/scaleway.product_catalog.v2alpha1.ListPublicCatalogProductsResponse'
+      security:
+      - scaleway: []
+      x-codeSamples:
+      - lang: cURL
+        source: |-
+          curl -X GET \
+            -H "X-Auth-Token: $SCW_SECRET_KEY" \
+            "https://api.scaleway.com/product-catalog/v2alpha1/public-catalog/products"
+      - lang: HTTPie
+        source: |-
+          http GET "https://api.scaleway.com/product-catalog/v2alpha1/public-catalog/products" \
+            X-Auth-Token:$SCW_SECRET_KEY
