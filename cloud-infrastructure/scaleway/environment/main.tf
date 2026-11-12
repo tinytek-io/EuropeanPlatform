@@ -309,6 +309,13 @@ resource "scaleway_rdb_database" "main" {
   name        = "main"
 }
 
+# The back-office's own database: the staff identity state (the OIDC provider's stores and the
+# sign-in codes). Staff and OIDC clients are committed configuration, not rows here.
+resource "scaleway_rdb_database" "back_office" {
+  instance_id = scaleway_rdb_instance.main.id
+  name        = "back_office"
+}
+
 # Databases created through the API do not grant the instance's admin user any privilege on
 # them, so migrations fail with "permission denied for database" at connect time. Each database
 # needs an explicit privilege grant for the application user.
@@ -380,6 +387,17 @@ resource "scaleway_rdb_privilege" "app_main" {
   }
 }
 
+resource "scaleway_rdb_privilege" "app_back_office" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.back_office.name
+  user_name     = scaleway_rdb_user.app.name
+  permission    = "readwrite"
+
+  lifecycle {
+    ignore_changes = [permission]
+  }
+}
+
 resource "scaleway_rdb_privilege" "migrator_account" {
   instance_id   = scaleway_rdb_instance.main.id
   database_name = scaleway_rdb_database.account.name
@@ -390,6 +408,13 @@ resource "scaleway_rdb_privilege" "migrator_account" {
 resource "scaleway_rdb_privilege" "migrator_main" {
   instance_id   = scaleway_rdb_instance.main.id
   database_name = scaleway_rdb_database.main.name
+  user_name     = scaleway_rdb_user.migrator.name
+  permission    = "all"
+}
+
+resource "scaleway_rdb_privilege" "migrator_back_office" {
+  instance_id   = scaleway_rdb_instance.main.id
+  database_name = scaleway_rdb_database.back_office.name
   user_name     = scaleway_rdb_user.migrator.name
   permission    = "all"
 }
@@ -800,7 +825,7 @@ variable "workload_key_expiry" {
 # plan time instead of silently planning staging's hostnames into another environment.
 
 variable "domain_name" {
-  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name>; staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
+  description = "This environment's zone on the public domain — the single source for every public hostname and the Transactional Email sending domain. The edge hostnames derive as app.<domain_name> and back-office.<domain_name> (the back-office is also the staff OIDC provider's issuer); staging sends mail from its sub-zone (isolated reputation), production registers the apex domain."
   type        = string
 }
 
@@ -822,6 +847,39 @@ resource "random_bytes" "authentication_token_signing_key" {
   length = 64
 }
 
+# The back-office delegation key pair (ES256): the back-office BFF signs short-lived delegation
+# tokens with the private key, and account's internal API validates them with the public key. A
+# key of its own, instead of the platform's HMAC token key, means a compromised back-office cannot
+# mint application tokens, and account cannot mint delegation tokens. Rotate with
+# terraform apply -replace=tls_private_key.back_office_delegation, then redeploy.
+resource "tls_private_key" "back_office_delegation" {
+  algorithm   = "ECDSA"
+  ecdsa_curve = "P256"
+}
+
+# The staff OIDC provider (the back-office signing staff in to Forgejo and other tools): its clients
+# are listed in the committed staff identity file, which Terraform reads only for their ids. Each
+# gets a generated secret (output staff_identity_client_secrets, to configure the tool with; the
+# back-office workers register it, hashed, in the provider's store), and every API replica signs ID
+# tokens with one RSA key the tools fetch from the JWKS endpoint. Rotate a
+# secret with terraform apply -replace='random_password.staff_identity_client["<clientId>"]', the
+# signing key with -replace=tls_private_key.staff_identity_signing; then redeploy.
+locals {
+  staff_identity_file       = "${path.module}/../../staff-identity/${var.environment}.yaml"
+  staff_identity_client_ids = fileexists(local.staff_identity_file) ? [for client in coalesce(try(yamldecode(file(local.staff_identity_file)).clients, null), []) : client.clientId] : []
+}
+
+resource "random_password" "staff_identity_client" {
+  for_each = toset(local.staff_identity_client_ids)
+  length   = 48
+  special  = false
+}
+
+resource "tls_private_key" "staff_identity_signing" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
 # The AES key material protecting the shared Data Protection keyring persisted in Object Storage:
 # the SPA-serving APIs (account-api, main-api) encrypt keyring elements with it before they are
 # written to the data-protection bucket, so bucket access alone yields no usable key material.
@@ -838,7 +896,7 @@ resource "random_bytes" "data_protection_encryption_key" {
 # bucket policy replaces IAM evaluation for its bucket: avatars and logos admit the account system,
 # data-protection (the keyring every API shares) admits every system, maintenance admits none.
 locals {
-  storage_systems = toset(["account", "main"])
+  storage_systems = toset(["account", "main", "back-office"])
 }
 
 resource "scaleway_iam_application" "storage" {
@@ -897,9 +955,10 @@ moved {
 locals {
   # The serving workloads and their in-cluster Service DNS names (the certificates' SANs).
   internal_tls_workloads = {
-    account-api = "account-api-service"
-    main-api    = "main-api-service"
-    app-gateway = "app-gateway-service"
+    account-api     = "account-api-service"
+    main-api        = "main-api-service"
+    app-gateway     = "app-gateway-service"
+    back-office-api = "back-office-api-service"
   }
 }
 
@@ -965,16 +1024,18 @@ locals {
 
   # Every workload shares the instance's max_connections (100 on db-dev-s, a few of them reserved for superusers), and
   # Npgsql's default pool lets each one open 100, so a burst in any workload could exhaust the database for all of
-  # them (found live: "too many clients"). The caps keep the worst case under the limit: two APIs at 8 and two
-  # workers at 4 is 24, doubled while a rollout runs old and new pods side by side is 48, and the migration Jobs add 2
+  # them (found live: "too many clients"). The caps keep the worst case under the limit: three APIs at 8 and three
+  # workers at 4 is 36, doubled while a rollout runs old and new pods side by side is 72, and the migration Jobs add 2
   # each. A larger database tier raises max_connections, and these can grow with it.
-  api_database_pool                  = ";Maximum Pool Size=8"
-  worker_database_pool               = ";Maximum Pool Size=4"
-  migrator_database_pool             = ";Maximum Pool Size=2"
-  account_database_connection_string = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
-  main_database_connection_string    = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
-  account_migrator_connection_string = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
-  main_migrator_connection_string    = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
+  api_database_pool                      = ";Maximum Pool Size=8"
+  worker_database_pool                   = ";Maximum Pool Size=4"
+  migrator_database_pool                 = ";Maximum Pool Size=2"
+  account_database_connection_string     = "Host=${local.database_host};Database=account;${local.app_database_credentials}"
+  main_database_connection_string        = "Host=${local.database_host};Database=main;${local.app_database_credentials}"
+  account_migrator_connection_string     = "Host=${local.database_host};Database=account;${local.migrator_database_credentials}"
+  main_migrator_connection_string        = "Host=${local.database_host};Database=main;${local.migrator_database_credentials}"
+  back_office_database_connection_string = "Host=${local.database_host};Database=back_office;${local.app_database_credentials}"
+  back_office_migrator_connection_string = "Host=${local.database_host};Database=back_office;${local.migrator_database_credentials}"
   # One blob-storage connection string per system, each carrying that system's storage key.
   blob_storage_connection_strings = {
     for system in local.storage_systems : system => "ServiceUrl=https://s3.${var.region}.scw.cloud;AccessKey=${scaleway_iam_api_key.storage[system].access_key};SecretKey=${scaleway_iam_api_key.storage[system].secret_key};ForcePathStyle=true;Region=${var.region};BucketPrefix=${var.prefix}-${var.environment}-"
@@ -995,6 +1056,7 @@ locals {
       # (AddNamedBlobStorages("account-storage")); without it the proxy 500s on first use.
       ConnectionStrings__account-storage = local.blob_storage_connection_strings["account"]
       Authentication__TokenSigning__Key  = local.signing_key
+      BackOfficeDelegation__PublicKeyPem = tls_private_key.back_office_delegation.public_key_pem
       data-protection-encryption-key     = local.data_protection_encryption_key
       InternalTls__CertificatePem        = tls_locally_signed_cert.workload["account-api"].cert_pem
       InternalTls__KeyPem                = tls_private_key.workload["account-api"].private_key_pem
@@ -1030,6 +1092,10 @@ locals {
       ConnectionStrings__main-database = "${local.main_migrator_connection_string}${local.migrator_database_pool}"
       Database__ApplicationUser        = scaleway_rdb_user.app.name
     }
+    back-office-migrator = {
+      ConnectionStrings__back-office-database = "${local.back_office_migrator_connection_string}${local.migrator_database_pool}"
+      Database__ApplicationUser               = scaleway_rdb_user.app.name
+    }
     app-gateway = {
       Authentication__TokenSigning__Key = local.signing_key
       # The CA is public material, but the gateway reads it through Secret Manager like its other
@@ -1038,14 +1104,42 @@ locals {
       InternalTls__CertificatePem = tls_locally_signed_cert.workload["app-gateway"].cert_pem
       InternalTls__KeyPem         = tls_private_key.workload["app-gateway"].private_key_pem
     }
+    back-office-api = {
+      # Antiforgery tokens minted by the back-office BFF are validated by itself; it consumes the
+      # shared Data Protection keyring (main-api owns generation), so it needs the encryption key.
+      # The blob client reads that keyring from Object Storage (registered by AddApiServices in
+      # deployed environments) — hence the blob-storage connection string. It holds the private
+      # delegation key but NOT the platform token signing key: the BFF never receives application
+      # tokens, so a compromised back-office cannot mint them.
+      ConnectionStrings__back-office-database = "${local.back_office_database_connection_string}${local.api_database_pool}"
+      ConnectionStrings__blob-storage         = local.blob_storage_connection_strings["back-office"]
+      BackOfficeDelegation__SigningKeyPem     = tls_private_key.back_office_delegation.private_key_pem_pkcs8
+      StaffIdentity__SigningKeyPem            = tls_private_key.staff_identity_signing.private_key_pem_pkcs8
+      data-protection-encryption-key          = local.data_protection_encryption_key
+      InternalTls__CertificatePem             = tls_locally_signed_cert.workload["back-office-api"].cert_pem
+      InternalTls__KeyPem                     = tls_private_key.workload["back-office-api"].private_key_pem
+      # The internal CA (public material) validates account's in-cluster TLS on the BFF's
+      # internal API calls, mirroring the app-gateway's trust configuration.
+      InternalTls__CaPem = tls_self_signed_cert.internal_ca.cert_pem
+    }
+    # The back-office workers migrate nothing when deployed (the migrator Job does) but run its
+    # data migrations and housekeeping on the back-office database.
+    back-office-workers = {
+      ConnectionStrings__back-office-database = "${local.back_office_database_connection_string}${local.worker_database_pool}"
+    }
   }
 
   # Every workload also pushes OTLP telemetry to the project Cockpit; the token comes from the
   # Cockpit resource and travels the same Secret Manager path as the workload's other secrets.
+  # The staff OIDC client secrets are keyed by the client ids read from the staff identity file,
+  # known at plan time, so the secret names stay visible to for_each on a fresh environment.
   workload_secrets = {
     for workload, secrets in local.base_workload_secrets :
     workload => merge(concat(
       [secrets],
+      # The staff OIDC provider's client secrets, one per client in the staff identity file. Only the
+      # workers hold them: they sync the client list into the provider's store, which keeps a hash.
+      [workload == "back-office-workers" ? { for client_id, secret in random_password.staff_identity_client : "StaffIdentity__ClientSecrets__${client_id}" => secret.result } : {}],
       [{ Cockpit__Token = scaleway_cockpit_token.workload_telemetry.secret_key }]
     )...)
   }
@@ -1096,11 +1190,11 @@ resource "scaleway_iam_policy" "workload" {
     condition            = "resource.name.startsWith(\"/${each.key}\") || !has(resource.id)"
   }
 
-  # The account workloads (user sign-in and notifications) send transactional email through the
-  # TEM HTTP API with this same key (the SMTP credentials are console-only). EmailFullAccess is
-  # send-only: no domain admin.
+  # The account workloads (user sign-in and notifications) and the back-office API (the staff
+  # sign-in codes) send transactional email through the TEM HTTP API with this same key (the SMTP
+  # credentials are console-only). EmailFullAccess is send-only: no domain admin.
   dynamic "rule" {
-    for_each = startswith(each.key, "account-") ? [1] : []
+    for_each = startswith(each.key, "account-") || each.key == "back-office-api" ? [1] : []
     content {
       permission_set_names = ["TransactionalEmailEmailFullAccess"]
       project_ids          = [var.project_id]

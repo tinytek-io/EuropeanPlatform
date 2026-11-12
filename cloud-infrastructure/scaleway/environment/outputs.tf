@@ -112,3 +112,9 @@ output "registry_pull_secret_key" {
   value       = data.terraform_remote_state.bootstrap.outputs.registry_pull_secret_key
   sensitive   = true
 }
+
+output "staff_identity_client_secrets" {
+  description = "The staff OIDC provider's client secret per clientId in the staff identity file — configure each tool with its id, its secret, and the issuer https://<back-office hostname> (discovery at /.well-known/openid-configuration)"
+  value       = { for client_id, secret in random_password.staff_identity_client : client_id => secret.result }
+  sensitive   = true
+}
