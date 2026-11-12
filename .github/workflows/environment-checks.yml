@@ -1,0 +1,80 @@
+name: Environment Checks
+
+# The read-only checks the deploy also runs, on a schedule: they catch what changes between deploys (a console edit, a
+# Load Balancer frontend recreated without its edge-only ACL, a paid offer subscribed by hand, a certificate that
+# stopped renewing). A failed check fails the run, which is what GitHub notifies on. Nothing here writes to Scaleway:
+# dns-check is left out because it asks Scaleway to verify records.
+on:
+  schedule:
+    - cron: "17 5 * * *" # Daily, early morning UTC
+  workflow_dispatch:
+
+concurrency:
+  group: environment-checks-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    name: Staging
+    runs-on: ubuntu-24.04
+    # The key lives in the GitHub environment's secrets. It must be read-only and may read: the Terraform state bucket
+    # (Object Storage), the key's own IAM entry and the project (to resolve the environment), Load Balancers, Edge
+    # Services and Transactional Email. The bootstrap does not create this key yet; create it as an IAM application in
+    # the environment's project with read-only permission sets for those products.
+    environment: staging
+
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      # The CLI is built once below; skip its self-rebuild on every invocation.
+      PP_SKIP_CHANGE_DETECTION: "1"
+
+    steps:
+      # Without a key the checks have nothing to read, so the run skips them and succeeds: adding the key to the
+      # environment's secrets is what turns them on.
+      - name: Check for a Scaleway Key
+        id: scaleway_key
+        run: |
+          if [[ -z "$SCW_ACCESS_KEY" || -z "$SCW_SECRET_KEY" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Environment checks skipped: no Scaleway key is configured in the staging environment's secrets."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Code
+        if: ${{ steps.scaleway_key.outputs.configured == 'true' }}
+        uses: actions/checkout@v7
+
+      - name: Setup .NET Core SDK
+        if: ${{ steps.scaleway_key.outputs.configured == 'true' }}
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: developer-cli/global.json
+
+      # Terraform at the version mise.toml pins: the checks read the environment's state and outputs.
+      - name: Install Terraform
+        if: ${{ steps.scaleway_key.outputs.configured == 'true' }}
+        uses: jdx/mise-action@v5
+        with:
+          install_args: terraform
+
+      - name: Build Developer CLI
+        if: ${{ steps.scaleway_key.outputs.configured == 'true' }}
+        run: dotnet build developer-cli/DeveloperCli.csproj
+
+      # Each check runs even when an earlier one failed, so one run reports everything that is wrong.
+      - name: Security Check
+        if: ${{ steps.scaleway_key.outputs.configured == 'true' }}
+        run: dotnet run --project developer-cli --no-build -- security-check -e staging
+
+      - name: Cost Estimate
+        if: ${{ !cancelled() && steps.scaleway_key.outputs.configured == 'true' }}
+        run: dotnet run --project developer-cli --no-build -- cost-estimate -e staging
+
+      - name: Edge Health
+        if: ${{ !cancelled() && steps.scaleway_key.outputs.configured == 'true' }}
+        run: dotnet run --project developer-cli --no-build -- edge-health -e staging
