@@ -1,0 +1,394 @@
+# Kapsule cluster-ops: east-west zero-trust network policies
+#
+# Default-deny in BOTH directions for every pod in the default namespace, with only the derived
+# allows on top (the shape proven in the security-substrate PoC: policy derived from the wiring,
+# never hand-listed per cluster beyond the graph the application actually declares).
+#
+# The first policy (default-namespace-default-deny) selects EVERY pod in the namespace, so a pod
+# without a dedicated policy below (a debug pod, a newly added system) is deny-all except DNS and
+# kubelet probes — never Cilium's allow-all fallback. Cilium policies are additive allow-lists:
+# once any policy selects an endpoint in a direction, that direction is default-deny and the
+# endpoint's effective allows are the UNION of every selecting policy. The per-workload policies
+# therefore only add to the namespace baseline; nothing here can subtract.
+#
+# Every workload's traffic map below comes from the AppHost wiring:
+#
+#   ingress:  kubelet probes (host entity) + Cilium Envoy (the `ingress` entity, the Gateway data
+#             plane, on the serving port 8443 only) + YARP app-gateway where the gateway routes to
+#             the workload.
+#   egress:   kube-dns (with the L7 DNS proxy rule — required for toFQDNs), the RDB endpoint
+#             (private network IP/port from the environment module's outputs), and the external
+#             Scaleway APIs by exact FQDN and port: Object Storage, Secret Manager/TEM
+#             (api.scaleway.com), and the three Cockpit OTLP endpoints. Never the broad `world`
+#             entity.
+#
+# The file ships in the Aspire chart: the AppHost's network policy patch resolves the placeholders
+# from the values the deploy command passes from the environment module's outputs, drops these
+# comments, and adds the policies to the release, so every deploy converges them (README.md §7):
+#   <rdb-ip>, <rdb-port>  database_endpoint_ip / database_endpoint_port
+#   <region>              region
+# Never write Helm template braces here: the chart renders this file as a template.
+#
+# CAVEAT (verify on first apply): toFQDNs rules require Cilium's DNS proxy, which is ON in
+# Cilium's default configuration but UNVERIFIED on Kapsule's managed Cilium. The verification
+# step in README.md §7 must confirm lookups resolve under policy; the fallback (weaker: IP-port
+# scoping only) is toCIDR rules for the Scaleway endpoints.
+#
+# CAVEAT (verify on first apply): Envoy's upstream connections to the workloads are admitted by
+# the reserved `ingress` entity, not by a kube-system endpoint selector. Cilium's docs define
+# that entity as "the Cilium Envoy instance that handles ingress L7 traffic" (reserved identity 8,
+# given to the per-node source IPs Envoy uses for proxied connections) — Envoy runs in the agent
+# or the host-network cilium-envoy DaemonSet, so it never carries a kube-system pod identity. The
+# docs demonstrate this for Ingress; that Gateway API listeners share the same identity follows
+# from them sharing the same Envoy, but is UNVERIFIED on Kapsule. Confirm with
+# `hubble observe --identity ingress` (or a 200 on the public smoke test) after applying; if the
+# public path breaks, the fallback is the previous `fromEndpoints` kube-system selector with the
+# same 8443 port scoping.
+#
+# Removing a policy from this file removes it from the cluster on the next deploy. Without a policy,
+# Cilium's default is allow-all, so an emergency rollback is `kubectl delete cnp --all -n default`
+# (the next deploy restores them).
+---
+# Namespace baseline: every pod in `default`, including ones no other policy names. The empty
+# endpointSelector selects all endpoints in the policy's namespace; the ingress and egress
+# sections put both directions into default-deny, admitting only kubelet probes (host) and DNS
+# through the L7 DNS proxy (the same rule every workload policy carries, so toFQDNs keeps working).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-namespace-default-deny
+  namespace: default
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+# cert-manager's HTTP-01 solver pods: the Gateway's Let's Encrypt certificate is issued by
+# answering /.well-known/acme-challenge/ through Cilium's Envoy (the `ingress` entity). The
+# default deny above selects these short-lived pods too, so without this the Gateway answers the
+# challenge with 503 and the certificate is never issued or renewed.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: acme-http01-solver
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:acme.cert-manager.io/http01-solver: "true"
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8089"
+              protocol: TCP
+---
+# app-gateway (YARP): public traffic enters through Cilium's Envoy (the `ingress` entity); it
+# routes to the feature APIs by Host, and proxies avatars/logos straight
+# from Object Storage. Like every workload it loads its configuration (token signing key, internal
+# TLS material) from Secret Manager and exports telemetry to Cockpit — without those it cannot
+# start.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: app-gateway-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: app-gateway
+  ingress:
+    - fromEntities:
+        - host
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: account-api
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: main-api
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: s3.<region>.scw.cloud
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# account-api: served through Envoy (its BackendTLSPolicy) and YARP. Reaches the database, Object Storage (avatars), Secret Manager, TEM, Cockpit.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: account-api-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: account-api
+  ingress:
+    - fromEntities:
+        - host
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: app-gateway
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: s3.<region>.scw.cloud
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+        # Signup and profile updates look up the user's Gravatar; without this the lookup waits out its
+        # 2-second timeout on every signup.
+        - matchName: gravatar.com
+        # Google sign-in: discovery and authorization (accounts.google.com), the token exchange
+        # (oauth2.googleapis.com), the signing keys the discovery document points at (www.googleapis.com),
+        # and the profile picture it imports (*.googleusercontent.com). Allowed whether or not Google
+        # sign-in is configured: each is one exact host, and a policy that changes with the providers would
+        # drop a provider's traffic the first deploy after it is turned on.
+        - matchName: accounts.google.com
+        - matchName: oauth2.googleapis.com
+        - matchName: www.googleapis.com
+        - matchPattern: "*.googleusercontent.com"
+        # Stripe: account-api loads the price catalog at startup and manages subscriptions.
+        - matchName: api.stripe.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# main-api: only YARP dials it (Envoy has no BackendTLSPolicy for main-api). Keyring owner.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: main-api-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: main-api
+  ingress:
+    - fromEntities:
+        - host
+    - fromEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: app-gateway
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: s3.<region>.scw.cloud
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# Workers: no inbound callers at all — background processors reaching the database, storage,
+# Secret Manager, and telemetry.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: workers-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchExpressions:
+      - { key: "k8s:io.kubernetes.pod.namespace", operator: In, values: [default] }
+      - { key: "k8s:app.kubernetes.io/component", operator: In, values: [account-workers, main-workers] }
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: s3.<region>.scw.cloud
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# account-workers additionally reach Stripe: they load the price catalog at startup and replay billing
+# events. Cilium unions every policy that selects an endpoint, so this adds to workers-east-west for
+# account-workers alone, and main-workers get no Stripe egress.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: account-workers-stripe
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: account-workers
+  egress:
+    - toFQDNs:
+        - matchName: api.stripe.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# Migrator Jobs (pods exist only during deploys): database structure ownership, resolved from
+# Secret Manager, on the migrator role. Selected by the workload-role label the chart's migration
+# Job template sets, not by component name: the Jobs are pre-upgrade hooks, which run before the
+# release applies its policies, so a new migrator must be admitted by the policy already in the
+# cluster (a new migrator's first deploy would otherwise time out reaching Secret Manager).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: migrators-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchExpressions:
+      - { key: "k8s:io.kubernetes.pod.namespace", operator: In, values: [default] }
+      - { key: "k8s:workload-role", operator: In, values: [migrator] }
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: api.scaleway.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+# The in-cluster Aspire dashboard (chart-generated "kubernetes-dashboard" component): a viewer,
+# reached only by operator port-forward (host entity). No egress beyond the namespace baseline's
+# DNS — it is not a pusher. The empty egress rule (`- {}`, Cilium's documented deny-all form)
+# keeps this policy deny-all on its own; an empty list is not guaranteed to enable enforcement.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kubernetes-dashboard-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: kubernetes-dashboard
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - {}

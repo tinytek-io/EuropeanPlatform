@@ -1,5 +1,12 @@
 <Project>
 
+    <!-- Workstation GC instead of ASP.NET Core's default Server GC. Server GC keeps a heap per CPU and trades memory
+         for throughput, which suits a large dedicated host; these services run as small pods sharing one node (staging
+         ran at 96% of its memory with Server GC), where a smaller footprint is worth more than peak throughput. -->
+    <PropertyGroup>
+        <ServerGarbageCollection>false</ServerGarbageCollection>
+    </PropertyGroup>
+
     <!-- Bake build provenance into every assembly so deployed binaries carry their own metadata,
          readable at runtime regardless of how or where they are run. -->
     <ItemGroup>
