@@ -1,9 +1,9 @@
 import type { useUserInfo } from "@repo/infrastructure/auth/hooks";
 
 import { t } from "@lingui/core/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { authSyncService, type TenantSwitchedMessage } from "@repo/infrastructure/auth/AuthSyncService";
 import { loggedInPath } from "@repo/infrastructure/auth/constants";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { useEffect, useState } from "react";
 
 import { fetchTenants, sortTenants, switchTenantApi, type TenantInfo } from "../common/tenantUtils";

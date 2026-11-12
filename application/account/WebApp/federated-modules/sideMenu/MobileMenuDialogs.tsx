@@ -1,8 +1,8 @@
 import { t } from "@lingui/core/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { authSyncService, type TenantSwitchedMessage } from "@repo/infrastructure/auth/AuthSyncService";
 import { loggedInPath } from "@repo/infrastructure/auth/constants";
 import { useUserInfo } from "@repo/infrastructure/auth/hooks";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { useEffect, useState } from "react";
 
 import { SupportDialog } from "../common/SupportDialog";
