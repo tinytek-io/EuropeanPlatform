@@ -57,12 +57,6 @@ internal static class ScalewayDiagnosticsRedactor
 /// </summary>
 internal sealed class FileScalewayDiagnosticsSink(string path) : IScalewayDiagnosticsSink
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     private readonly Lock _writeLock = new();
 
     public void Record(ScalewayDiagnosticEvent diagnosticEvent)
@@ -70,7 +64,7 @@ internal sealed class FileScalewayDiagnosticsSink(string path) : IScalewayDiagno
         // The timestamp is stamped here, not on the event, so the in-memory test sink stays deterministic.
         var line = new StringBuilder();
         line.Append("{\"timestamp\":\"").Append(DateTimeOffset.UtcNow.ToString("O")).Append("\",");
-        var payload = JsonSerializer.Serialize(diagnosticEvent, JsonOptions);
+        var payload = JsonSerializer.Serialize(diagnosticEvent, ScalewaySdkJsonContext.Default.ScalewayDiagnosticEvent);
         line.Append(payload.AsSpan(1)); // splice the event object's fields in after the timestamp
 
         lock (_writeLock)

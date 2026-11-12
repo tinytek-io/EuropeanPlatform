@@ -18,12 +18,6 @@ public sealed class ScalewayApiClient : IDisposable, IScalewayApiClient
     /// <summary>Runaway guard: 100 pages of 100 is far past any real deployment, so exceeding it means the API ignored paging.</summary>
     private const int MaxPages = 100;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     private readonly IScalewayDiagnosticsSink? _diagnostics;
 
     private readonly HttpClient _httpClient;
@@ -130,10 +124,10 @@ public sealed class ScalewayApiClient : IDisposable, IScalewayApiClient
     /// <summary>
     ///     Creates a resource via POST.
     /// </summary>
-    public async Task<JsonElement> CreateResourceAsync(string apiPath, string region, object body, CancellationToken cancellationToken = default)
+    public async Task<JsonElement> CreateResourceAsync(string apiPath, string region, JsonElement body, CancellationToken cancellationToken = default)
     {
         var url = BuildUrl(apiPath, region);
-        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        var requestJson = body.GetRawText();
         var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
         var response = await SendClassifyingConnectionFailuresAsync(() => _httpClient.PostAsync(url, content, cancellationToken));
@@ -147,10 +141,10 @@ public sealed class ScalewayApiClient : IDisposable, IScalewayApiClient
     /// <summary>
     ///     Updates a resource via PATCH.
     /// </summary>
-    public async Task<JsonElement> UpdateResourceAsync(string apiPath, string region, string resourceId, object body, CancellationToken cancellationToken = default)
+    public async Task<JsonElement> UpdateResourceAsync(string apiPath, string region, string resourceId, JsonElement body, CancellationToken cancellationToken = default)
     {
         var url = BuildUrl($"{apiPath}/{resourceId}", region);
-        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        var requestJson = body.GetRawText();
         var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
         var request = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
@@ -163,10 +157,10 @@ public sealed class ScalewayApiClient : IDisposable, IScalewayApiClient
     }
 
     /// <summary>PUTs to a collection path — Scaleway's idempotent set-style operations (e.g. RDB privileges).</summary>
-    public async Task<JsonElement> PutResourceAsync(string apiPath, string region, object body, CancellationToken cancellationToken = default)
+    public async Task<JsonElement> PutResourceAsync(string apiPath, string region, JsonElement body, CancellationToken cancellationToken = default)
     {
         var url = BuildUrl(apiPath, region);
-        var requestJson = JsonSerializer.Serialize(body, JsonOptions);
+        var requestJson = body.GetRawText();
         var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
         var request = new HttpRequestMessage(HttpMethod.Put, url) { Content = content };

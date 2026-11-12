@@ -185,6 +185,14 @@ may include breaking changes in minor releases; each is called out under `Change
 
 ### Changed
 
+- `BREAKING:` `IScalewayApiClient`'s `CreateResourceAsync`, `UpdateResourceAsync` and `PutResourceAsync` take the
+  body as an already-serialized `JsonElement` instead of an `object`. The SDK no longer uses reflection-based
+  System.Text.Json anywhere: each generated service client serializes its requests and responses through a
+  source-generated `JsonSerializerContext` emitted beside it, and the pricing cache and diagnostics log through the
+  SDK's own. The package is therefore trim and Native AOT safe, and a call no longer pays reflection's first-use
+  cost. The wire format is unchanged (snake_case names, unset fields omitted). A caller of the raw transport
+  serializes its body itself, e.g. `JsonSerializer.SerializeToElement(new { name = "essential" })`.
+
 - `BREAKING:` `ScalewayPricingCatalogClient` returns the catalog's product records instead of a name-to-hourly-price
   map. `GetProductsAsync(CatalogLocality)` lists a region's, a zone's or the global products (Instances, Load
   Balancers and Public Gateways are zonal; Edge Services is global, and the old region-only fetch could not see

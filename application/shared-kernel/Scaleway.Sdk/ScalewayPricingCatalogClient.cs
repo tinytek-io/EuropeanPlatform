@@ -26,7 +26,6 @@ public sealed class ScalewayPricingCatalogClient(HttpClient httpClient, string? 
     private const int MaxPages = 50;
 
     private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
-    private static readonly JsonSerializerOptions CacheJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
     private readonly string _cacheDirectory = cacheDirectory ?? DefaultCacheDirectory();
     private readonly bool _cacheDisabled = cacheDisabled ?? Environment.GetEnvironmentVariable("SCW_PRICING_CACHE_DISABLED") == "1";
@@ -146,7 +145,7 @@ public sealed class ScalewayPricingCatalogClient(HttpClient httpClient, string? 
 
         try
         {
-            var cache = JsonSerializer.Deserialize<DiskCache>(File.ReadAllText(path), CacheJsonOptions);
+            var cache = JsonSerializer.Deserialize(File.ReadAllText(path), ScalewaySdkJsonContext.Default.DiskCache);
             return cache is not null && DateTimeOffset.UtcNow - cache.UpdatedAt <= CacheTtl ? cache.Products : null;
         }
         catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
@@ -163,7 +162,7 @@ public sealed class ScalewayPricingCatalogClient(HttpClient httpClient, string? 
             Directory.CreateDirectory(_cacheDirectory);
             var path = CacheFilePath(localityKey);
             var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(new DiskCache(DateTimeOffset.UtcNow, products), CacheJsonOptions));
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(new DiskCache(DateTimeOffset.UtcNow, products), ScalewaySdkJsonContext.Default.DiskCache));
             File.Move(temporaryPath, path, true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -187,7 +186,7 @@ public sealed class ScalewayPricingCatalogClient(HttpClient httpClient, string? 
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".platformplatform");
     }
 
-    private sealed record DiskCache(DateTimeOffset UpdatedAt, IReadOnlyList<CatalogProduct> Products);
+    internal sealed record DiskCache(DateTimeOffset UpdatedAt, IReadOnlyList<CatalogProduct> Products);
 }
 
 /// <summary>Where catalog products are listed: one region, one zone, or the global catalog.</summary>

@@ -220,6 +220,23 @@ public sealed class EmitterOutputTests
     }
 
     [Fact]
+    public void EveryRecord_SerializesThroughTheServicesSourceGeneratedContext_NotReflection()
+    {
+        // Reflection-based System.Text.Json fails under Native AOT and is trimmed away; the generated context is
+        // what keeps a trimmed consumer's requests and responses, so every record must be in it.
+        Client.Should().Contain("[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]");
+        foreach (var record in Api.Records)
+        {
+            Client.Should().Contain($"[JsonSerializable(typeof({record.Name}))]");
+        }
+
+        Client.Should().Contain("internal sealed partial class WidgetJsonContext : JsonSerializerContext;");
+        Client.Should().Contain("JsonSerializer.SerializeToElement(request, Json.CreateWidgetRequest)", "the request body is serialized through the context before it reaches the transport");
+        Client.Should().Contain("response.Deserialize(Json.Widget)!");
+        Client.Should().NotContain("JsonSerializerOptions", "a client-local options instance would mean reflection-based serialization");
+    }
+
+    [Fact]
     public void EachMethod_CarriesAnXmlDocTracingItToTheScalewayOperation()
     {
         Client.Should().Contain("///     Scaleway operation <c>CreateWidget</c> — <c>POST /widget/v1/regions/{region}/widgets</c> (V1).");

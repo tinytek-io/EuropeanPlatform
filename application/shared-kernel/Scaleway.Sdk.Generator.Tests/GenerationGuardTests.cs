@@ -203,7 +203,7 @@ public sealed class GenerationGuardTests
                     region ??= scope?.Region ?? throw new InvalidOperationException("This operation is region-scoped: pass a region or use a client created with a default region.");
                     query = scope?.ApplyProject(query) ?? query;
                     var response = await client.GetAsync($"secret-manager/v1beta1/regions/{region}/secrets-by-path/versions/{revision}/access", region, query.ToQueryParameters(), cancellationToken);
-                    return response?.Deserialize<AccessSecretVersionResponse>(JsonOptions);
+                    return response?.Deserialize(Json.AccessSecretVersionResponse);
                 }
             """
         );

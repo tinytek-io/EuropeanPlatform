@@ -26,25 +26,31 @@ public interface IScalewayApiClient
     /// <summary>POSTs to a collection path and returns the created resource as Scaleway echoed it back.</summary>
     /// <param name="apiPath">Collection path, relative to the API base address.</param>
     /// <param name="region">Region the call is billed and routed to.</param>
-    /// <param name="body">Serialized with snake_case names; null properties are omitted rather than sent as null.</param>
+    /// <param name="body">
+    ///     The request, already serialized. A generated client serializes it through its source-generated context
+    ///     (snake_case names, null properties omitted), so the transport itself needs no reflection.
+    /// </param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
     /// <exception cref="ScalewayResourceAlreadyExistsException">Scaleway rejected the create because the name is taken.</exception>
-    Task<JsonElement> CreateResourceAsync(string apiPath, string region, object body, CancellationToken cancellationToken);
+    Task<JsonElement> CreateResourceAsync(string apiPath, string region, JsonElement body, CancellationToken cancellationToken);
 
     /// <summary>PATCHes one resource. Scaleway treats an omitted field as unchanged, so a partial body is a partial update.</summary>
     /// <param name="apiPath">Item path prefix, which this completes with the resource id.</param>
     /// <param name="region">Region the call is billed and routed to.</param>
     /// <param name="resourceId">Scaleway ID of the resource to update.</param>
-    /// <param name="body">Serialized with snake_case names; null properties are omitted rather than sent as null.</param>
+    /// <param name="body">
+    ///     The request, already serialized. A generated client serializes it through its source-generated context
+    ///     (snake_case names, null properties omitted), so the transport itself needs no reflection.
+    /// </param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
-    Task<JsonElement> UpdateResourceAsync(string apiPath, string region, string resourceId, object body, CancellationToken cancellationToken);
+    Task<JsonElement> UpdateResourceAsync(string apiPath, string region, string resourceId, JsonElement body, CancellationToken cancellationToken);
 
     /// <summary>PUTs to a collection path — Scaleway's idempotent set-style operations (e.g. RDB privileges).</summary>
     /// <param name="apiPath">Collection path, relative to the API base address.</param>
     /// <param name="region">Region the call is billed and routed to.</param>
-    /// <param name="body">The whole desired state; unlike a PATCH, what is omitted is not kept.</param>
+    /// <param name="body">The whole desired state, already serialized; unlike a PATCH, what is omitted is not kept.</param>
     /// <param name="cancellationToken">Passed to the underlying HTTP request.</param>
-    Task<JsonElement> PutResourceAsync(string apiPath, string region, object body, CancellationToken cancellationToken);
+    Task<JsonElement> PutResourceAsync(string apiPath, string region, JsonElement body, CancellationToken cancellationToken);
 
     /// <summary>GETs one resource, returning null on 404 so a caller can ask whether it exists without catching.</summary>
     /// <param name="apiPath">Item path prefix, which this completes with the resource id.</param>

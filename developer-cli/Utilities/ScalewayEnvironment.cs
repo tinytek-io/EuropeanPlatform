@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using DeveloperCli.Installation;
 using Scaleway.Sdk;
@@ -238,7 +239,7 @@ public static partial class ScalewayEnvironment
 
         // The transport PATCHes "{path}/{id}"; the offer collection is the target itself, so it is the last segment.
         await CallAsync(credentials, "subscribe the project to Transactional Email's Essential offer",
-            async transport => await transport.UpdateResourceAsync(regionPath, Region, "offer-subscriptions", new { project_id = projectId, name = EmailOffer })
+            async transport => await transport.UpdateResourceAsync(regionPath, Region, "offer-subscriptions", JsonSerializer.SerializeToElement(new { project_id = projectId, name = EmailOffer }))
         );
         AnsiConsole.MarkupLine($"[green]Subscribed the project to Transactional Email's '{EmailOffer}' offer[/] (free tier, no commitment).");
     }
