@@ -24,6 +24,11 @@
         <None Remove="Directory.Build.props" />
     </ItemGroup>
     <ItemGroup>
+        <!-- The test project lives beside the CLI but is a separate project in the application solution. -->
+        <Compile Remove="Tests\**" />
+        <None Remove="Tests\**" />
+    </ItemGroup>
+    <ItemGroup>
         <!-- Linked source from shared-kernel: developer-cli is a single-file CLI that intentionally
              stays isolated from shared-kernel's heavy dependency closure (MediatR, EFCore, NSwag,
              OpenTelemetry, multiple Azure SDKs). PortAllocation and DockerVolumeNaming are the shared
@@ -39,5 +44,10 @@
         <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaPins.cs" Link="Utilities\SchemaPins.cs" />
         <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaVersionCheck.cs" Link="Utilities\SchemaVersionCheck.cs" />
         <Compile Include="..\application\shared-kernel\Scaleway.Sdk.Generator\SchemaVersionCache.cs" Link="Utilities\SchemaVersionCache.cs" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- Scaleway.Sdk has no package dependencies (it is built to stand alone), so referencing it keeps the
+             CLI isolated from shared-kernel's dependency closure while sharing one Scaleway client. -->
+        <ProjectReference Include="..\application\shared-kernel\Scaleway.Sdk\Scaleway.Sdk.csproj" />
     </ItemGroup>
 </Project>
