@@ -5,7 +5,6 @@ using System.Text.Json;
 using Account.Features.BackOffice.Invoices.Queries;
 using Account.Features.Subscriptions.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Tests.Persistence;
 using Xunit;
 
@@ -25,11 +24,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — no Statuses query param = "All" view.
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -50,11 +49,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Invoices" view maps to Paid+Pending+Failed; only RowKind=Invoice rows match.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Paid&Statuses=Pending&Statuses=Failed&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Paid&Statuses=Pending&Statuses=Failed&PageSize=10");
 
         // Assert — all three invoice rows match (paid, paid-with-credit-note, AND the refunded transaction's
         // invoice row whose status is now Succeeded since the original payment outcome was successful).
@@ -78,11 +77,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             Refunded("inv_refunded", "2025-03-01T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — "Refunds and credit notes" maps to Refunded OR HasCreditNote.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
 
         // Assert — both transactions have a credit note, so both project to a CreditNote row.
         // No standalone Refund rows because the credit note encompasses the refund in that case.
@@ -100,11 +99,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         // the original payment succeeded; only the reversal row carries the Refunded signal.
         SeedTransactions(Refunded("inv_refunded", "2025-03-01T00:00:00Z"));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — 2 rows: Invoice (Succeeded — not Refunded) + CreditNote.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -122,11 +121,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         // Arrange — Stripe pro-rated refund edge case: a refund without an accompanying credit note.
         SeedTransactions(RefundedWithoutCreditNote("inv_refund_only", "2025-04-01T00:00:00Z", "2025-04-05T00:00:00Z"));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — Invoice (Succeeded) + Refund (no CreditNote row since CreditNoteUrl is null).
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -147,11 +146,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             RefundedWithoutCreditNote("inv_refund_only", "2025-04-01T00:00:00Z", "2025-04-05T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — Refunded filter alone matches only RowKind=Refund.
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -170,11 +169,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         var paymentDate = "2025-04-01T00:00:00Z";
         SeedTransactions(RefundedWithLegacyNullDates("inv_legacy", paymentDate));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert — two rows: Invoice (Succeeded — original payment outcome) and CreditNote, both dated by the original payment date.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -196,11 +195,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
             RefundedWithLegacyNullDates("inv_legacy", "2025-04-15T00:00:00Z")
         );
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync("/api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?Statuses=Refunded&Statuses=HasCreditNote&PageSize=10");
 
         // Assert — exactly the credit-note row from the legacy transaction.
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -219,11 +218,11 @@ public sealed class GetBackOfficeInvoicesTests(BackOfficeWebApplicationFactory f
         var creditNoteDate = "2025-02-05T00:00:00Z";
         SeedTransactions(PaidWithCreditNote("inv_paid_cn", invoiceDate, creditNoteDate));
 
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act — descending by date is the default.
-        var response = await client.GetAsync("/api/back-office/invoices?PageSize=10");
+        var response = await client.GetAsync("/internal-api/back-office/invoices?PageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

@@ -1,0 +1,1018 @@
+{
+  "BackOfficeDashboardKpisResponse": {
+    "activeSessionsLast24Hours": "number",
+    "activeTenants": "number",
+    "activeUsersInPeriod": "number",
+    "blendedMonthlyRecurringRevenue": "number",
+    "blendedMonthlyRecurringRevenueDeltaPercent": "number",
+    "canceledTenants": "number",
+    "currency": "string",
+    "newTenantsDeltaPercent": "number",
+    "newTenantsInPeriod": "number",
+    "period": {
+      "enum": [
+        "Last30Days",
+        "Last7Days",
+        "Last90Days"
+      ]
+    },
+    "totalRevenue": "number",
+    "totalTenants": "number",
+    "totalUsers": "number",
+    "trialTenants": "number"
+  },
+  "BackOfficeDashboardMrrTrendResponse": {
+    "currency": "string",
+    "period": {
+      "enum": [
+        "Last30Days",
+        "Last7Days",
+        "Last90Days"
+      ]
+    },
+    "points": {
+      "array": {
+        "date": "string",
+        "monthlyRecurringRevenue": "number"
+      }
+    },
+    "priorPoints": {
+      "array": {
+        "date": "string",
+        "monthlyRecurringRevenue": "number"
+      }
+    }
+  },
+  "BackOfficeDashboardPlanDistributionResponse": {
+    "distribution": {
+      "array": {
+        "count": "number",
+        "percentage": "number",
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        }
+      }
+    },
+    "totalTenants": "number"
+  },
+  "BackOfficeDashboardRecentLoginsResponse": {
+    "logins": {
+      "array": {
+        "avatarUrl": "string",
+        "email": "string",
+        "firstName": "string",
+        "lastName": "string",
+        "method": {
+          "enum": [
+            "Google",
+            "OneTimePassword"
+          ]
+        },
+        "occurredAt": "string",
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string",
+        "userId": "string"
+      }
+    }
+  },
+  "BackOfficeDashboardRecentPaymentsResponse": {
+    "payments": {
+      "array": {
+        "amount": "number",
+        "currency": "string",
+        "date": "string",
+        "id": "string",
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "status": {
+          "enum": [
+            "Cancelled",
+            "Failed",
+            "Pending",
+            "Refunded",
+            "Succeeded"
+          ]
+        },
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string"
+      }
+    }
+  },
+  "BackOfficeDashboardRecentSignupsResponse": {
+    "signups": {
+      "array": {
+        "createdAt": "string",
+        "name": "string",
+        "owner": {
+          "email": "string",
+          "firstName": "string",
+          "lastName": "string",
+          "userId": "string"
+        },
+        "tenantId": "number",
+        "tenantLogoUrl": "string"
+      }
+    }
+  },
+  "BackOfficeDashboardRecentStripeEventsResponse": {
+    "events": {
+      "array": {
+        "amountDelta": "number",
+        "currency": "string",
+        "fromPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "id": "string",
+        "occurredAt": "string",
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string",
+        "toPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "type": {
+          "enum": [
+            "BillingInfoAdded",
+            "BillingInfoUpdated",
+            "NoOp",
+            "PaymentFailed",
+            "PaymentMethodUpdated",
+            "PaymentRecovered",
+            "PaymentRefunded",
+            "SubscriptionCancelled",
+            "SubscriptionCreated",
+            "SubscriptionDowngradeCancelled",
+            "SubscriptionDowngradeScheduled",
+            "SubscriptionDowngraded",
+            "SubscriptionExpired",
+            "SubscriptionImmediatelyCancelled",
+            "SubscriptionPastDue",
+            "SubscriptionReactivated",
+            "SubscriptionRenewed",
+            "SubscriptionSuspended",
+            "SubscriptionUpgraded",
+            "Unclassified"
+          ]
+        }
+      }
+    }
+  },
+  "BackOfficeDashboardRevenueTrendResponse": {
+    "currency": "string",
+    "period": {
+      "enum": [
+        "Last30Days",
+        "Last7Days",
+        "Last90Days"
+      ]
+    },
+    "points": {
+      "array": {
+        "date": "string",
+        "revenue": "number"
+      }
+    },
+    "priorPoints": {
+      "array": {
+        "date": "string",
+        "revenue": "number"
+      }
+    }
+  },
+  "BackOfficeDashboardTrendsResponse": {
+    "metric": {
+      "enum": [
+        "LoginActivity",
+        "NewTenants",
+        "NewUsers"
+      ]
+    },
+    "period": {
+      "enum": [
+        "Last30Days",
+        "Last7Days",
+        "Last90Days"
+      ]
+    },
+    "points": {
+      "array": {
+        "date": "string",
+        "value": "number"
+      }
+    },
+    "priorPoints": {
+      "array": {
+        "date": "string",
+        "value": "number"
+      }
+    }
+  },
+  "BackOfficeInvoicesResponse": {
+    "currentPageOffset": "number",
+    "invoices": {
+      "array": {
+        "amount": "number",
+        "amountExcludingTax": "number",
+        "creditNoteUrl": "string",
+        "creditNotedAt": "string",
+        "currency": "string",
+        "date": "string",
+        "failureReason": "string",
+        "id": "string",
+        "invoiceUrl": "string",
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "refundedAt": "string",
+        "rowKind": {
+          "enum": [
+            "CreditNote",
+            "Invoice",
+            "Refund"
+          ]
+        },
+        "status": {
+          "enum": [
+            "Cancelled",
+            "Failed",
+            "Pending",
+            "Refunded",
+            "Succeeded"
+          ]
+        },
+        "taxAmount": "number",
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string"
+      }
+    },
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number"
+  },
+  "BackOfficeUserDetailResponse": {
+    "abInclusionPin": {
+      "enum": [
+        "AlwaysOn",
+        "NeverOn"
+      ]
+    },
+    "avatarUrl": "string",
+    "createdAt": "string",
+    "email": "string",
+    "emailConfirmed": "boolean",
+    "firstName": "string",
+    "id": "string",
+    "lastName": "string",
+    "lastSeenAt": "string",
+    "locale": "string",
+    "modifiedAt": "string",
+    "role": {
+      "enum": [
+        "Admin",
+        "Member",
+        "Owner"
+      ]
+    },
+    "tenantId": "number",
+    "tenantMemberships": {
+      "array": {
+        "country": "string",
+        "createdAt": "string",
+        "currency": "string",
+        "emailConfirmed": "boolean",
+        "hasEverSubscribed": "boolean",
+        "lastSeenAt": "string",
+        "monthlyRecurringRevenue": "number",
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "plannedChange": {
+          "enum": [
+            "Cancellation",
+            "ScheduledPlanChange"
+          ]
+        },
+        "renewalDate": "string",
+        "role": {
+          "enum": [
+            "Admin",
+            "Member",
+            "Owner"
+          ]
+        },
+        "scheduledPriceAmount": "number",
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string",
+        "userId": "string"
+      }
+    },
+    "tenantName": "string",
+    "title": "string"
+  },
+  "BackOfficeUserLoginHistoryResponse": {
+    "entries": {
+      "array": {
+        "externalProvider": {
+          "enum": [
+            "Google"
+          ]
+        },
+        "failureReason": "string",
+        "kind": {
+          "enum": [
+            "Email",
+            "External"
+          ]
+        },
+        "method": {
+          "enum": [
+            "Google",
+            "OneTimePassword"
+          ]
+        },
+        "occurredAt": "string",
+        "outcome": {
+          "enum": [
+            "Failed",
+            "Pending",
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  },
+  "BackOfficeUserSessionsResponse": {
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "sessions": {
+      "array": {
+        "createdAt": "string",
+        "deviceType": {
+          "enum": [
+            "Desktop",
+            "Mobile",
+            "Tablet",
+            "Unknown"
+          ]
+        },
+        "expiresAt": "string",
+        "id": "string",
+        "ipAddress": "string",
+        "lastActiveAt": "string",
+        "loginMethod": {
+          "enum": [
+            "Google",
+            "OneTimePassword"
+          ]
+        },
+        "revokedAt": "string",
+        "revokedReason": {
+          "enum": [
+            "LoggedOut",
+            "ReplayAttackDetected",
+            "Revoked",
+            "SwitchTenant"
+          ]
+        },
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string",
+        "userAgent": "string"
+      }
+    },
+    "totalCount": "number",
+    "totalPages": "number"
+  },
+  "BackOfficeUsersResponse": {
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number",
+    "users": {
+      "array": {
+        "avatarUrl": "string",
+        "createdAt": "string",
+        "email": "string",
+        "emailConfirmed": "boolean",
+        "firstName": "string",
+        "id": "string",
+        "lastName": "string",
+        "lastSeenAt": "string",
+        "role": {
+          "enum": [
+            "Admin",
+            "Member",
+            "Owner"
+          ]
+        },
+        "tenantHasEverSubscribed": "boolean",
+        "tenantId": "number",
+        "tenantName": "string",
+        "tenantPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "tenantPlannedChange": {
+          "enum": [
+            "Cancellation",
+            "ScheduledPlanChange"
+          ]
+        },
+        "title": "string"
+      }
+    }
+  },
+  "BillingDriftSummaryResponse": {
+    "subscriptionsWithDriftCount": "number"
+  },
+  "BillingEventsResponse": {
+    "billingEvents": {
+      "array": {
+        "amountDelta": "number",
+        "committedMrr": "number",
+        "country": "string",
+        "currency": "string",
+        "eventType": {
+          "enum": [
+            "BillingInfoAdded",
+            "BillingInfoUpdated",
+            "NoOp",
+            "PaymentFailed",
+            "PaymentMethodUpdated",
+            "PaymentRecovered",
+            "PaymentRefunded",
+            "SubscriptionCancelled",
+            "SubscriptionCreated",
+            "SubscriptionDowngradeCancelled",
+            "SubscriptionDowngradeScheduled",
+            "SubscriptionDowngraded",
+            "SubscriptionExpired",
+            "SubscriptionImmediatelyCancelled",
+            "SubscriptionPastDue",
+            "SubscriptionReactivated",
+            "SubscriptionRenewed",
+            "SubscriptionSuspended",
+            "SubscriptionUpgraded",
+            "Unclassified"
+          ]
+        },
+        "fromPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "id": "string",
+        "newAmount": "number",
+        "occurredAt": "string",
+        "previousAmount": "number",
+        "tenantId": "number",
+        "tenantLogoUrl": "string",
+        "tenantName": "string",
+        "toPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        }
+      }
+    },
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number"
+  },
+  "DashboardMrrConsistencySummaryResponse": {
+    "currency": "string",
+    "kpiMonthlyRecurringRevenue": "number",
+    "trendLatestMonthlyRecurringRevenue": "number"
+  },
+  "GetFeatureFlagTenantsResponse": {
+    "currentPageOffset": "number",
+    "disabledCount": "number",
+    "enabledCount": "number",
+    "overrideCount": "number",
+    "pageSize": "number",
+    "tenants": {
+      "array": {
+        "country": "string",
+        "createdAt": "string",
+        "currency": "string",
+        "defaultEnabled": "boolean",
+        "hasEverSubscribed": "boolean",
+        "id": "number",
+        "inclusionThresholdPercentage": "number",
+        "isEnabled": "boolean",
+        "logoUrl": "string",
+        "monthlyRecurringRevenue": "number",
+        "name": "string",
+        "overrideDisabledAt": "string",
+        "overrideEnabledAt": "string",
+        "owner": {
+          "email": "string",
+          "firstName": "string",
+          "lastName": "string",
+          "userId": "string"
+        },
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "plannedChange": {
+          "enum": [
+            "Cancellation",
+            "ScheduledPlanChange"
+          ]
+        },
+        "renewalDate": "string",
+        "rolloutBucket": "number",
+        "scheduledPriceAmount": "number",
+        "source": {
+          "enum": [
+            "ab_rollout",
+            "default",
+            "manual_override",
+            "plan"
+          ]
+        },
+        "tenantAbInclusionPin": {
+          "enum": [
+            "AlwaysOn",
+            "NeverOn"
+          ]
+        }
+      }
+    },
+    "totalCount": "number",
+    "totalPages": "number"
+  },
+  "GetFeatureFlagUsersResponse": {
+    "currentPageOffset": "number",
+    "disabledCount": "number",
+    "enabledCount": "number",
+    "overrideCount": "number",
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number",
+    "users": {
+      "array": {
+        "avatarUrl": "string",
+        "createdAt": "string",
+        "defaultEnabled": "boolean",
+        "email": "string",
+        "firstName": "string",
+        "id": "string",
+        "inclusionThresholdPercentage": "number",
+        "isEnabled": "boolean",
+        "lastName": "string",
+        "lastSeenAt": "string",
+        "overrideDisabledAt": "string",
+        "overrideEnabledAt": "string",
+        "role": {
+          "enum": [
+            "Admin",
+            "Member",
+            "Owner"
+          ]
+        },
+        "rolloutBucket": "number",
+        "source": {
+          "enum": [
+            "ab_rollout",
+            "default",
+            "manual_override",
+            "plan"
+          ]
+        },
+        "tenantId": "number",
+        "tenantName": "string",
+        "tenantPlan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "userAbInclusionPin": {
+          "enum": [
+            "AlwaysOn",
+            "NeverOn"
+          ]
+        }
+      }
+    }
+  },
+  "GetFeatureFlagsResponse": {
+    "flags": {
+      "array": {
+        "adminLevel": {
+          "enum": [
+            "SystemAdmin",
+            "TenantOwner",
+            "User"
+          ]
+        },
+        "configurableByTenant": "boolean",
+        "configurableByUser": "boolean",
+        "createdAt": "string",
+        "deletedAt": "string",
+        "description": "string",
+        "disabledAt": "string",
+        "enabledAt": "string",
+        "isAbTestEligible": "boolean",
+        "isActive": "boolean",
+        "isKillSwitchEnabled": "boolean",
+        "isStableModule": "boolean",
+        "key": "string",
+        "orphanedAt": "string",
+        "requiredPlan": "string",
+        "rolloutBucketEnd": "number",
+        "rolloutBucketStart": "number",
+        "rolloutPercentage": "number",
+        "scope": {
+          "enum": [
+            "System",
+            "Tenant",
+            "User"
+          ]
+        }
+      }
+    }
+  },
+  "GetTenantFeatureFlagsResponse": {
+    "flags": {
+      "array": {
+        "bucketEnd": "number",
+        "bucketStart": "number",
+        "defaultEnabled": "boolean",
+        "description": "string",
+        "flagKey": "string",
+        "inclusionThresholdPercentage": "number",
+        "isAbTestEligible": "boolean",
+        "isBaseRowActive": "boolean",
+        "isEnabled": "boolean",
+        "requiredPlan": "string",
+        "rolloutBucket": "number",
+        "rolloutPercentage": "number",
+        "scope": {
+          "enum": [
+            "System",
+            "Tenant",
+            "User"
+          ]
+        },
+        "source": {
+          "enum": [
+            "ab_rollout",
+            "default",
+            "manual_override",
+            "plan"
+          ]
+        },
+        "tenantAbInclusionPin": {
+          "enum": [
+            "AlwaysOn",
+            "NeverOn"
+          ]
+        }
+      }
+    }
+  },
+  "GetUserFeatureFlagsResponse": {
+    "flags": {
+      "array": {
+        "bucketEnd": "number",
+        "bucketStart": "number",
+        "defaultEnabled": "boolean",
+        "description": "string",
+        "flagKey": "string",
+        "inclusionThresholdPercentage": "number",
+        "isAbTestEligible": "boolean",
+        "isBaseRowActive": "boolean",
+        "isEnabled": "boolean",
+        "rolloutBucket": "number",
+        "rolloutPercentage": "number",
+        "scope": {
+          "enum": [
+            "System",
+            "Tenant",
+            "User"
+          ]
+        },
+        "source": {
+          "enum": [
+            "ab_rollout",
+            "default",
+            "manual_override",
+            "plan"
+          ]
+        },
+        "tenantId": "number",
+        "userAbInclusionPin": {
+          "enum": [
+            "AlwaysOn",
+            "NeverOn"
+          ]
+        }
+      }
+    }
+  },
+  "ReconcileTenantWithStripeResponse": {
+    "archivedEventsAwaitingConfirmation": {
+      "count": "number",
+      "newestOccurredAt": "string",
+      "oldestOccurredAt": "string"
+    },
+    "billingEventsAppended": "number",
+    "driftDiscrepancyCount": "number",
+    "hasDriftDetected": "boolean",
+    "reconciledAt": "string"
+  },
+  "ReplayArchivedTenantStripeEventsResponse": {
+    "billingEventsAppended": "number",
+    "replayedAt": "string"
+  },
+  "TenantActivityResponse": {
+    "events": {
+      "array": {
+        "description": "string",
+        "name": "string",
+        "timestamp": "string"
+      }
+    }
+  },
+  "TenantDetailResponse": {
+    "abInclusionPin": {
+      "enum": [
+        "AlwaysOn",
+        "NeverOn"
+      ]
+    },
+    "billingAddress": {
+      "city": "string",
+      "country": "string",
+      "line1": "string",
+      "line2": "string",
+      "postalCode": "string",
+      "state": "string"
+    },
+    "billingName": "string",
+    "cancelAtPeriodEnd": "boolean",
+    "createdAt": "string",
+    "currency": "string",
+    "driftCheckedAt": "string",
+    "driftDiscrepancies": {
+      "array": {
+        "actualValue": "string",
+        "description": "string",
+        "expectedEventType": {
+          "enum": [
+            "BillingInfoAdded",
+            "BillingInfoUpdated",
+            "NoOp",
+            "PaymentFailed",
+            "PaymentMethodUpdated",
+            "PaymentRecovered",
+            "PaymentRefunded",
+            "SubscriptionCancelled",
+            "SubscriptionCreated",
+            "SubscriptionDowngradeCancelled",
+            "SubscriptionDowngradeScheduled",
+            "SubscriptionDowngraded",
+            "SubscriptionExpired",
+            "SubscriptionImmediatelyCancelled",
+            "SubscriptionPastDue",
+            "SubscriptionReactivated",
+            "SubscriptionRenewed",
+            "SubscriptionSuspended",
+            "SubscriptionUpgraded",
+            "Unclassified"
+          ]
+        },
+        "expectedValue": "string",
+        "kind": {
+          "enum": [
+            "AmountExcludingTaxClamped",
+            "BillingEventDenormalizationStale",
+            "ExtraEvent",
+            "FieldDisagree",
+            "MissingEvent",
+            "ScheduledPriceMissing",
+            "StripeEventPayloadDivergence",
+            "SubscriptionStateMismatch",
+            "UnclassifiedStripeEvent",
+            "UnsupportedStripeApiVersion"
+          ]
+        },
+        "occurredAt": "string",
+        "severity": {
+          "enum": [
+            "Critical",
+            "Warning"
+          ]
+        }
+      }
+    },
+    "hasDriftDetected": "boolean",
+    "hasEverSubscribed": "boolean",
+    "id": "number",
+    "lifetimeValue": "number",
+    "logoUrl": "string",
+    "modifiedAt": "string",
+    "monthlyRecurringRevenue": "number",
+    "name": "string",
+    "paymentMethod": {
+      "brand": "string",
+      "expMonth": "number",
+      "expYear": "number",
+      "last4": "string"
+    },
+    "plan": {
+      "enum": [
+        "Basis",
+        "Premium",
+        "Standard"
+      ]
+    },
+    "renewalDate": "string",
+    "scheduledPlan": {
+      "enum": [
+        "Basis",
+        "Premium",
+        "Standard"
+      ]
+    },
+    "scheduledPriceAmount": "number",
+    "state": {
+      "enum": [
+        "Active",
+        "Suspended"
+      ]
+    },
+    "stripeCustomerUrl": "string",
+    "subscribedSince": "string",
+    "suspendedAt": "string",
+    "suspensionReason": {
+      "enum": [
+        "CustomerDeleted",
+        "PaymentFailed"
+      ]
+    },
+    "taxId": "string"
+  },
+  "TenantPaymentHistoryResponse": {
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number",
+    "transactions": {
+      "array": {
+        "amount": "number",
+        "amountExcludingTax": "number",
+        "creditNoteUrl": "string",
+        "creditNotedAt": "string",
+        "currency": "string",
+        "date": "string",
+        "failureReason": "string",
+        "id": "string",
+        "invoiceUrl": "string",
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "refundedAt": "string",
+        "rowKind": {
+          "enum": [
+            "CreditNote",
+            "Invoice",
+            "Refund"
+          ]
+        },
+        "status": {
+          "enum": [
+            "Cancelled",
+            "Failed",
+            "Pending",
+            "Refunded",
+            "Succeeded"
+          ]
+        },
+        "taxAmount": "number"
+      }
+    }
+  },
+  "TenantUserCountsResponse": {
+    "activeUsers": "number",
+    "pendingUsers": "number",
+    "totalUsers": "number"
+  },
+  "TenantUsersResponse": {
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "totalCount": "number",
+    "totalPages": "number",
+    "users": {
+      "array": {
+        "avatarUrl": "string",
+        "createdAt": "string",
+        "email": "string",
+        "emailConfirmed": "boolean",
+        "firstName": "string",
+        "id": "string",
+        "lastName": "string",
+        "lastSeenAt": "string",
+        "role": {
+          "enum": [
+            "Admin",
+            "Member",
+            "Owner"
+          ]
+        },
+        "title": "string"
+      }
+    }
+  },
+  "TenantsResponse": {
+    "currentPageOffset": "number",
+    "pageSize": "number",
+    "tenants": {
+      "array": {
+        "country": "string",
+        "createdAt": "string",
+        "currency": "string",
+        "hasEverSubscribed": "boolean",
+        "id": "number",
+        "logoUrl": "string",
+        "modifiedAt": "string",
+        "monthlyRecurringRevenue": "number",
+        "name": "string",
+        "owner": {
+          "email": "string",
+          "firstName": "string",
+          "lastName": "string",
+          "userId": "string"
+        },
+        "plan": {
+          "enum": [
+            "Basis",
+            "Premium",
+            "Standard"
+          ]
+        },
+        "plannedChange": {
+          "enum": [
+            "Cancellation",
+            "ScheduledPlanChange"
+          ]
+        },
+        "renewalDate": "string",
+        "scheduledPriceAmount": "number"
+      }
+    },
+    "totalCount": "number",
+    "totalPages": "number"
+  },
+  "UnsyncedSubscriptionsSummaryResponse": {
+    "unsyncedSubscriptionsCount": "number"
+  }
+}

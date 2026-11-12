@@ -98,7 +98,7 @@ async function removeAllTenantOverrides(page: Page, flagKey: string): Promise<vo
 
 test.describe("@smoke", () => {
   // Holds the already-logged-in back-office page from the test body so the afterEach can reuse it
-  // for the cleanup PUTs (one MockEasyAuth roundtrip instead of two). Falls back to spinning up a
+  // for the cleanup PUTs (one mock identity picker roundtrip instead of two). Falls back to spinning up a
   // fresh context if the test failed before the back-office login completed.
   let backOfficePageForCleanup: Page | null = null;
 
@@ -146,7 +146,7 @@ test.describe("@smoke", () => {
     const page = await backOfficeContext.newPage();
     const context = createTestContext(page);
 
-    await step("Log in as Admin via MockEasyAuth & verify redirect to feature flags page")(async () => {
+    await step("Log in as Admin via the mock identity picker & verify redirect to feature flags page")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/feature-flags`);
 
       await logInAsAdmin(page, `${BACK_OFFICE_BASE_URL}/feature-flags`);
@@ -405,7 +405,7 @@ test.describe("@comprehensive", () => {
     const page = await backOfficeContext.newPage();
     createTestContext(page);
 
-    await step("Log in as Admin via MockEasyAuth & verify redirect to beta-features detail")(async () => {
+    await step("Log in as Admin via the mock identity picker & verify redirect to beta-features detail")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/feature-flags/beta-features`);
 
       await logInAsAdmin(page, `${BACK_OFFICE_BASE_URL}/feature-flags/beta-features`);

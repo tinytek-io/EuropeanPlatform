@@ -7,8 +7,6 @@ using Account.Features.ExternalAuthentication.Domain;
 using Account.Features.Users.BackOffice.Queries;
 using Account.Tests.BackOffice;
 using FluentAssertions;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -26,11 +24,11 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
         SeedEmailLogin(user.Email, false, EmailLogin.MaxAttempts, 60);
         SeedExternalLogin(user.Email, ExternalLoginResult.Success, 5);
         SeedExternalLogin(user.Email, ExternalLoginResult.IdentityProviderError, 120);
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{user.Id}/login-history");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{user.Id}/login-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -50,11 +48,11 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
         var user = DatabaseSeeder.Tenant1Owner;
         SeedEmailLogin(user.Email, true, 0, 60 * 24 * 60); // 60 days
         SeedEmailLogin(user.Email, true, 0, 60 * 24 * 5); // 5 days
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{user.Id}/login-history");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{user.Id}/login-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -68,11 +66,11 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
     {
         // Arrange
         var unknownUserId = UserId.NewId();
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{unknownUserId}/login-history");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{unknownUserId}/login-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -86,24 +84,10 @@ public sealed class GetBackOfficeUserLoginHistoryTests(BackOfficeWebApplicationF
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/login-history");
+        var response = await client.GetAsync($"/internal-api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/login-history");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetBackOfficeUserLoginHistory_WhenCalledViaWrongHost_ShouldReturnNotFound()
-    {
-        // Arrange
-        using var client = CreateClientForHost("app.test.localhost");
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, "Some User");
-
-        // Act
-        var response = await client.GetAsync($"/api/back-office/users/{DatabaseSeeder.Tenant1Owner.Id}/login-history");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     private void SeedEmailLogin(string email, bool completed, int retryCount, int createdMinutesAgo)

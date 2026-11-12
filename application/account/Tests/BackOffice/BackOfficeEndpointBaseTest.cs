@@ -1,19 +1,31 @@
+using System.Net.Http.Headers;
+using System.Security.Claims;
 using Account.Integrations.Stripe;
 using Bogus;
 using JetBrains.Annotations;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
-using SharedKernel.Authentication.BackOfficeIdentity;
-using SharedKernel.Authentication.MockEasyAuth;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+using SharedKernel.Authentication;
+using SharedKernel.Authentication.TokenSigning;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Authentication;
 using SharedKernel.Tests.Telemetry;
 
 namespace Account.Tests.BackOffice;
 
-// Base class for back-office endpoint tests. Each derived class declares
+// Base class for the internal back-office API tests. Each derived class declares
 // IClassFixture<BackOfficeWebApplicationFactory> (or a subclass) to share a single host across
 // its tests; per-test isolation is preserved by the BackOfficeTestContext routed through the
 // fixture's AsyncLocal slot.
+//
+// The routes under test are the INTERNAL API the back-office BFF consumes: every request
+// authenticates with a short-lived delegation token minted from a staff principal (the same
+// mechanism the BFF's delegation handler uses), not with the staff session the back-office's
+// own routes authenticate with.
 public abstract class BackOfficeEndpointBaseTest : IDisposable
 {
     protected const string BackOfficeHost = BackOfficeWebApplicationFactory.BackOfficeHost;
@@ -57,39 +69,26 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
 
     protected MockStripeState StripeState { get; }
 
+    protected IServiceProvider Services => _factory.Services;
+
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-    protected HttpClient CreateBackOfficeClient(string? clientPrincipalName = null, string? clientPrincipalId = null, string? clientPrincipalPayload = null)
+    // The internal API authenticates the back-office BFF's delegation token. Tests mint the
+    // same token from a fixed staff principal (identical to what the BFF sends): the claims are
+    // rebuilt exactly like the back-office's staff identity does for a signed-in staff member.
+    protected HttpClient CreateBackOfficeClient()
     {
-        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
-            {
-                BaseAddress = new Uri($"https://{BackOfficeHost}"),
-                AllowAutoRedirect = false
-            }
-        );
-        client.DefaultRequestHeaders.Host = BackOfficeHost;
-        if (clientPrincipalName is not null) client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, clientPrincipalName);
-        if (clientPrincipalId is not null) client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalIdHeader, clientPrincipalId);
-        if (clientPrincipalPayload is not null) client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalPayloadHeader, clientPrincipalPayload);
-        return client;
+        return CreateClientWithoutIdentity();
     }
 
-    protected HttpClient CreateBackOfficeClientForIdentity(MockEasyAuthIdentity identity)
+    protected HttpClient CreateBackOfficeClientForIdentity(TestStaffIdentity identity)
     {
-        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
-            {
-                BaseAddress = new Uri($"https://{BackOfficeHost}"),
-                AllowAutoRedirect = false
-            }
-        );
-        client.DefaultRequestHeaders.Host = BackOfficeHost;
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalNameHeader, identity.Name);
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalIdHeader, identity.ObjectId);
-        client.DefaultRequestHeaders.Add(BackOfficeIdentityDefaults.PrincipalPayloadHeader, MockEasyAuthCookie.EncodePayload(identity));
+        var client = CreateClientWithoutIdentity();
+        AddDelegationToken(client, BuildStaffPrincipal(identity));
         return client;
     }
 
@@ -103,6 +102,65 @@ public abstract class BackOfficeEndpointBaseTest : IDisposable
         );
         client.DefaultRequestHeaders.Host = host;
         return client;
+    }
+
+    private HttpClient CreateClientWithoutIdentity()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                BaseAddress = new Uri($"https://{BackOfficeHost}"),
+                AllowAutoRedirect = false
+            }
+        );
+        client.DefaultRequestHeaders.Host = BackOfficeHost;
+        return client;
+    }
+
+    private void AddDelegationToken(HttpClient client, ClaimsPrincipal principal)
+    {
+        var signingConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection([new KeyValuePair<string, string?>(BackOfficeDelegationDefaults.SigningKeyConfigurationKey, TestBackOfficeDelegationKeys.SigningKeyPem)])
+            .Build();
+        var tokenGenerator = new BackOfficeDelegationTokenGenerator(signingConfiguration, _factory.Services.GetRequiredService<TimeProvider>());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenGenerator.Generate(principal));
+    }
+
+    // A client carrying a token signed with the platform's HMAC key (the key every application
+    // token uses) that otherwise looks like a delegation token: same issuer, audience, and admin
+    // groups. The internal API must reject it — only the back-office's delegation key is trusted.
+    protected HttpClient CreateClientWithPlatformSignedToken(TestStaffIdentity identity)
+    {
+        var client = CreateClientWithoutIdentity();
+        var now = _factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
+        var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(BuildStaffPrincipal(identity).Claims),
+                NotBefore = now.UtcDateTime,
+                Expires = now.AddMinutes(2).UtcDateTime,
+                Issuer = BackOfficeDelegationDefaults.DelegationIssuer,
+                Audience = BackOfficeDelegationDefaults.DelegationAudience,
+                SigningCredentials = _factory.Services.GetRequiredService<ITokenSigningClient>().GetSigningCredentials()
+            }
+        );
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    // Rebuilds the staff principal from a fixed test identity, mirroring the claims the
+    // back-office's staff identity produces for a signed-in staff member (and its delegation
+    // handler forwards): the delegation contract's 'name' and 'groups' claim types plus the .NET
+    // email and name identifier claims.
+    private static ClaimsPrincipal BuildStaffPrincipal(TestStaffIdentity identity)
+    {
+        var claims = new List<Claim>
+        {
+            new(BackOfficeDelegationDefaults.NameClaimType, identity.Name),
+            new(ClaimTypes.Email, identity.Email),
+            new(ClaimTypes.NameIdentifier, identity.SubjectId)
+        };
+        claims.AddRange(identity.Groups.Select(group => new Claim(BackOfficeDelegationDefaults.GroupsClaimType, group)));
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestStaffIdentity"));
     }
 
     [UsedImplicitly]

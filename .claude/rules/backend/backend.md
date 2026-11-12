@@ -119,4 +119,4 @@ Follow these steps when implementing changes:
    - **ALL lint findings are blocking** - CI pipeline fails on any result marked "Issues found"
    - Severity level (note/warning/error) is irrelevant - fix all findings before proceeding
 
-When you see paths like `/[scs-name]/Core/Features/[Feature]/Domain` in rules, replace `[scs-name]` with the specific self-contained system name (e.g., `main`, `account`) and `[Feature]` with the feature name (e.g., `Users`, `Tenants`). A feature is often 1:1 with a domain aggregate. Back-office features live under `account/Core/Features/BackOffice/`.
+When you see paths like `/[scs-name]/Core/Features/[Feature]/Domain` in rules, replace `[scs-name]` with the specific self-contained system name (e.g., `main`, `account`, `back-office`) and `[Feature]` with the feature name (e.g., `Users`, `Tenants`). A feature is often 1:1 with a domain aggregate. The staff-facing back-office features live under `back-office/Core/Features/`; the account handlers backing its internal API live under `account/Core/Features/BackOffice/`.

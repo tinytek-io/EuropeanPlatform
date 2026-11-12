@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 
-namespace SharedKernel.Authentication.BackOfficeIdentity;
+namespace SharedKernel.Authentication;
 
 public sealed class BackOfficeAdminRequirement : IAuthorizationRequirement;
 
-// Authorization handler enforcing the optional back-office admin capability. Easy Auth gates the
-// container app to authenticated tenant users; this requirement adds an opt-in admin gate on top.
+// Authorization handler enforcing the optional back-office admin capability on top of the
+// authenticated-staff gate.
 // When BackOffice:AdminsGroupId is unset, no one passes (admin features are off). When set, the
 // principal must carry a 'groups' claim matching the configured value.
 public sealed class BackOfficeAdminAuthorizationHandler(IOptions<BackOfficeHostOptions> options)
@@ -19,7 +19,7 @@ public sealed class BackOfficeAdminAuthorizationHandler(IOptions<BackOfficeHostO
         if (string.IsNullOrWhiteSpace(_options.AdminsGroupId)) return Task.CompletedTask;
 
         var hasGroup = context.User.Claims.Any(claim =>
-            claim.Type == BackOfficeIdentityDefaults.GroupsClaimType &&
+            claim.Type == BackOfficeDelegationDefaults.GroupsClaimType &&
             string.Equals(claim.Value, _options.AdminsGroupId, StringComparison.Ordinal)
         );
 
