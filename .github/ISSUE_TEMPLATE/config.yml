@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Ask a question
-    url: https://github.com/platformplatform/PlatformPlatform/discussions/new/choose
-    about: Start a new discussion on our GitHub Community pages
-  - name: Browse existing discussions
-    url: https://github.com/platformplatform/PlatformPlatform/discussions
-    about: Visit our GitHub Community pages to view existing discussions (or click Discussions in the menu)
+  - name: Report a security vulnerability
+    url: https://github.com/tinytek-io/EuropeanPlatform/security/advisories/new
+    about: Report a vulnerability privately instead of opening a public issue
+  - name: Browse existing issues
+    url: https://github.com/tinytek-io/EuropeanPlatform/issues
+    about: Check whether your question, bug or idea is already being discussed

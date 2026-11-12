@@ -194,7 +194,7 @@ Account Owners and Account Administrators have access to usage data and activity
 
 ## 12. International Data Transfers
 
-Personal and business data is stored and processed exclusively within the EU (Scaleway's Paris region) and is not transferred outside the EU to provide the Service.
+Personal and business data is stored and processed within the EU (Scaleway's Paris region). The one exception is payment processing: if you subscribe to a paid plan, Stripe, our payment processor, processes your billing name, email address and billing address, and your payment details, and may do so outside the EU. That transfer relies on the safeguards of GDPR Chapter V that Stripe provides, an adequacy decision or Standard Contractual Clauses. No other personal or business data is transferred outside the EU to provide the Service.
 
 Pseudonymized analytics data (OpenTelemetry telemetry processed in Scaleway Cockpit) is processed within the same EU region. For customers located outside the EU, your data is processed within the EU; no data is transferred to your local region.
 

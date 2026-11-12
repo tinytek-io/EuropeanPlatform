@@ -191,7 +191,7 @@ This allows customers to resubscribe (important for seasonal use like ERP system
 
 **Direction:** Analytics data flows INTO EU (from non-EU customers), NOT out of EU.
 
-**Key principle:** All data (personal, business, and pseudonymized analytics) stays in the EU — Scaleway's Paris region. Nothing is transferred outside the EU.
+**Key principle:** All data (personal, business, and pseudonymized analytics) stays in the EU — Scaleway's Paris region — except payment processing. Stripe processes billing contact and payment details and may do so outside the EU, under the GDPR Chapter V safeguards it provides (an adequacy decision or Standard Contractual Clauses). Privacy Policy Section 12 and DPA Section 9 both state this exception; keep them aligned with Schedule 2.
 
 ### Sub-Processor Notice Period
 

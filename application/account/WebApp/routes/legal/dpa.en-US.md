@@ -146,7 +146,7 @@ The Account remains responsible for determining whether the breach must be notif
 
 ## 9. International Data Transfers
 
-Personal Data processed under this DPA is stored and processed exclusively within the EU (Scaleway's Paris region) and is not transferred outside the EU.
+Personal Data processed under this DPA is stored and processed within the EU (Scaleway's Paris region). The one exception is payment processing: when the Account subscribes to a paid plan, Stripe (Schedule 2) processes the billing contact's name, email address and billing address, and payment details, and may do so outside the EU. That transfer relies on the safeguards of GDPR Chapter V that Stripe provides, an adequacy decision or Standard Contractual Clauses, as set out in Stripe's data processing agreement. No other Personal Data is transferred outside the EU.
 
 Pseudonymized analytics data is processed within the same EU region. For Accounts located outside the EU, analytics data is processed within the EU; no data is transferred to the Account's local region.
 

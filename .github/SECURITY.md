@@ -6,7 +6,7 @@ The security of our project is a top priority. We appreciate the contributions o
 
 ## Reporting a Vulnerability
 
-If you encounter or suspect any security issues, please [use this form to create a new security advisory](https://github.com/platformplatform/PlatformPlatform/security/advisories). We take all reports seriously and will respond promptly.
+If you encounter or suspect any security issues, please [use this form to report it privately](https://github.com/tinytek-io/EuropeanPlatform/security/advisories/new). We take all reports seriously and will respond promptly.
 
 ## Responsible Disclosure Policy
 
@@ -14,12 +14,12 @@ We support responsible disclosure practices. Please allow us a reasonable timefr
 
 ## Security Roadmap
 
-PlatformPlatform is currently in the early stage. We're proactively working towards strengthening our security posture. Our ongoing efforts include:
+EuropeanPlatform is currently in the early stage. We're proactively working towards strengthening our security posture. Our ongoing efforts include:
 
 1. Engaging professional penetration testing services
 2. Implementing Static Code Analysis within pull request workflows
 3. Integrating Open Source vulnerability and license scanning tools
-4. Resolving all security warnings and alerts in Azure
+4. Verifying the platform's security guarantees automatically on every deployment to Scaleway
 5. Ensuring secure coding practices are followed
 6. Conducting regular security audits and assessments
 7. Developing and implementing an incident response plan

@@ -1,18 +1,18 @@
-# Contributing to PlatformPlatform
+# Contributing to EuropeanPlatform
 
-Thank you for your interest in contributing to the PlatformPlatform project! We appreciate your effort and contributions that will help improve the project. This document outlines the guidelines for contributing to the project.
+Thank you for your interest in contributing to the EuropeanPlatform project! We appreciate your effort and contributions that will help improve the project. This document outlines the guidelines for contributing to the project.
 
-Before you start working on a contribution, **we strongly recommend discussing your ideas with the project maintainers by [starting a discussion here](https://github.com/platformplatform/PlatformPlatform/discussions)**. This ensures that your efforts align with the project's goals and that you won't spend time implementing something that may be rejected later. We have strong opinions and uphold an high standard of quality for the project, so please be prepared to make changes to your contribution based on feedback from the maintainers. Pay special attention to Branch name and Commit messages guidelines below.
+Before you start working on a contribution, **we strongly recommend discussing your ideas with the project maintainers by [opening an issue here](https://github.com/tinytek-io/EuropeanPlatform/issues/new/choose)**. This ensures that your efforts align with the project's goals and that you won't spend time implementing something that may be rejected later. We have strong opinions and uphold an high standard of quality for the project, so please be prepared to make changes to your contribution based on feedback from the maintainers. Pay special attention to Branch name and Commit messages guidelines below.
 
-Please note that all contributions to this project require signing our [Contributor License Agreement (CLA)](https://gist.github.com/platformplatformadmin/dcedb5be10888e216fb2a0c59435e44d). By signing the CLA, you grant PlatformPlatform the rights to your contributions, ensuring that we can continue to develop and distribute the project under the MIT License or potentially other licensing options. The CLA signing process is handled through [CLA Assistant](https://cla-assistant.io/). You will be prompted to sign the CLA when you submit a pull request.
+By contributing, you agree that your contributions are licensed under the project's [MIT License](../LICENSE).
 
 ## Contributing Workflow
 
-1. **Fork the Repository**: Navigate to the [PlatformPlatform repository](https://github.com/platformplatform/PlatformPlatform) and click the "Fork" button in the upper right-hand corner. This will create a copy of the repository under your GitHub account.
+1. **Fork the Repository**: Navigate to the [EuropeanPlatform repository](https://github.com/tinytek-io/EuropeanPlatform) and click the "Fork" button in the upper right-hand corner. This will create a copy of the repository under your GitHub account.
 
-2. **Clone the Fork**: Open a terminal window and navigate to the directory where you want to clone the forked repository. Run the following command, replacing `your-username` with your GitHub username: `git clone https://github.com/your-username/platformplatform.git`
+2. **Clone the Fork**: Open a terminal window and navigate to the directory where you want to clone the forked repository. Run the following command, replacing `your-username` with your GitHub username: `git clone https://github.com/your-username/EuropeanPlatform.git`
 
-3. **Add the Upstream Remote**: Navigate to the cloned repository and run the following command to add the original PlatformPlatform repository as a remote named `upstream`: `git remote add upstream https://github.com/platformplatform/PlatformPlatform.git`
+3. **Add the Upstream Remote**: Navigate to the cloned repository and run the following command to add the original EuropeanPlatform repository as a remote named `upstream`: `git remote add upstream https://github.com/tinytek-io/EuropeanPlatform.git`
 
 4. **Create a Branch**: Create a new branch for your contribution, giving it a descriptive name that reflects the changes you intend to make: `git checkout -b your-branch-name`. Branch names should be lowercase and use a dash to separate words.
 
@@ -30,4 +30,4 @@ Please note that we intend to merge pull-requests as fast as possible (preferabl
 
 ## Questions and Support
 
-If you have any questions or need help with the contribution process, feel free to [start a discussion here](https://github.com/platformplatform/PlatformPlatform/discussions).
+If you have any questions or need help with the contribution process, feel free to [open an issue here](https://github.com/tinytek-io/EuropeanPlatform/issues/new/choose).
