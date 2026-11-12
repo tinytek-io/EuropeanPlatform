@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AssemblyName>BackOffice</AssemblyName>
+        <RootNamespace>BackOffice</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\shared-kernel\SharedKernel\SharedKernel.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The committed staff identity file (cloud-infrastructure/staff-identity) is YAML. -->
+        <PackageReference Include="YamlDotNet"/>
+        <!-- The staff OIDC provider other tools (Forgejo, ...) sign staff in through. -->
+        <PackageReference Include="OpenIddict.EntityFrameworkCore"/>
+        <PackageReference Include="OpenIddict.Server.AspNetCore"/>
+        <PackageReference Include="OpenIddict.Server.DataProtection"/>
+    </ItemGroup>
+
+</Project>

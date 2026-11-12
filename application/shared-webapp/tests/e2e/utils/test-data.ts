@@ -85,11 +85,11 @@ export function testUser() {
 }
 
 /**
- * Log in as Admin via MockEasyAuth on the back-office host.
+ * Log in as Admin via the mock identity picker on the back-office host.
  *
  * Selects the Admin radio, submits the login form, and waits for the back-office
  * page to land on its expected URL. The caller is responsible for navigating to
- * the desired back-office route before calling this helper, since MockEasyAuth
+ * the desired back-office route before calling this helper, since the mock identity picker
  * redirects to whichever back-office URL initiated the auth challenge.
  *
  * @param backOfficePage Playwright page bound to the back-office baseURL

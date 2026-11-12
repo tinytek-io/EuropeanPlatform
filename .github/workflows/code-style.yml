@@ -54,6 +54,7 @@ jobs:
 
           account=false
           main=false
+          back_office=false
           other=false
 
           while IFS= read -r path; do
@@ -62,6 +63,8 @@ jobs:
                 account=true ;;
               application/main/Api/*|application/main/Core/*|application/main/Workers/*|application/main/Tests/*)
                 main=true ;;
+              application/back-office/Api/*|application/back-office/Core/*|application/back-office/Workers/*|application/back-office/Tests/*)
+                back_office=true ;;
               application/AppGateway/*|application/shared-kernel/*|developer-cli/*)
                 other=true ;;
               application/*)
@@ -71,7 +74,7 @@ jobs:
             esac
           done <<< "$changed"
 
-          systems=$(( $([[ "$account" == "true" ]] && echo 1 || echo 0) + $([[ "$main" == "true" ]] && echo 1 || echo 0) ))
+          systems=$(( $([[ "$account" == "true" ]] && echo 1 || echo 0) + $([[ "$main" == "true" ]] && echo 1 || echo 0) + $([[ "$back_office" == "true" ]] && echo 1 || echo 0) ))
           if [[ "$other" == "true" ]] || (( systems > 1 )); then
             echo "backend_scope=" >> "$GITHUB_OUTPUT"
             echo "backend_label=full backend (PlatformPlatform.slnx)" >> "$GITHUB_OUTPUT"
@@ -81,6 +84,9 @@ jobs:
           elif [[ "$main" == "true" ]]; then
             echo "backend_scope=--self-contained-system main" >> "$GITHUB_OUTPUT"
             echo "backend_label=main only" >> "$GITHUB_OUTPUT"
+          elif [[ "$back_office" == "true" ]]; then
+            echo "backend_scope=--self-contained-system back-office" >> "$GITHUB_OUTPUT"
+            echo "backend_label=back-office only" >> "$GITHUB_OUTPUT"
           else
             echo "backend_scope=" >> "$GITHUB_OUTPUT"
             echo "backend_label=full backend (default — no backend paths matched)" >> "$GITHUB_OUTPUT"

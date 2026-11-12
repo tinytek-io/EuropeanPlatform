@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AssemblyName>BackOffice.Workers</AssemblyName>
+        <RootNamespace>BackOffice.Workers</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <DefaultItemExcludes>$(DefaultItemExcludes);publish\**;Dockerfile</DefaultItemExcludes>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Core\BackOffice.csproj"/>
+    </ItemGroup>
+
+    <!-- The staff identity files ship with the workers too (staff-identity/<environment>.yaml): they sync the
+    file's OIDC client list into the provider's store. StaffIdentity:File selects the environment's one. -->
+    <ItemGroup>
+        <Content Include="..\..\..\cloud-infrastructure\staff-identity\*.yaml">
+            <Link>staff-identity\%(Filename)%(Extension)</Link>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+    </ItemGroup>
+
+</Project>

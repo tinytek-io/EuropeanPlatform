@@ -3,6 +3,7 @@
 [![App Gateway](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml?query=branch%3Amain)
 [![Account](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/account.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/account.yml?query=branch%3Amain)
 [![Main](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/main.yml?query=branch%3Amain)
+[![Back Office](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/back-office.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/back-office.yml?query=branch%3Amain)
 [![Cloud Infrastructure](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/cloud-infrastructure.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/cloud-infrastructure.yml?query=branch%3Amain)
 [![Code Style](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/code-style.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/code-style.yml?query=branch%3Amain)
 [![Developer CLI](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/developer-cli.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/developer-cli.yml?query=branch%3Amain)

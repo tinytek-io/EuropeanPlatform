@@ -1,0 +1,124 @@
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
+import { NotFoundError } from "@repo/infrastructure/auth/routeGuards";
+import { Button } from "@repo/ui/components/Button";
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@repo/ui/components/Field";
+import { Link } from "@repo/ui/components/Link";
+import { Logo } from "@repo/ui/components/Logo";
+import { RadioGroup, RadioGroupItem } from "@repo/ui/components/RadioGroup";
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+
+import { HorizontalHeroLayout } from "@/shared/layouts/HorizontalHeroLayout";
+
+import { StaffSignInForm } from "./-components/StaffSignInForm";
+
+const MOCK_IDENTITY_IDS = ["admin", "user"] as const;
+
+interface MockLoginSearch {
+  returnPath: string;
+}
+
+export const Route = createFileRoute("/login")({
+  staticData: { trackingTitle: "Sign in" },
+  beforeLoad: () => {
+    // Gated by the server-provided runtime flags, not the build type: the back-office signs staff
+    // in itself wherever a staff identity file is configured, and otherwise offers the mock
+    // identity selector where the environment opts in (MockStaffIdentity:Enabled, local development).
+    if (
+      import.meta.runtime_env.PUBLIC_STAFF_SIGN_IN_ENABLED !== "true" &&
+      import.meta.runtime_env.PUBLIC_MOCK_STAFF_IDENTITY_ENABLED !== "true"
+    ) {
+      throw new NotFoundError();
+    }
+  },
+  validateSearch: (search: Record<string, unknown>): MockLoginSearch => {
+    const raw = search.returnPath;
+    const returnPath = typeof raw === "string" && raw.startsWith("/") ? raw : "/";
+    return { returnPath };
+  },
+  component: LoginPage
+});
+
+function LoginPage() {
+  const { returnPath } = Route.useSearch();
+  if (import.meta.runtime_env.PUBLIC_STAFF_SIGN_IN_ENABLED === "true") {
+    return (
+      <HorizontalHeroLayout>
+        <StaffSignInForm returnPath={returnPath} />
+      </HorizontalHeroLayout>
+    );
+  }
+
+  return <MockLoginPage />;
+}
+
+function MockLoginPage() {
+  const { returnPath } = Route.useSearch();
+  const [selectedId, setSelectedId] = useState<string>("admin");
+  const [isPending, setIsPending] = useState(false);
+
+  return (
+    <HorizontalHeroLayout>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setIsPending(true);
+          const encodedReturnPath = encodeURIComponent(returnPath);
+          globalThis.location.href = `/auth/login/callback?identity=${selectedId}&post_login_redirect_uri=${encodedReturnPath}`;
+        }}
+        className="flex w-full max-w-[22rem] flex-col items-center gap-4 pt-8 pb-4"
+      >
+        <Link href="/" className="cursor-pointer">
+          <Logo variant="mark" className="size-12" alt={t`Logo`} />
+        </Link>
+        <h2>
+          <Trans>Back Office - Sign in</Trans>
+        </h2>
+        <div className="text-center text-sm text-muted-foreground">
+          <Trans>Sign in with a mock identity. Production requires authenticated staff sign-in.</Trans>
+        </div>
+
+        <RadioGroup className="w-full pt-2" value={selectedId} onValueChange={setSelectedId}>
+          {MOCK_IDENTITY_IDS.map((id) => (
+            <FieldLabel key={id}>
+              <Field orientation="horizontal">
+                <RadioGroupItem value={id} />
+                <FieldContent>
+                  <FieldTitle>{getIdentityName(id)}</FieldTitle>
+                  <FieldDescription>{getIdentityDescription(id)}</FieldDescription>
+                </FieldContent>
+              </Field>
+            </FieldLabel>
+          ))}
+        </RadioGroup>
+
+        <Button type="submit" isPending={isPending} className="mt-4 w-full text-center">
+          {isPending ? <Trans>Logging in...</Trans> : <Trans>Log in</Trans>}
+        </Button>
+      </form>
+    </HorizontalHeroLayout>
+  );
+}
+
+function getIdentityName(id: string) {
+  switch (id) {
+    case "admin":
+      return <Trans>Admin</Trans>;
+    case "user":
+      return <Trans>User</Trans>;
+    default:
+      return id;
+  }
+}
+
+function getIdentityDescription(id: string) {
+  switch (id) {
+    case "admin":
+      return <Trans>Log in with admin rights</Trans>;
+    case "user":
+      return <Trans>Log in without group claims</Trans>;
+    default:
+      return null;
+  }
+}
