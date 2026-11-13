@@ -505,15 +505,15 @@ git checkout -b feature-name
 
 ### 2. Configure your product management tool (one-time setup)
 
-Pick a tool. The name must match a file in [.claude/reference/product-management/](./.claude/reference/product-management/): `Linear`, `AzureDevOps`, `Jira`, or `Markdown` (for tracking features and tasks as markdown files in your repo).
+Pick a tool. The name must match a file in [.claude/reference/product-management/](./.claude/reference/product-management/): `GitHub` (the default: GitHub issues with sub-issues), `Linear`, `AzureDevOps`, `Jira`, or `Markdown` (for tracking features and tasks as markdown files in your repo).
 
 Set the value in [AGENTS.md](./AGENTS.md):
 
 ```
-PRODUCT_MANAGEMENT_TOOL="Linear"
+PRODUCT_MANAGEMENT_TOOL="GitHub"
 ```
 
-Then configure the MCP server for that tool. Each reference file contains the exact MCP configuration under its **MCP Configuration** section (e.g., [Linear.md](./.claude/reference/product-management/Linear.md)). The `Markdown` option needs no MCP, since it reads and writes local files directly.
+`GitHub` and `Markdown` need no MCP server: `GitHub` uses the `gh` CLI against the repository in `GH_REPO` (set in [.claude/settings.json](./.claude/settings.json)), and `Markdown` reads and writes local files directly. For the other tools, configure the MCP server from the **MCP Configuration** section of their reference file (e.g., [Linear.md](./.claude/reference/product-management/Linear.md)).
 
 ### 3. Define your feature
 

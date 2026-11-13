@@ -27,7 +27,7 @@ Never commit, amend, or revert without explicit user instruction each time. Comm
 Whenever you see `[PRODUCT_MANAGEMENT_TOOL]`, replace it with the configured value.
 
 ```
-PRODUCT_MANAGEMENT_TOOL="Linear"
+PRODUCT_MANAGEMENT_TOOL="GitHub"
 ```
 
 When working with [features] or [tasks], read `.claude/reference/product-management/[PRODUCT_MANAGEMENT_TOOL].md` to learn how to look them up, how to update status, and how generic statuses like [Active], [Review], [Completed] map to the tool. Read the [feature] for full context and the [task] for specific requirements.
