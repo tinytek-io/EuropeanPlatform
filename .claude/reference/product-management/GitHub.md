@@ -127,22 +127,24 @@ gh auth refresh --scopes project
 
 Issues, comments and assignees use the plain `gh issue` commands. Sub-issues and the board's fields have no `gh issue` command: GitHub keeps an issue's status on a separate board item, so they go through `gh api`.
 
+`gh` fills `{owner}` and `{repo}` from `GH_REPO`, in REST paths and in GraphQL variables passed with `-F`. The `<projectId>`, `<fieldId>` and `<optionId>` placeholders are the ids in the Configuration table.
+
 ```bash
 # Attach a task as a sub-issue of its parent. sub_issue_id is the task's REST id (the numeric "id"), NOT its #number
 gh api repos/{owner}/{repo}/issues/<parentNumber>/sub_issues -F sub_issue_id="$(gh api repos/{owner}/{repo}/issues/<taskNumber> --jq .id)"
 
-# Find an issue's board item. The board auto-adds new issues; add one only when no item on project 12 is returned
-gh api graphql -f query='query{ repository(owner:"tinytek-io", name:"EuropeanPlatform"){ issue(number:<number>){ id
-  projectItems(first:10){ nodes { id project { number } } } } } }'
-gh api graphql -f query='mutation{ addProjectV2ItemById(input:{ projectId:"PVT_kwDOB7l0y84Brczc", contentId:"<issueNodeId>" }){ item { id } } }'
+# Find an issue's node id and board item. The board auto-adds new issues; add one only when no item on the project is returned
+gh api graphql -F owner='{owner}' -F name='{repo}' -F number=<number> -f query='query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { id projectItems(first: 10) { nodes { id project { number } } } } } }'
+gh api graphql -f query='mutation { addProjectV2ItemById(input: { projectId: "<projectId>", contentId: "<issueNodeId>" }) { item { id } } }'
 
-# Set a field on the item. The value shape follows the field: Status is { singleSelectOptionId: "<id>" },
-# Area is { multiSelectOptionIds: ["<id>", ...] } (the full set, it replaces), Iteration is { iterationId: "<id>" }
-gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{ projectId:"PVT_kwDOB7l0y84Brczc", itemId:"<itemId>",
-  fieldId:"<fieldId>", value:{ singleSelectOptionId:"<optionId>" } }){ projectV2Item { id } } }'
+# Set a field on the item. The value shape follows the field: Status is { singleSelectOptionId: "<optionId>" },
+# Area is { multiSelectOptionIds: ["<optionId>", ...] } (the full set, it replaces), Iteration is { iterationId: "<iterationId>" }
+gh api graphql -f query='mutation { updateProjectV2ItemFieldValue(input: { projectId: "<projectId>", itemId: "<itemId>",
+  fieldId: "<fieldId>", value: { singleSelectOptionId: "<optionId>" } }) { projectV2Item { id } } }'
 
 # The current iteration is the one whose [startDate, startDate + duration days) contains today
-gh api graphql -f query='query{ node(id:"PVTIF_lADOB7l0y84Brczczhpvfi8"){ ... on ProjectV2IterationField {
+gh api graphql -f query='query { node(id: "<iterationFieldId>") { ... on ProjectV2IterationField {
   configuration { iterations { id title startDate duration } } } } }'
 ```
 
