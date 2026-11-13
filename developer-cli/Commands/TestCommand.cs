@@ -1,6 +1,8 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
 using Spectre.Console;
@@ -70,16 +72,19 @@ public class TestCommand : Command
                 ProcessHelper.Run(buildCommand, workingDirectory, "Build", quiet);
             }
 
+            // The summary counts the TRX results, one file per test assembly: the console lines of assemblies running in
+            // parallel interleave mid-line ("  Passed   Passed A [1 ms]B [1 ms]"), so counting them drops tests.
+            var resultsDirectory = Path.Combine(Path.GetTempPath(), "developer-cli-test-results", Guid.NewGuid().ToString("N"));
             var filterArgument = BuildFilterArgument(filter, excludeCategory);
-            var testCommand = $"""dotnet test {targetName} --no-build --no-restore --logger "console;verbosity=normal"{filterArgument}""";
+            var testCommand = $"""dotnet test {targetName} --no-build --no-restore --logger "console;verbosity=normal" --logger "trx;LogFilePrefix=results" --results-directory "{resultsDirectory}"{filterArgument}""";
 
             if (quiet)
             {
-                RunTestsQuietly(testCommand, workingDirectory);
+                RunTestsQuietly(testCommand, workingDirectory, resultsDirectory);
             }
             else
             {
-                RunTestsWithFilteredOutput(testCommand, workingDirectory);
+                RunTestsWithFilteredOutput(testCommand, workingDirectory, resultsDirectory);
             }
         }
         catch (Exception ex)
@@ -89,7 +94,7 @@ public class TestCommand : Command
         }
     }
 
-    private static void RunTestsWithFilteredOutput(string command, string? workingDirectory)
+    private static void RunTestsWithFilteredOutput(string command, string? workingDirectory, string resultsDirectory)
     {
         if (Configuration.TraceEnabled)
         {
@@ -162,6 +167,7 @@ public class TestCommand : Command
         stderrTask.GetAwaiter().GetResult();
         stopwatch.Stop();
         var duration = stopwatch.Elapsed.TotalSeconds;
+        stats = ConsumeTrxResults(resultsDirectory) ?? stats;
 
         // Print our summary
         Console.WriteLine();
@@ -180,13 +186,13 @@ public class TestCommand : Command
         }
     }
 
-    private static void RunTestsQuietly(string command, string? workingDirectory)
+    private static void RunTestsQuietly(string command, string? workingDirectory, string resultsDirectory)
     {
         var stopwatch = Stopwatch.StartNew();
         var result = ProcessHelper.ExecuteQuietly(command, workingDirectory);
         stopwatch.Stop();
 
-        var stats = ParseTestOutput(result.StdOut);
+        var stats = ConsumeTrxResults(resultsDirectory) ?? ParseTestOutput(result.StdOut);
         var duration = stopwatch.Elapsed.TotalSeconds;
 
         // Print summary
@@ -209,6 +215,69 @@ public class TestCommand : Command
         {
             Console.WriteLine($"Full output: {result.TempFilePathWithSize}");
             Environment.Exit(result.ExitCode);
+        }
+    }
+
+    // Reads the run's TRX results and deletes them. Null when no assembly wrote results (the run failed before
+    // executing tests) or any result file is unreadable, so the console output is all there is.
+    private static TestStats? ConsumeTrxResults(string resultsDirectory)
+    {
+        if (!Directory.Exists(resultsDirectory)) return null;
+        var trxFiles = Directory.GetFiles(resultsDirectory, "*.trx", SearchOption.AllDirectories);
+        if (trxFiles.Length == 0)
+        {
+            Directory.Delete(resultsDirectory, true);
+            return null;
+        }
+
+        var stats = new TestStats();
+        foreach (var trxFile in trxFiles)
+        {
+            var testRun = LoadTestRun(trxFile);
+            if (testRun is null)
+            {
+                Directory.Delete(resultsDirectory, true);
+                return null;
+            }
+
+            foreach (var testResult in testRun.Descendants().Where(element => element.Name.LocalName == "UnitTestResult"))
+            {
+                switch (testResult.Attribute("outcome")?.Value)
+                {
+                    case "Passed":
+                        stats.Passed++;
+                        break;
+                    case "Failed":
+                        stats.Failed++;
+                        stats.FailedTests.Add(testResult.Attribute("testName")?.Value ?? "(unnamed test)");
+                        break;
+                    default:
+                        stats.Skipped++;
+                        break;
+                }
+            }
+        }
+
+        Directory.Delete(resultsDirectory, true);
+        return stats;
+    }
+
+    // An interrupted run can leave a truncated result file. Skipping it would silently drop that assembly's tests and
+    // failures from the summary, so the caller falls back to the console output, which covers every assembly.
+    private static XElement? LoadTestRun(string trxFile)
+    {
+        try
+        {
+            var testRun = XDocument.Load(trxFile).Root;
+            if (testRun?.Name.LocalName == "TestRun") return testRun;
+
+            AnsiConsole.MarkupLine($"[yellow]Test results file '{Markup.Escape(trxFile)}' has no test run. Counting the console output instead.[/]");
+            return null;
+        }
+        catch (Exception exception) when (exception is XmlException or IOException or UnauthorizedAccessException)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Test results file '{Markup.Escape(trxFile)}' is unreadable: {Markup.Escape(exception.Message)} Counting the console output instead.[/]");
+            return null;
         }
     }
 
@@ -253,6 +322,7 @@ public class TestCommand : Command
         if (trimmedLine.StartsWith("Copyright (c) Microsoft")) return true;
         if (trimmedLine.StartsWith("Starting test execution")) return true;
         if (trimmedLine.StartsWith("A total of ")) return true;
+        if (trimmedLine.StartsWith("Results File: ")) return true; // The TRX files the summary reads, deleted afterwards
 
         // Filter per-assembly summary lines (we generate our own)
         if (trimmedLine.StartsWith("Test Run Successful.")) return true;
