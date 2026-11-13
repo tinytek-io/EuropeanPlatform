@@ -1,0 +1,17 @@
+# The command-line tools this repository is built and deployed with, at the versions it is verified against.
+# With mise (https://mise.jdx.dev) activated in your shell, run `mise install` in the repository; every tool below is
+# then on PATH at exactly this version whenever you work in it. Installing the tools another way works too, as long as
+# the versions match.
+#
+# Each version is held in step with another file that is the source of truth for it:
+# - node: application/.node-version (the developer CLI installs that version through fnm)
+# - kubectl: within one minor version of the clusters' Kubernetes version (Kapsule runs 1.37)
+#
+# The .NET SDK is not listed: application/global.json pins it, and a second pin could disagree with it.
+
+[tools]
+helm = "4.2.3"
+kubectl = "1.37.2"
+node = "24.14.0"
+scaleway-cli = "2.58.3"
+terraform = "1.16.4"

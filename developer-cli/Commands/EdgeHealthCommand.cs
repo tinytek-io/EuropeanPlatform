@@ -1,0 +1,386 @@
+using System.CommandLine;
+using System.Formats.Asn1;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using DeveloperCli.Utilities;
+using Scaleway.Sdk;
+using Spectre.Console;
+using ScwEdge = Scaleway.Sdk.EdgeServices.V1Beta1;
+
+namespace DeveloperCli.Commands;
+
+/// <summary>
+///     Verifies the Scaleway Edge Services pipelines fronting the public hostnames and the HTTPS
+///     endpoints they serve. Read-only: it never mutates Scaleway, the cluster, or DNS. Meant to run
+///     after terraform apply / aspire deploy — the edge API reports stages as "active" while pipelines
+///     silently lose their head stage or their managed certificate material, and neither Terraform
+///     (the provider's head_stage Read is a no-op) nor the deploy pipeline surfaces that.
+/// </summary>
+/// <remarks>
+///     Reads through the generated Edge Services client (scw has no head-stage command at all). It acts
+///     with the environment's operator key (the scw profile the bootstrap command writes, or
+///     SCW_ACCESS_KEY/SCW_SECRET_KEY when exported) and checks only the environment's own project.
+/// </remarks>
+public sealed class EdgeHealthCommand : Command
+{
+    // Managed edge certificates are 90-day Let's Encrypt certificates that Scaleway renews on its
+    // own, conventionally around 30 days before expiry. One that still has fewer than 21 days left
+    // has missed its renewal, which leaves three weeks for a person to act (the deploy never
+    // recreates a TLS stage that still serves a certificate).
+    private const int MinimumDaysBeforeCertificateExpiry = 21;
+
+    // A plain shared client for the public endpoint checks; it carries no credentials and its
+    // default handler validates certificates, which is exactly the behavior under test.
+    private static readonly HttpClient EndpointHttpClient = new();
+
+    public EdgeHealthCommand() : base(
+        "edge-health",
+        "Verify the Scaleway Edge Services pipelines, their stage chains, and the public HTTPS endpoints (read-only; acts with the environment's operator scw profile)."
+    )
+    {
+        var environmentOption = new Option<string>("--environment", "-e")
+        {
+            Description = "The environment to check (staging)",
+            DefaultValueFactory = _ => "staging"
+        };
+        Options.Add(environmentOption);
+
+        SetAction(parseResult => ExecuteAsync(parseResult.GetValue(environmentOption)!).GetAwaiter().GetResult());
+    }
+
+    private static async Task ExecuteAsync(string environment)
+    {
+        var resolved = await ScalewayEnvironment.ResolveAsync(environment);
+
+        using var scaleway = ScalewayEnvironment.CreateClient(resolved.Credentials, resolved.OrganizationId);
+        var edgeServices = scaleway.WithProject(ProjectId.Parse(resolved.ProjectId)).EdgeServices;
+
+        var pipelines = await edgeServices.ListPipelinesAsync();
+        if (pipelines.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]Error:[/] no Edge Services pipelines found.");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine($"Checking [bold]{pipelines.Count}[/] pipeline(s)...\n");
+
+        var failures = 0;
+
+        foreach (var pipeline in pipelines)
+        {
+            AnsiConsole.MarkupLine($"[bold]{(pipeline.Name ?? pipeline.Id ?? "").EscapeMarkup()}[/] ([dim]{pipeline.Id}[/])");
+
+            var pipelineChecks = new List<(string Check, bool Passed, string Detail)> { PipelineStatusCheck(pipeline) };
+
+            var stages = await ListStagesAsync(edgeServices, pipeline.Id!);
+            pipelineChecks.Add(HeadStageCheck(stages));
+            pipelineChecks.AddRange(StageChecks(stages));
+
+            failures += RenderChecks(pipelineChecks);
+
+            var hostnameStages = HostnameStages(stages.DnsStages);
+            var hostnames = hostnameStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
+
+            // The pipeline's endpoint: recreated pipelines get a new one, which silently orphans
+            // every CNAME still pointing at the old endpoint (the API exposes no stable alias).
+            var pipelineEndpoint = hostnameStages.Select(stage => stage.DefaultFqdn).FirstOrDefault(fqdn => !string.IsNullOrWhiteSpace(fqdn));
+
+            foreach (var hostname in hostnames)
+            {
+                var dnsChecks = pipelineEndpoint is null
+                    ? [("dns record", false, "no active pipeline endpoint to point the DNS at — attach the head stage")]
+                    : await CheckDnsRecordAsync(hostname, pipelineEndpoint);
+                failures += RenderChecks(dnsChecks);
+
+                var endpointChecks = await CheckPublicEndpointAsync(hostname);
+                failures += RenderChecks(endpointChecks);
+            }
+
+            AnsiConsole.WriteLine();
+        }
+
+        if (failures > 0)
+        {
+            AnsiConsole.MarkupLine($"[red]{failures} check(s) failed.[/]");
+            Environment.Exit(1);
+        }
+
+        AnsiConsole.MarkupLine("[green]All edge health checks passed.[/]");
+    }
+
+    // The listing carries each pipeline's status and errors, so no per-pipeline read is needed.
+    private static (string Check, bool Passed, string Detail) PipelineStatusCheck(ScwEdge.Pipeline pipeline)
+    {
+        var messages = pipeline.Errors is { Count: > 0 }
+            ? string.Join("; ", pipeline.Errors.Select(error => $"{error.Code}: {error.Message}"))
+            : null;
+
+        if (pipeline.Status != ScwEdge.PipelineStatus.Ready)
+        {
+            return ("pipeline status", false, messages is null ? $"status is '{pipeline.Status}', expected 'ready'" : $"status is '{pipeline.Status}', expected 'ready' ({messages})");
+        }
+
+        return messages is null
+            ? ("pipeline status", true, "ready, no errors")
+            : ("pipeline status", false, $"status ready but has errors: {messages}");
+    }
+
+    private static async Task<PipelineStages> ListStagesAsync(ScwEdge.EdgeServicesApi edgeServices, string pipelineId)
+    {
+        return new PipelineStages(
+            await edgeServices.ListDnsStagesAsync(pipelineId),
+            await edgeServices.ListTlsStagesAsync(pipelineId),
+            (await edgeServices.ListCacheStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            (await edgeServices.ListWafStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            (await edgeServices.ListBackendStagesAsync(pipelineId)).Select(stage => stage.Status).ToList(),
+            await edgeServices.ListHeadStagesAsync(pipelineId)
+        );
+    }
+
+    /// <summary>
+    ///     A missing head stage leaves every stage inactive with no other error anywhere (found live:
+    ///     the pipeline reads "error: pipeline_missing_head_stage" while all stages claim green in
+    ///     their own listings) — this is the one check neither Terraform nor the deploy provides.
+    /// </summary>
+    private static (string Check, bool Passed, string Detail) HeadStageCheck(PipelineStages stages)
+    {
+        if (stages.HeadStages.Count == 0)
+        {
+            return ("head stage", false, "no head stage — the pipeline has no entry point and will not serve");
+        }
+
+        var headDnsStageId = stages.HeadStages[0].DnsStageId;
+        var headExists = stages.DnsStages.Any(stage => stage.Id == headDnsStageId);
+        return headExists
+            ? ("head stage", true, $"head points at DNS stage {headDnsStageId?[..8]}")
+            : ("head stage", false, $"head points at DNS stage '{headDnsStageId}' which does not exist (stale head)");
+    }
+
+    /// <summary>
+    ///     The DNS stages carrying the hostnames a pipeline serves, found by their FQDNs rather than their type.
+    ///     Scaleway reports such a stage as <c>custom</c> only once it has verified the hostname's CNAME, and it
+    ///     never verifies again after a failed check (found live: a stage created while its record was being
+    ///     changed stayed <c>auto</c>, with the pipeline in <c>dns_cname_resolve</c>, long after the CNAME was
+    ///     correct). Selecting by type would skip that hostname's DNS, certificate and endpoint checks silently.
+    /// </summary>
+    private static List<ScwEdge.DNSStage> HostnameStages(IEnumerable<ScwEdge.DNSStage> dnsStages)
+    {
+        return dnsStages.Where(stage => stage.Fqdns is { Length: > 0 }).ToList();
+    }
+
+    private static IEnumerable<(string Check, bool Passed, string Detail)> StageChecks(PipelineStages stages)
+    {
+        // DNS: the hostname stage carries the FQDNs this pipeline serves; it must be active and verified.
+        var hostnameStages = HostnameStages(stages.DnsStages);
+        if (hostnameStages.Count == 0)
+        {
+            yield return ("dns stage", false, "no DNS stage carries a hostname");
+        }
+        else
+        {
+            var fqdns = hostnameStages.SelectMany(stage => stage.Fqdns ?? []).ToList();
+            var active = hostnameStages.All(stage => stage.Status == ScwEdge.StageStatus.Active);
+            var unverified = hostnameStages.Where(stage => stage.Type != ScwEdge.DNSStageType.Custom).ToList();
+            if (!active)
+            {
+                yield return ("dns stage", false, $"status '{string.Join(",", hostnameStages.Select(stage => stage.Status))}', fqdns: [{string.Join(", ", fqdns)}]");
+            }
+            else if (unverified.Count > 0)
+            {
+                yield return ("dns stage", false, $"serving {string.Join(", ", fqdns)}, but Scaleway has not verified the CNAME (stage type '{unverified[0].Type}', expected 'custom'); it does not check again on its own");
+            }
+            else
+            {
+                yield return ("dns stage", true, $"active, serving {string.Join(", ", fqdns)}");
+            }
+        }
+
+        // TLS: active is not enough — the managed certificate must have materialized as a secret
+        // reference. Issuance failures (found live: "tls_managed_internal") leave the stage active
+        // with no secret, and the pipeline then serves no certificate for the custom hostnames.
+        var tls = stages.TlsStages.FirstOrDefault();
+        if (tls is null)
+        {
+            yield return ("tls stage", false, "no TLS stage");
+        }
+        else
+        {
+            var secretCount = tls.Secrets?.Count ?? 0;
+            yield return tls.Status == ScwEdge.StageStatus.Active && secretCount > 0
+                ? ("tls stage", true, $"active, certificate materialized ({secretCount} secret(s))")
+                : ("tls stage", false, $"status '{tls.Status}', certificate secrets: {secretCount} (managed certificate did not issue)");
+        }
+
+        foreach (var (name, statuses) in new[] { ("cache stage", stages.CacheStageStatuses), ("waf stage", stages.WafStageStatuses), ("backend stage", stages.BackendStageStatuses) })
+        {
+            if (statuses.Count == 0)
+            {
+                yield return (name, false, $"no {name.Split(' ')[0]} stage");
+                continue;
+            }
+
+            var status = statuses[0];
+            yield return status == ScwEdge.StageStatus.Active
+                ? (name, true, "active")
+                : (name, false, $"status '{status}'");
+        }
+    }
+
+    /// <summary>
+    ///     Verifies that the public hostname's CNAME points at the pipeline's current endpoint. A
+    ///     recreated pipeline gets a new &lt;id&gt;.svc.edge.scw.cloud endpoint, and every DNS record still
+    ///     pointing at the old one silently serves nothing — the edge API has no stable alias, so this
+    ///     drift must be caught on the DNS side.
+    /// </summary>
+    private static async Task<List<(string Check, bool Passed, string Detail)>> CheckDnsRecordAsync(string hostname, string endpoint)
+    {
+        var checks = new List<(string Check, bool Passed, string Detail)>();
+
+        var cnames = await PublicDns.ResolveAsync("CNAME", hostname);
+        if (cnames is null)
+        {
+            checks.Add(("dns record", false, "CNAME lookup failed: the public resolver did not answer"));
+            return checks;
+        }
+
+        var cname = cnames.FirstOrDefault()?.TrimEnd('.');
+        if (string.IsNullOrWhiteSpace(cname))
+        {
+            checks.Add(("dns record", false, $"no CNAME record for {hostname} — point it at {endpoint}"));
+            return checks;
+        }
+
+        checks.Add(string.Equals(cname, endpoint.TrimEnd('.'), StringComparison.OrdinalIgnoreCase)
+            ? ("dns record", true, $"CNAME points at the pipeline endpoint ({endpoint})")
+            : ("dns record", false, $"CNAME points at {cname} but the pipeline endpoint is {endpoint} — the pipeline was recreated; update the DNS record")
+        );
+
+        return checks;
+    }
+
+    private static async Task<List<(string Check, bool Passed, string Detail)>> CheckPublicEndpointAsync(string hostname)
+    {
+        var checks = new List<(string Check, bool Passed, string Detail)>();
+
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(hostname);
+            checks.Add(("dns", true, $"resolves to {string.Join(", ", addresses.Select(address => address.ToString()))}"));
+        }
+        catch (Exception exception)
+        {
+            checks.Add(("dns", false, exception.Message));
+            return checks;
+        }
+
+        // Connect and inspect the certificate the endpoint actually serves, without trusting it
+        // yet — the details (SAN match, expiry) are reported as checks themselves.
+        try
+        {
+            using var tcpClient = new TcpClient(hostname, 443);
+            await using var sslStream = new SslStream(tcpClient.GetStream(), false,
+                static (_, _, _, _) => true
+            );
+            await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                {
+                    TargetHost = hostname,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                }
+            );
+
+            var certificate = new X509Certificate2(sslStream.RemoteCertificate!);
+            var subjectMatches = CertificateMatchesHostname(certificate, hostname);
+            var daysLeft = (certificate.NotAfter - DateTime.UtcNow).TotalDays;
+            checks.Add(subjectMatches
+                ? ("certificate", true, $"issued for {hostname}, expires in {daysLeft:F0} day(s)")
+                : ("certificate", false, $"serves certificate for '{certificate.Subject}', which does not cover {hostname}")
+            );
+            checks.Add(daysLeft >= MinimumDaysBeforeCertificateExpiry
+                ? ("certificate expiry", true, $"{daysLeft:F0} day(s) left")
+                : ("certificate expiry", false, $"only {daysLeft:F0} day(s) left (threshold {MinimumDaysBeforeCertificateExpiry}) — the managed renewal has not happened; check that the CNAME still points at the pipeline and the TLS stage's errors in the Scaleway console")
+            );
+        }
+        catch (Exception exception)
+        {
+            checks.Add(("certificate", false, $"TLS handshake failed: {exception.Message}"));
+            return checks;
+        }
+
+        try
+        {
+            using var response = await EndpointHttpClient.GetAsync($"https://{hostname}/");
+            checks.Add(response.IsSuccessStatusCode || (int)response.StatusCode < 500
+                ? ("endpoint", true, $"HTTPS {(int)response.StatusCode} {response.ReasonPhrase}")
+                : ("endpoint", false, $"HTTPS {(int)response.StatusCode} {response.ReasonPhrase}")
+            );
+        }
+        catch (Exception exception)
+        {
+            checks.Add(("endpoint", false, exception.Message));
+        }
+
+        return checks;
+    }
+
+    private static bool CertificateMatchesHostname(X509Certificate2 certificate, string hostname)
+    {
+        var commonName = certificate.GetNameInfo(X509NameType.SimpleName, false);
+        if (string.Equals(commonName, hostname, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var sanExtension = certificate.Extensions.FirstOrDefault(extension => extension.Oid?.Value == "2.5.29.17");
+        if (sanExtension is null)
+        {
+            return false;
+        }
+
+        var sequence = new AsnReader(sanExtension.RawData, AsnEncodingRules.DER).ReadSequence();
+        while (sequence.HasData)
+        {
+            // GeneralName [2] dNSName is a context-specific primitive tag holding an IA5String.
+            if (sequence.PeekTag() is { TagClass: TagClass.ContextSpecific, TagValue: 2 } dnsNameTag)
+            {
+                var name = sequence.ReadCharacterString(UniversalTagNumber.IA5String, dnsNameTag);
+                if (string.Equals(name, hostname, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                sequence.ReadEncodedValue();
+            }
+        }
+
+        return false;
+    }
+
+    private static int RenderChecks(IEnumerable<(string Check, bool Passed, string Detail)> checks)
+    {
+        var failures = 0;
+        foreach (var (check, passed, detail) in checks)
+        {
+            AnsiConsole.MarkupLine($"  {(passed ? "[green]✓[/]" : "[red]✗[/]")} [bold]{check,-12}[/] {detail.EscapeMarkup()}");
+            if (!passed)
+            {
+                failures++;
+            }
+        }
+
+        return failures;
+    }
+
+    private sealed record PipelineStages(
+        IReadOnlyList<ScwEdge.DNSStage> DnsStages,
+        IReadOnlyList<ScwEdge.TLSStage> TlsStages,
+        List<ScwEdge.StageStatus?> CacheStageStatuses,
+        List<ScwEdge.StageStatus?> WafStageStatuses,
+        List<ScwEdge.StageStatus?> BackendStageStatuses,
+        IReadOnlyList<ScwEdge.ListHeadStagesResponseHeadStage> HeadStages
+    );
+}

@@ -146,6 +146,32 @@ public static class ProcessHelper
         params (string Name, string Value)[] environmentVariables
     )
     {
+        var (exitCode, stdout, stderr) = await CaptureOutputAsync(command, workingDirectory, environmentVariables);
+
+        // Save full output to temp file
+        var tempFile = Path.Combine(TempOutputDirectory, $"{Guid.NewGuid()}.log");
+        var fullOutput = $"Command: {command}\nWorking Directory: {workingDirectory ?? "N/A"}\nExit Code: {exitCode}\n\n=== STDOUT ===\n{stdout}\n\n=== STDERR ===\n{stderr}";
+        await File.WriteAllTextAsync(tempFile, fullOutput);
+
+        return new ProcessResult(exitCode, stdout, stderr, tempFile);
+    }
+
+    /// <summary>
+    ///     Executes a command whose output carries secrets (a kubeconfig, API keys) and captures it
+    ///     in memory only: unlike ExecuteQuietlyAsync, nothing is written to the temp log directory.
+    /// </summary>
+    public static async Task<ProcessResult> ExecuteSensitiveAsync(string command, string? workingDirectory = null)
+    {
+        var (exitCode, stdout, stderr) = await CaptureOutputAsync(command, workingDirectory, []);
+        return new ProcessResult(exitCode, stdout, stderr, null);
+    }
+
+    private static async Task<(int ExitCode, string StdOut, string StdErr)> CaptureOutputAsync(
+        string command,
+        string? workingDirectory,
+        (string Name, string Value)[] environmentVariables
+    )
+    {
         var processStartInfo = CreateProcessStartInfo(command, workingDirectory, true);
         processStartInfo.RedirectStandardOutput = true;
         processStartInfo.RedirectStandardError = true;
@@ -166,15 +192,7 @@ public static class ProcessHelper
         // Ensure async stream reads complete (WaitForExit can return before streams finish)
         var results = await Task.WhenAll(stdoutTask, stderrTask);
 
-        var stdout = results[0];
-        var stderr = results[1];
-
-        // Save full output to temp file
-        var tempFile = Path.Combine(TempOutputDirectory, $"{Guid.NewGuid()}.log");
-        var fullOutput = $"Command: {command}\nWorking Directory: {workingDirectory ?? "N/A"}\nExit Code: {process.ExitCode}\n\n=== STDOUT ===\n{stdout}\n\n=== STDERR ===\n{stderr}";
-        await File.WriteAllTextAsync(tempFile, fullOutput);
-
-        return new ProcessResult(process.ExitCode, stdout, stderr, tempFile);
+        return (process.ExitCode, results[0], results[1]);
     }
 
     public static string StartProcess(
@@ -290,13 +308,14 @@ public sealed class ProcessExecutionException(int exitCode, string message)
     public int ExitCode { get; } = exitCode;
 }
 
-public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr, string TempFilePath)
+// TempFilePath is null for sensitive commands, whose output is never written to disk.
+public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr, string? TempFilePath)
 {
     public bool Success => ExitCode == 0;
 
     public string CombinedOutput => $"{StdOut}\n{StdErr}";
 
-    public string TempFilePathWithSize => $"{TempFilePath} ({ProcessHelper.FormatFileSize(TempFilePath)})";
+    public string TempFilePathWithSize => TempFilePath is null ? "not saved (sensitive output)" : $"{TempFilePath} ({ProcessHelper.FormatFileSize(TempFilePath)})";
 
     public string GetErrorSummary(string operation)
     {
@@ -317,6 +336,8 @@ public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr, s
         if (errorLines.Length > 3)
         {
             outputBuilder.Append("  ... and ").Append(errorLines.Length - 3).AppendLine(" more lines");
+            if (TempFilePath is null) return outputBuilder.ToString();
+
             outputBuilder.AppendLine();
             outputBuilder.Append("Full output: ").Append(TempFilePath).Append(" (").Append(ProcessHelper.FormatFileSize(TempFilePath)).Append(')');
         }

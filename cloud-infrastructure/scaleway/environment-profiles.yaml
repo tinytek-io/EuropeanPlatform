@@ -1,0 +1,106 @@
+# The platform team's sizing matrix: how each environment type meets what the self-contained systems ask for.
+#
+# Application teams never set these values. A system declares only its workloads' usage class (the options of
+# AddSelfContainedSystem in the AppHost; `standard` unless it differs from its role's norm), and an environment's tier
+# file declares only its environment type. Terraform reads `infrastructure` for the environment's type; the
+# Aspire.Hosting.EuropeanPlatform SDK reads `workloads`. Both validate this file and fail on a missing type, role,
+# class or setting, so a gap surfaces at plan or publish time rather than as a half-sized environment.
+#
+# Environment types are named by purpose and fixed per environment: the environment module refuses to change an
+# existing environment's type. Classes are named by how a workload behaves, never by hardware, so each environment
+# type can meet the same class differently.
+#
+# review, test and staging are deliberately as small as the platform runs on for now. production is a starting
+# point to tune from measurements once a production environment exists; it has not been deployed.
+
+infrastructure:
+  review:
+    cluster:
+      nodeType: PLAY2-NANO
+      nodeCount: 1
+    database:
+      nodeType: db-dev-s
+      highAvailability: false
+      backupFrequencyHours: 24
+      backupRetentionDays: 7
+    network:
+      loadBalancerType: lb-s
+      natGatewayType: VPC-GW-S
+    storage:
+      blobVersioning: false
+  test:
+    cluster:
+      nodeType: PLAY2-NANO
+      nodeCount: 1
+    database:
+      nodeType: db-dev-s
+      highAvailability: false
+      backupFrequencyHours: 24
+      backupRetentionDays: 7
+    network:
+      loadBalancerType: lb-s
+      natGatewayType: VPC-GW-S
+    storage:
+      blobVersioning: false
+  staging:
+    cluster:
+      nodeType: PLAY2-NANO
+      nodeCount: 1 # A node replacement or upgrade briefly interrupts the environment
+    database:
+      nodeType: db-dev-s # No SLA
+      highAvailability: false
+      backupFrequencyHours: 24
+      backupRetentionDays: 7
+    network:
+      loadBalancerType: lb-s
+      natGatewayType: VPC-GW-S
+    storage:
+      blobVersioning: false
+  production:
+    cluster:
+      nodeType: PRO2-XXS
+      nodeCount: 2 # Workloads stay up while Kapsule drains a node for an upgrade or host maintenance
+    database:
+      nodeType: db-pro2-xxs
+      highAvailability: true # A standby node takes over when the primary's host fails
+      backupFrequencyHours: 24
+      backupRetentionDays: 30
+    network:
+      loadBalancerType: lb-s # Size up once production traffic is measured
+      natGatewayType: VPC-GW-S
+    storage:
+      blobVersioning: true # Keeps overwritten and deleted user uploads recoverable; it can be suspended, never removed
+
+# Per role, per usage class, per environment type. Memory is a Kubernetes request and limit: requests stay low on the
+# small types so a rollout's replacement pods, started before the old ones stop, fit beside them on one node.
+# Replicas apply to the long-running roles; a migrator runs once per deploy as a Job.
+workloads:
+  api:
+    standard:
+      review: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 384Mi }
+      test: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 384Mi }
+      staging: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 384Mi }
+      production: { replicas: 2, memoryRequest: 192Mi, memoryLimit: 384Mi }
+    memory-intensive:
+      review: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 512Mi }
+      test: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 512Mi }
+      staging: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 512Mi }
+      production: { replicas: 2, memoryRequest: 256Mi, memoryLimit: 512Mi }
+  workers:
+    standard:
+      review: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      test: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      staging: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      production: { replicas: 1, memoryRequest: 128Mi, memoryLimit: 256Mi }
+  gateway:
+    standard:
+      review: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      test: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      staging: { replicas: 1, memoryRequest: 96Mi, memoryLimit: 256Mi }
+      production: { replicas: 2, memoryRequest: 128Mi, memoryLimit: 256Mi }
+  migrator:
+    standard:
+      review: { memoryRequest: 96Mi, memoryLimit: 384Mi }
+      test: { memoryRequest: 96Mi, memoryLimit: 384Mi }
+      staging: { memoryRequest: 96Mi, memoryLimit: 384Mi }
+      production: { memoryRequest: 128Mi, memoryLimit: 384Mi }
