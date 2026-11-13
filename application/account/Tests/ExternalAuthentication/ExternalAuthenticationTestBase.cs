@@ -34,9 +34,9 @@ public abstract class ExternalAuthenticationTestBase : IDisposable
     // SinglePageAppConfiguration only consumes this as a URI.
     protected const string PublicUrl = "https://localhost";
     protected readonly Faker Faker = new();
+    protected readonly TelemetryEventsCollectorSpy TelemetryEventsCollectorSpy;
     protected readonly TimeProvider TimeProvider;
     private readonly WebApplicationFactory<Program> _webApplicationFactory;
-    protected readonly TelemetryEventsCollectorSpy TelemetryEventsCollectorSpy;
 
     protected ExternalAuthenticationTestBase()
     {

@@ -167,9 +167,11 @@ builder
             // Replace the auto-published "https" endpoint URL with three explicit dashboard URLs.
             // DisplayOrder: higher values sort higher in the list (Web App > Back Office > Open API).
             context.Urls.Clear();
+#pragma warning disable CS0618 // DisplayOrder is a field until a future Aspire version re-adds it as a property
             context.Urls.Add(new ResourceUrlAnnotation { Url = appBaseUrl, DisplayText = "Web App", DisplayOrder = 300 });
             context.Urls.Add(new ResourceUrlAnnotation { Url = backOfficeBaseUrl, DisplayText = "Back Office", DisplayOrder = 200 });
             context.Urls.Add(new ResourceUrlAnnotation { Url = $"{appBaseUrl}/openapi", DisplayText = "Open API", DisplayOrder = 100 });
+#pragma warning restore CS0618
         }
     );
 
