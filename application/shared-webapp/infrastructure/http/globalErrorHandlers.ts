@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 
-import { applicationInsights } from "../applicationInsights/ApplicationInsightsProvider";
+import { trackException } from "../telemetry/TelemetryProvider";
 import { showErrorToast } from "./errorHandler";
 
 const DEFAULT_TOAST_DURATIONS = {
@@ -8,7 +8,7 @@ const DEFAULT_TOAST_DURATIONS = {
 } as const;
 
 function showUnknownErrorToast(error: Error) {
-  applicationInsights.trackException({ exception: error });
+  trackException(error);
 
   toast.error("Unknown Error", {
     description: `An unknown error occurred (${error})`,

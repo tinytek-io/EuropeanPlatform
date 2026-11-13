@@ -1,8 +1,5 @@
 using Account.Database;
 using Account.Integrations.Stripe;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -13,7 +10,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NSubstitute;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
@@ -37,10 +33,6 @@ public class AccountWebApplicationFactory : WebApplicationFactory<Program>
     {
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, TestPublicUrl);
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, $"{TestPublicUrl}/account");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         Environment.SetEnvironmentVariable("Stripe__AllowMockProvider", "true");
         Environment.SetEnvironmentVariable("Stripe__PublishableKey", "pk_test_mock_publishable_key");
         // ASP.NET uses a cryptographic double-submit antiforgery pattern that encrypts the user's
@@ -109,7 +101,6 @@ public class AccountWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(services.Single(d => d.ServiceType == typeof(IEmailClient)));
                 services.AddTransient<IEmailClient>(_ => CurrentContext.EmailClient);
 
-                services.AddSingleton(new TelemetryClient(new TelemetryConfiguration { TelemetryChannel = Substitute.For<ITelemetryChannel>() }));
                 services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
                 ConfigureAdditionalTestServices(services);

@@ -23,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder
     .AddApiInfrastructure()
     .AddDevelopmentPort()
+    .AddInternalTls()
     .AddAccountInfrastructure();
 
 // Configure dependency injection services like Repositories, MediatR, Pipelines, FluentValidation validators, etc.
@@ -61,12 +62,12 @@ var runtimeEnvironment = new Dictionary<string, string>
     ["PUBLIC_SUBSCRIPTION_ENABLED"] = Environment.GetEnvironmentVariable("PUBLIC_SUBSCRIPTION_ENABLED") ?? "false"
 };
 
-// The /login picker is the dev-only MockEasyAuth identity selector. In Azure-deployed instances the
+// The /login picker is the dev-only MockEasyAuth identity selector. In deployed environments the
 // path must not be reachable: it is removed from the auth-gate exemption list (so the back-office
 // authorize policy applies) and short-circuited to 401 below to reject even authenticated requests.
-string[] backOfficeUnauthenticatedPaths = SharedInfrastructureConfiguration.IsRunningInAzure ? [] : ["/login"];
+string[] backOfficeUnauthenticatedPaths = SharedInfrastructureConfiguration.IsRunningInCloud ? [] : ["/login"];
 
-if (SharedInfrastructureConfiguration.IsRunningInAzure)
+if (SharedInfrastructureConfiguration.IsRunningInCloud)
 {
     app.MapGet("/login", Results.Unauthorized).RequireHost(backOfficeHostname);
 }
@@ -82,15 +83,17 @@ app.UseApiServices(); // Add common configuration for all APIs like Swagger, HST
 // that AppGateway proxies on the user-facing host must be served here directly from blob storage.
 app.MapBackOfficeBlobProxy(backOfficeHostname);
 
-if (SharedInfrastructureConfiguration.IsRunningInAzure)
+if (SharedInfrastructureConfiguration.IsRunningInCloud)
 {
-    // Production: same image runs in two ACA container apps. The back-office one carries an explicit
-    // env var; account-api does not. Each registers only the SPA it serves, so endpoint matching does
-    // not depend on Request.Host being correctly rewritten from X-Forwarded-Host through the ACA mesh.
+    // Deployed: each workload registers only the SPA it serves, so endpoint matching does not depend
+    // on Request.Host being correctly rewritten from X-Forwarded-Host. The account-api workload
+    // serves the account SPA; the back-office SPA is served only where BackOffice:IsBackOfficeContainer
+    // is set, and no deployed environment routes the back-office hostname to account-api: deployed,
+    // nothing signs staff in, so the back-office stays local-only.
     var isBackOfficeContainer = app.Configuration.GetValue("BackOffice:IsBackOfficeContainer", false);
 
     // Email *.preview.* artifacts are reachable only on the back-office container -- the email
-    // preview page that consumes them is back-office-only and Easy Auth gates the whole host.
+    // preview page that consumes them is back-office-only and the staff sign-in gates the whole host.
     // `appPublicUrl` resolves {{PublicUrl}} in served previews so their assets load from the
     // public app host.
     app.UseEmailStaticFiles("WebApp", isBackOfficeContainer, appPublicUrl);

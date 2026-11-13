@@ -5,7 +5,6 @@ using Account.Features.FeatureFlags.Shared;
 using Account.Features.Subscriptions.Domain;
 using Account.Features.Tenants.Domain;
 using Account.Integrations.Stripe;
-using Microsoft.ApplicationInsights;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Telemetry;
 
@@ -31,8 +30,8 @@ public sealed class ProcessPendingStripeEvents(
     StripeClientFactory stripeClientFactory,
     TimeProvider timeProvider,
     ITelemetryEventsCollector events,
-    PlanBasedFeatureFlagEvaluator planBasedFeatureFlagEvaluator,
     TelemetryClient telemetryClient,
+    PlanBasedFeatureFlagEvaluator planBasedFeatureFlagEvaluator,
     ILogger<ProcessPendingStripeEvents> logger
 )
 {
@@ -778,7 +777,6 @@ public sealed class ProcessPendingStripeEvents(
         {
             var telemetryEvent = events.Dequeue();
             telemetryClient.TrackEvent(telemetryEvent.GetType().Name, telemetryEvent.Properties);
-            logger.LogInformation("Telemetry: {EventName} {EventProperties}", telemetryEvent.GetType().Name, string.Join(", ", telemetryEvent.Properties.Select(p => $"{p.Key}={p.Value}")));
         }
     }
 

@@ -6,11 +6,11 @@ using Xunit;
 
 namespace Account.Tests.BackOffice;
 
-// Verifies the dev-only /login picker exemption. In tests SharedInfrastructureConfiguration.IsRunningInAzure
-// is false (AZURE_CLIENT_ID is unset), so /login must be reachable on the back-office host without an
+// Verifies the dev-only /login picker exemption. In tests SharedInfrastructureConfiguration.IsRunningInCloud
+// is false (ASPNETCORE_ENVIRONMENT is not Production), so /login must be reachable on the back-office host without an
 // authenticated principal — it serves the SPA shell that hosts the MockEasyAuth identity picker. The
-// Azure branch (empty unauthenticatedPaths + 401 short-circuit) is gated on the static readonly
-// SharedInfrastructureConfiguration.IsRunningInAzure and verified by inspection of Program.cs.
+// deployed branch (empty unauthenticatedPaths + 401 short-circuit) is gated on the static readonly
+// SharedInfrastructureConfiguration.IsRunningInCloud and verified by inspection of Program.cs.
 public sealed class MockLoginRouteTests(BackOfficeWebApplicationFactory factory) : BackOfficeEndpointBaseTest(factory), IClassFixture<BackOfficeWebApplicationFactory>
 {
     [Fact]

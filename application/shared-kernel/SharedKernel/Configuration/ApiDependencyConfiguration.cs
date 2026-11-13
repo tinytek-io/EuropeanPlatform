@@ -3,18 +3,24 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NJsonSchema.Generation;
 using SharedKernel.Antiforgery;
 using SharedKernel.Authentication;
 using SharedKernel.Authentication.BackOfficeIdentity;
 using SharedKernel.Authentication.MockEasyAuth;
+using SharedKernel.Authentication.TokenSigning;
 using SharedKernel.Endpoints;
 using SharedKernel.ExecutionContext;
+using SharedKernel.Integrations.BlobStorage;
 using SharedKernel.Middleware;
 using SharedKernel.OpenApi;
 using SharedKernel.Platform;
@@ -112,6 +118,41 @@ public static class ApiDependencyConfiguration
     {
         public IServiceCollection AddApiServices(Assembly[] assemblies, ApiDocumentLayout documentLayout = ApiDocumentLayout.Single)
         {
+            if (SharedInfrastructureConfiguration.IsRunningInCloud)
+            {
+                // The shared Data Protection keyring, persisted in Object Storage: antiforgery tokens are
+                // minted by the service serving the SPA page (main-api, via the module-federated shell) and
+                // validated by the service the API call targets — every API must share one keyring, and it
+                // must survive restarts and scale-out (found live: per-container ephemeral keys 400ed signup).
+                // Registered here rather than in the shared services: workers neither serve token flows nor
+                // need the repository (found live in the prior deployment: main-workers crash-looped
+                // resolving a blob client it neither has nor needs).
+                // Single-writer ring: one API owns key generation and rotation, every other API consumes the
+                // ring read-only. Keeping generation in one place removes the cold-start race where two APIs
+                // create a first key simultaneously, and narrows which workload can introduce a key the whole
+                // platform then trusts. Today that narrowing is by configuration, not by permission — the
+                // storage identity is still shared across workloads.
+                var ownsKeyRing = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEY_RING_OWNER") == "true";
+                // The keyring is encrypted at rest with a key from Secret Manager: bucket read access alone
+                // must not yield the master keys. Registered as a singleton so the framework-activated
+                // decryptor resolves the same key through the service provider.
+                services.AddSingleton(serviceProvider => DataProtectionEncryptionKey.FromConfiguration(serviceProvider.GetRequiredService<IConfiguration>()));
+                services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(serviceProvider => new ConfigureOptions<KeyManagementOptions>(options =>
+                        {
+                            options.XmlRepository = new BlobStorageDataProtectionRepository(serviceProvider.GetRequiredService<IBlobStorageClient>());
+                            options.XmlEncryptor = new AesGcmXmlEncryptor(serviceProvider.GetRequiredService<DataProtectionEncryptionKey>());
+                            options.AutoGenerateKeys = ownsKeyRing;
+                        }
+                    )
+                );
+
+                if (ownsKeyRing)
+                {
+                    // Create the ring before any request needs it, so the consumers never meet it empty.
+                    services.AddHostedService<DataProtectionKeyRingWarmup>();
+                }
+            }
+
             services
                 .AddApiExecutionContext()
                 .AddExceptionHandler<GlobalExceptionHandler>()
@@ -127,6 +168,10 @@ public static class ApiDependencyConfiguration
                     {
                         options.Cookie.Name = AuthenticationTokenHttpKeys.AntiforgeryTokenCookieName;
                         options.HeaderName = AuthenticationTokenHttpKeys.AntiforgeryTokenHttpHeaderKey;
+                        // The __Host- prefix requires the Secure attribute on every response; the
+                        // framework default (None) strips it when the request reaches Kestrel as
+                        // plain HTTP behind the gateway, producing a cookie browsers reject.
+                        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                     }
                 )
                 .AddHttpForwardHeaders();
@@ -275,6 +320,10 @@ public static class ApiDependencyConfiguration
 
         private IServiceCollection AddAuthConfiguration()
         {
+            // The JWT bearer validation parameters come from ITokenSigningClient, which reads the
+            // signing key from configuration (Scaleway Secret Manager in deployed workloads).
+            services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureJwtBearerOptions>();
+
             // Add Authentication and Authorization services
             services
                 .AddAuthentication(options =>
@@ -284,15 +333,7 @@ public static class ApiDependencyConfiguration
                         options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
                     }
                 )
-                .AddJwtBearer(o =>
-                    {
-                        var tokenSigningService = SharedDependencyConfiguration.GetTokenSigningService();
-                        o.TokenValidationParameters = tokenSigningService.GetTokenValidationParameters(
-                            validateLifetime: true,
-                            clockSkew: TimeSpan.FromSeconds(5) // In Azure, we don't need any clock skew, but this must be a higher value than the AppGateway
-                        );
-                    }
-                )
+                .AddJwtBearer()
                 .AddScheme<AuthenticationSchemeOptions, BackOfficeIdentityHandler>(BackOfficeIdentityDefaults.AuthenticationScheme, _ => { });
 
             services.AddSingleton<IAuthorizationHandler, BackOfficeAdminAuthorizationHandler>();
@@ -319,12 +360,12 @@ public static class ApiDependencyConfiguration
         public IServiceCollection AddHttpForwardHeaders()
         {
             // Ensure correct client IP addresses are set for requests
-            // This is required when running behind a reverse proxy like YARP or Azure Container Apps
+            // This is required when running behind a reverse proxy like YARP or the cluster's ingress
             return services.Configure<ForwardedHeadersOptions>(options =>
                 {
-                    // X-Forwarded-For surfaces real upstream client IPs in Application Insights / logs.
+                    // X-Forwarded-For surfaces real upstream client IPs in telemetry and logs.
                     // X-Forwarded-Proto sets Request.Scheme so generated absolute URLs use https.
-                    // X-Forwarded-Host is intentionally NOT enabled: each Azure container app
+                    // X-Forwarded-Host is intentionally NOT enabled: each deployed workload
                     // registers only the SPA it serves (see Account.Api Program.cs), so endpoint
                     // matching no longer depends on Request.Host being rewritten from forwarded
                     // headers, and dev's dual-Kestrel setup delivers the right Host directly.
@@ -346,5 +387,33 @@ public static class ApiDependencyConfiguration
                 }
             );
         }
+    }
+}
+
+/// <summary>
+///     Wires the token signing validation parameters into JWT bearer authentication. Registered as
+///     IConfigureNamedOptions: plain IConfigureOptions&lt;T&gt; only runs for the default options name,
+///     while JwtBearer builds the named "Bearer" instance — a nameless configurator never runs
+///     (found live: every authenticated request answered 401).
+/// </summary>
+public sealed class ConfigureJwtBearerOptions(ITokenSigningClient tokenSigningClient)
+    : IConfigureNamedOptions<JwtBearerOptions>
+{
+    public void Configure(string? name, JwtBearerOptions options)
+    {
+        if (name != JwtBearerDefaults.AuthenticationScheme)
+        {
+            return;
+        }
+
+        options.TokenValidationParameters = tokenSigningClient.GetTokenValidationParameters(
+            validateLifetime: true,
+            clockSkew: TimeSpan.FromSeconds(5) // No clock skew needed between workloads in one cluster, but this must be a higher value than the AppGateway
+        );
+    }
+
+    public void Configure(JwtBearerOptions options)
+    {
+        Configure(Options.DefaultName, options);
     }
 }

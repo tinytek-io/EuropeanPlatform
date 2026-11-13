@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
 import { signUpPath } from "@repo/infrastructure/auth/constants";
 import { isValidReturnPath } from "@repo/infrastructure/auth/util";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
 

@@ -42,10 +42,6 @@ public abstract class ExternalAuthenticationTestBase : IDisposable
     {
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.PublicUrlKey, PublicUrl);
         Environment.SetEnvironmentVariable(SinglePageAppConfiguration.CdnUrlKey, $"{PublicUrl}/account");
-        Environment.SetEnvironmentVariable(
-            "APPLICATIONINSIGHTS_CONNECTION_STRING",
-            "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://localhost;LiveEndpoint=https://localhost"
-        );
         Environment.SetEnvironmentVariable("BypassAntiforgeryValidation", "true");
 
         TimeProvider = TimeProvider.System;

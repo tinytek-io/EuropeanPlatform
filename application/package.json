@@ -26,8 +26,6 @@
     "@lingui/babel-plugin-lingui-macro": "6.4.0",
     "@lingui/core": "6.4.0",
     "@lingui/react": "6.4.0",
-    "@microsoft/applicationinsights-react-js": "19.4.0",
-    "@microsoft/applicationinsights-web": "3.4.2",
     "@module-federation/runtime-tools": "2.5.1",
     "@stripe/react-stripe-js": "6.6.0",
     "@stripe/stripe-js": "9.8.0",

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
 using AppHost;
-using Azure.Storage.Blobs;
 using Projects;
 using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Configuration;
@@ -44,23 +43,22 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword, port:
     .WithLifetime(ContainerLifetime.Persistent)
     .WithArgs("-c", "wal_level=logical");
 
-var azureStorage = builder
-    .AddAzureStorage("azure-storage")
-    .RunAsEmulator(resourceBuilder =>
-        {
-            resourceBuilder.WithDataVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-azure-storage-data");
-            resourceBuilder.WithBlobPort(ports.Blob);
-            resourceBuilder.WithLifetime(ContainerLifetime.Persistent);
-        }
-    )
-    .WithAnnotation(new ContainerImageAnnotation
-        {
-            Registry = "mcr.microsoft.com",
-            Image = "azure-storage/azurite",
-            Tag = "latest"
-        }
-    )
-    .AddBlobs("blob-storage");
+// S3-compatible object storage, the local stand-in for Scaleway Object Storage. Fixed credentials, safe for a
+// local-only emulator: SeaweedFS's default IAM accepts any, so they only keep the connection string's shape identical
+// to the deployed one. Buckets are created lazily by the S3 client on first use, and the S3 gateway runs on the
+// container's 8333 so the default `weed server` ports stay free.
+builder
+    .AddContainer("seaweedfs", "chrislusf/seaweedfs:latest")
+    .WithHttpEndpoint(ports.Blob, 8333)
+    .WithArgs("server", "-dir=/data", "-s3", "-s3.port=8333")
+    .WithVolume($"{dockerVolumePrefix}{ports.VolumeNameInfix}-seaweed-data", "/data")
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithUrlForEndpoint("http", url => url.DisplayText = "Object storage (SeaweedFS)");
+
+// AddConnectionString reads its value from ConnectionStrings:{name} (its optional second argument is the environment
+// variable name), so set this worktree's object storage port in configuration first.
+builder.Configuration["ConnectionStrings:blob-storage"] = $"ServiceUrl=http://localhost:{ports.Blob};AccessKey=seaweed-admin;SecretKey=seaweed-admin;ForcePathStyle=true;Region=fr-par";
+var blobStorage = builder.AddConnectionString("blob-storage");
 
 builder
     .AddContainer("mail-server", "axllent/mailpit")
@@ -68,9 +66,6 @@ builder
     .WithEndpoint(ports.MailpitSmtp, 1025)
     .WithLifetime(ContainerLifetime.Persistent)
     .WithUrlForEndpoint("http", u => u.DisplayText = "Read mail here");
-
-CreateBlobContainer("avatars");
-CreateBlobContainer("logos");
 
 var frontendBuild = builder
     .AddJavaScriptApp("frontend-build", "../")
@@ -86,7 +81,7 @@ var accountWorkers = builder
     .AddProject<Account_Workers>("account-workers")
     .WithEnvironment("KESTREL_PORT", ports.AccountWorkers.ToString())
     .WithReference(accountDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     // The BillingDriftWorker resolves StripeClientFactory which reads these. Without them the worker
     // process sees UnconfiguredStripeClient even when Stripe is configured at the API level, and every
     // stale subscription logs a warn + fail line through ProcessPendingStripeEvents on every worker start.
@@ -118,7 +113,7 @@ var accountApi = builder
     .WithEnvironment("BackOffice__Host", backOfficeHostname)
     .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
     .WithReference(accountDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
     .WithEnvironment("OAuth__Google__ClientSecret", googleOAuthClientSecret)
     .WithEnvironment("OAuth__AllowMockProvider", "true")
@@ -140,7 +135,7 @@ var mainWorkers = builder
     .AddProject<Main_Workers>("main-workers")
     .WithEnvironment("KESTREL_PORT", ports.MainWorkers.ToString())
     .WithReference(mainDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WaitFor(mainDatabase);
 
 var mainApi = builder
@@ -148,7 +143,7 @@ var mainApi = builder
     .WithEnvironment("KESTREL_PORT", ports.MainApi.ToString())
     .WithUrlConfiguration(appHostname, ports.AppGateway, "")
     .WithReference(mainDatabase)
-    .WithReference(azureStorage)
+    .WithReference(blobStorage)
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", stripeFullyConfigured ? "true" : "false")
     .WaitFor(mainWorkers);
@@ -295,23 +290,6 @@ void AddStripeCliContainer()
         builder.CreateResourceBuilder(new ParameterResource("stripe-api-key", _ => "not-configured", true)),
         builder.CreateResourceBuilder(new ParameterResource("stripe-webhook-secret", _ => "not-configured", true))
     );
-}
-
-void CreateBlobContainer(string containerName)
-{
-    // Build the Azurite connection string dynamically from the actual blob port so this works on
-    // any base port (parallel stacks from git worktrees rely on this). The default development
-    // account key is the well-known Azurite credential and is safe to keep in source.
-    var connectionString =
-        $"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:{ports.Blob}/devstoreaccount1";
-
-    new Task(() =>
-        {
-            var blobServiceClient = new BlobServiceClient(connectionString);
-            var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
-            containerClient.CreateIfNotExists();
-        }
-    ).Start();
 }
 
 void OverrideAspireDashboardEnvironmentVariables(PortAllocation portAllocation)

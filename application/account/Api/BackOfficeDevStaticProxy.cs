@@ -6,10 +6,10 @@ using Yarp.ReverseProxy.Forwarder;
 
 namespace Account.Api;
 
-// Non-Azure proxy that forwards back-office static-asset and HMR traffic from the back-office Kestrel
-// listener (BACK_OFFICE_KESTREL_PORT) to the rsbuild dev server (BACK_OFFICE_STATIC_PORT). Azure
-// deployments bake the bundle into BackOffice/dist and serve it via UseStaticFiles, so this
-// proxy is registered only outside Azure. The proxy must run before authentication so anonymous
+// Local-development proxy that forwards back-office static-asset and HMR traffic from the back-office Kestrel
+// listener (BACK_OFFICE_KESTREL_PORT) to the rsbuild dev server (BACK_OFFICE_STATIC_PORT). Deployed
+// images bake the bundle into BackOffice/dist and serve it via UseStaticFiles, so this
+// proxy is registered only on developer machines. The proxy must run before authentication so anonymous
 // browsers can fetch /static/*, /rsbuild-hmr, and HMR /{filename}.hot-update.{ext} during the SPA
 // bootstrap.
 public static class BackOfficeDevStaticProxy
@@ -22,7 +22,7 @@ public static class BackOfficeDevStaticProxy
 
     public static IApplicationBuilder UseBackOfficeDevStaticProxy(this WebApplication app, string backOfficeHostname)
     {
-        if (SharedInfrastructureConfiguration.IsRunningInAzure) return app;
+        if (SharedInfrastructureConfiguration.IsRunningInCloud) return app;
 
         var rawPort = Environment.GetEnvironmentVariable("BACK_OFFICE_STATIC_PORT");
         if (!int.TryParse(rawPort, out var staticPort) || staticPort <= 0) return app;

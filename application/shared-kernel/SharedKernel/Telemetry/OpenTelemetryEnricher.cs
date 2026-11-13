@@ -9,15 +9,14 @@ public class OpenTelemetryEnricher(IExecutionContext executionContext)
     {
         if (Activity.Current is null) return;
 
-        // Set standard OpenTelemetry semantic convention for getting the geo data from the Client IP Address
-        Activity.Current.SetTag("client.address", executionContext.ClientIpAddress.ToString());
-
+        // client.address is owned by PublicHostTelemetryEnricher, which records only the client's
+        // network; setting the raw executionContext.ClientIpAddress here would export PII.
         if (executionContext.UserInfo.IsAuthenticated)
         {
             Activity.Current.SetTag("enduser.id", executionContext.UserInfo.Id);
         }
 
-        // Set custom properties, ensure any changes here are also added to ApplicationInsightsTelemetryInitializer
+        // Set custom properties; these travel as activity tags through the OTLP exporter
         Activity.Current.SetTag("tenant.id", executionContext.TenantId?.Value);
         Activity.Current.SetTag("tenant.subscription_plan", executionContext.UserInfo.SubscriptionPlan);
         Activity.Current.SetTag("user.id", executionContext.UserInfo.Id);

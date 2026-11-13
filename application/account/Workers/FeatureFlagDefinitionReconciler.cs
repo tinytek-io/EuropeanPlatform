@@ -3,7 +3,6 @@ using System.Text;
 using Account.Database;
 using Account.Features;
 using Account.Features.FeatureFlags.Domain;
-using Microsoft.ApplicationInsights;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.FeatureFlags;
 using SharedKernel.Telemetry;

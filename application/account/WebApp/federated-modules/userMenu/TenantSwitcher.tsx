@@ -2,7 +2,7 @@ import type { useUserInfo } from "@repo/infrastructure/auth/hooks";
 
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { trackInteraction } from "@repo/infrastructure/applicationInsights/ApplicationInsightsProvider";
+import { trackInteraction } from "@repo/infrastructure/telemetry/TelemetryProvider";
 import {
   DropdownMenuGroup,
   DropdownMenuItem,
