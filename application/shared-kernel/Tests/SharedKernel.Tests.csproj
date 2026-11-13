@@ -13,6 +13,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\SharedKernel\SharedKernel.csproj"/>
+        <ProjectReference Include="..\Scaleway.Sdk\Scaleway.Sdk.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

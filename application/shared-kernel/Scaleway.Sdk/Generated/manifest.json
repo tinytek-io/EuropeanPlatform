@@ -1,0 +1,566 @@
+{
+  "services": [
+    {
+      "service": "account",
+      "slug": "account-project",
+      "namespace": "Scaleway.Sdk.Account.V3",
+      "apiVersion": "V3",
+      "entryPoint": "ScalewayClient.Projects",
+      "resourceGroups": [
+        {
+          "name": "Project",
+          "tier": "StructurallyConformant",
+          "collectionPath": "account/v3/projects",
+          "itemPath": "account/v3/projects",
+          "operations": [
+            "ListProjects",
+            "CreateProject",
+            "GetProject",
+            "UpdateProject",
+            "DeleteProject"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "edge_services",
+      "slug": "edge-services",
+      "namespace": "Scaleway.Sdk.EdgeServices.V1Beta1",
+      "apiVersion": "V1Beta1",
+      "entryPoint": "ScalewayProjectClient.EdgeServices",
+      "resourceGroups": [
+        {
+          "name": "Pipeline",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines",
+          "itemPath": "edge-services/v1beta1/pipelines",
+          "operations": [
+            "ListPipelines",
+            "CreatePipeline",
+            "GetPipeline",
+            "UpdatePipeline",
+            "DeletePipeline"
+          ]
+        },
+        {
+          "name": "DNSStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/dns-stages",
+          "itemPath": "edge-services/v1beta1/dns-stages",
+          "operations": [
+            "GetDNSStage",
+            "UpdateDNSStage",
+            "DeleteDNSStage",
+            "ListDNSStages",
+            "CreateDNSStage"
+          ]
+        },
+        {
+          "name": "TLSStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/tls-stages",
+          "itemPath": "edge-services/v1beta1/tls-stages",
+          "operations": [
+            "ListTLSStages",
+            "CreateTLSStage",
+            "GetTLSStage",
+            "UpdateTLSStage",
+            "DeleteTLSStage"
+          ]
+        },
+        {
+          "name": "CacheStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/cache-stages",
+          "itemPath": "edge-services/v1beta1/cache-stages",
+          "operations": [
+            "GetCacheStage",
+            "UpdateCacheStage",
+            "DeleteCacheStage",
+            "ListCacheStages",
+            "CreateCacheStage"
+          ]
+        },
+        {
+          "name": "WafStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/waf-stages",
+          "itemPath": "edge-services/v1beta1/waf-stages",
+          "operations": [
+            "ListWafStages",
+            "CreateWafStage",
+            "GetWafStage",
+            "UpdateWafStage",
+            "DeleteWafStage"
+          ]
+        },
+        {
+          "name": "BackendStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/backend-stages",
+          "itemPath": "edge-services/v1beta1/backend-stages",
+          "operations": [
+            "GetBackendStage",
+            "UpdateBackendStage",
+            "DeleteBackendStage",
+            "ListBackendStages",
+            "CreateBackendStage"
+          ]
+        },
+        {
+          "name": "HeadStage",
+          "tier": "StructurallyConformant",
+          "collectionPath": "edge-services/v1beta1/pipelines/{pipeline_id}/head-stages",
+          "itemPath": "edge-services/v1beta1/pipelines/{pipeline_id}/head-stages",
+          "operations": [
+            "ListHeadStages"
+          ]
+        }
+      ],
+      "actions": [
+        "GetCurrentPlan"
+      ]
+    },
+    {
+      "service": "iam",
+      "slug": "iam",
+      "namespace": "Scaleway.Sdk.Iam.V1Alpha1",
+      "apiVersion": "V1Alpha1",
+      "entryPoint": "ScalewayClient.Iam",
+      "resourceGroups": [
+        {
+          "name": "Application",
+          "tier": "StructurallyConformant",
+          "collectionPath": "iam/v1alpha1/applications",
+          "itemPath": "iam/v1alpha1/applications",
+          "operations": [
+            "ListApplications",
+            "CreateApplication",
+            "GetApplication",
+            "UpdateApplication",
+            "DeleteApplication"
+          ]
+        },
+        {
+          "name": "Policy",
+          "tier": "StructurallyConformant",
+          "collectionPath": "iam/v1alpha1/policies",
+          "itemPath": "iam/v1alpha1/policies",
+          "operations": [
+            "ListPolicies",
+            "CreatePolicy",
+            "GetPolicy",
+            "UpdatePolicy",
+            "DeletePolicy"
+          ]
+        },
+        {
+          "name": "APIKey",
+          "tier": "StructurallyConformant",
+          "collectionPath": "iam/v1alpha1/api-keys",
+          "itemPath": "iam/v1alpha1/api-keys",
+          "operations": [
+            "ListAPIKeys",
+            "CreateAPIKey",
+            "GetAPIKey",
+            "UpdateAPIKey",
+            "DeleteAPIKey"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "k8s",
+      "slug": "kubernetes",
+      "namespace": "Scaleway.Sdk.K8s.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.Kubernetes",
+      "resourceGroups": [
+        {
+          "name": "Cluster",
+          "tier": "StructurallyConformant",
+          "collectionPath": "k8s/v1/regions/{region}/clusters",
+          "itemPath": "k8s/v1/regions/{region}/clusters",
+          "operations": [
+            "ListClusters",
+            "CreateCluster",
+            "GetCluster",
+            "UpdateCluster",
+            "DeleteCluster"
+          ]
+        },
+        {
+          "name": "Version",
+          "tier": "StructurallyConformant",
+          "collectionPath": "k8s/v1/regions/{region}/versions",
+          "itemPath": "k8s/v1/regions/{region}/versions",
+          "operations": [
+            "ListVersions",
+            "GetVersion"
+          ]
+        }
+      ],
+      "actions": [
+        "GetClusterKubeConfig"
+      ]
+    },
+    {
+      "service": "lb",
+      "slug": "load-balancer-zoned",
+      "namespace": "Scaleway.Sdk.Lb.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.LoadBalancers",
+      "resourceGroups": [
+        {
+          "name": "Lb",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/lbs",
+          "itemPath": "lb/v1/zones/{zone}/lbs",
+          "operations": [
+            "ListLbs",
+            "CreateLb",
+            "GetLb",
+            "DeleteLb"
+          ]
+        },
+        {
+          "name": "Frontend",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/lbs/{lb_id}/frontends",
+          "itemPath": "lb/v1/zones/{zone}/frontends",
+          "operations": [
+            "GetFrontend",
+            "DeleteFrontend",
+            "ListFrontends",
+            "CreateFrontend"
+          ]
+        },
+        {
+          "name": "Acl",
+          "tier": "StructurallyConformant",
+          "collectionPath": "lb/v1/zones/{zone}/frontends/{frontend_id}/acls",
+          "itemPath": "lb/v1/zones/{zone}/acls",
+          "operations": [
+            "GetAcl",
+            "DeleteAcl",
+            "ListAcls",
+            "CreateAcl"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "rdb",
+      "slug": "managed-database-postgre-mysql",
+      "namespace": "Scaleway.Sdk.Rdb.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.Databases",
+      "resourceGroups": [
+        {
+          "name": "Instance",
+          "tier": "StructurallyConformant",
+          "collectionPath": "rdb/v1/regions/{region}/instances",
+          "itemPath": "rdb/v1/regions/{region}/instances",
+          "operations": [
+            "ListInstances",
+            "CreateInstance",
+            "GetInstance",
+            "UpdateInstance",
+            "DeleteInstance"
+          ]
+        }
+      ],
+      "actions": [
+        "GetInstanceCertificate"
+      ]
+    },
+    {
+      "service": "redis",
+      "slug": "managed-database-redis",
+      "namespace": "Scaleway.Sdk.Redis.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.Redis",
+      "resourceGroups": [
+        {
+          "name": "Cluster",
+          "tier": "StructurallyConformant",
+          "collectionPath": "redis/v1/zones/{zone}/clusters",
+          "itemPath": "redis/v1/zones/{zone}/clusters",
+          "operations": [
+            "ListClusters",
+            "CreateCluster",
+            "GetCluster",
+            "UpdateCluster",
+            "DeleteCluster"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "product_catalog",
+      "slug": "product-catalog-public-catalog",
+      "namespace": "Scaleway.Sdk.ProductCatalog.V2Alpha1",
+      "apiVersion": "V2Alpha1",
+      "entryPoint": "ScalewayClient.ProductCatalog",
+      "resourceGroups": [
+        {
+          "name": "PublicCatalogProduct",
+          "tier": "StructurallyConformant",
+          "collectionPath": "product-catalog/v2alpha1/public-catalog/products",
+          "itemPath": "product-catalog/v2alpha1/public-catalog/products",
+          "operations": [
+            "ListPublicCatalogProducts"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "registry",
+      "slug": "registry",
+      "namespace": "Scaleway.Sdk.Registry.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.Registry",
+      "resourceGroups": [
+        {
+          "name": "Namespace",
+          "tier": "StructurallyConformant",
+          "collectionPath": "registry/v1/regions/{region}/namespaces",
+          "itemPath": "registry/v1/regions/{region}/namespaces",
+          "operations": [
+            "ListNamespaces",
+            "CreateNamespace",
+            "GetNamespace",
+            "UpdateNamespace",
+            "DeleteNamespace"
+          ]
+        },
+        {
+          "name": "Image",
+          "tier": "StructurallyConformant",
+          "collectionPath": "registry/v1/regions/{region}/images",
+          "itemPath": "registry/v1/regions/{region}/images",
+          "operations": [
+            "ListImages",
+            "GetImage",
+            "UpdateImage",
+            "DeleteImage"
+          ]
+        },
+        {
+          "name": "Tag",
+          "tier": "StructurallyConformant",
+          "collectionPath": "registry/v1/regions/{region}/images/{image_id}/tags",
+          "itemPath": "registry/v1/regions/{region}/tags",
+          "operations": [
+            "ListTags",
+            "GetTag",
+            "DeleteTag"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "secret",
+      "slug": "secret-manager",
+      "namespace": "Scaleway.Sdk.Secret.V1Beta1",
+      "apiVersion": "V1Beta1",
+      "entryPoint": "ScalewayProjectClient.Secrets",
+      "resourceGroups": [
+        {
+          "name": "Secret",
+          "tier": "StructurallyConformant",
+          "collectionPath": "secret-manager/v1beta1/regions/{region}/secrets",
+          "itemPath": "secret-manager/v1beta1/regions/{region}/secrets",
+          "operations": [
+            "ListSecrets",
+            "CreateSecret",
+            "GetSecret",
+            "UpdateSecret",
+            "DeleteSecret"
+          ]
+        },
+        {
+          "name": "SecretVersion",
+          "tier": "StructurallyConformant",
+          "collectionPath": "secret-manager/v1beta1/regions/{region}/secrets/{secret_id}/versions",
+          "itemPath": "secret-manager/v1beta1/regions/{region}/secrets/{secret_id}/versions",
+          "operations": [
+            "ListSecretVersions",
+            "CreateSecretVersion",
+            "GetSecretVersion",
+            "UpdateSecretVersion",
+            "DeleteSecretVersion"
+          ]
+        }
+      ],
+      "actions": [
+        "AccessSecretVersion"
+      ]
+    },
+    {
+      "service": "container",
+      "slug": "serverless-containers",
+      "namespace": "Scaleway.Sdk.ServerlessContainer.V1",
+      "apiVersion": "V1",
+      "entryPoint": "ScalewayProjectClient.Containers",
+      "resourceGroups": [
+        {
+          "name": "Container",
+          "tier": "StructurallyConformant",
+          "collectionPath": "containers/v1/regions/{region}/containers",
+          "itemPath": "containers/v1/regions/{region}/containers",
+          "operations": [
+            "ListContainers",
+            "CreateContainer",
+            "GetContainer",
+            "UpdateContainer",
+            "DeleteContainer"
+          ]
+        },
+        {
+          "name": "Namespace",
+          "tier": "StructurallyConformant",
+          "collectionPath": "containers/v1/regions/{region}/namespaces",
+          "itemPath": "containers/v1/regions/{region}/namespaces",
+          "operations": [
+            "ListNamespaces",
+            "CreateNamespace",
+            "GetNamespace",
+            "UpdateNamespace",
+            "DeleteNamespace"
+          ]
+        },
+        {
+          "name": "Domain",
+          "tier": "StructurallyConformant",
+          "collectionPath": "containers/v1/regions/{region}/domains",
+          "itemPath": "containers/v1/regions/{region}/domains",
+          "operations": [
+            "ListDomains",
+            "CreateDomain",
+            "GetDomain",
+            "UpdateDomain",
+            "DeleteDomain"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    {
+      "service": "jobs",
+      "slug": "serverless-jobs",
+      "namespace": "Scaleway.Sdk.Jobs.V1Alpha2",
+      "apiVersion": "V1Alpha2",
+      "entryPoint": "ScalewayProjectClient.Jobs",
+      "resourceGroups": [
+        {
+          "name": "JobDefinition",
+          "tier": "StructurallyConformant",
+          "collectionPath": "serverless-jobs/v1alpha2/regions/{region}/job-definitions",
+          "itemPath": "serverless-jobs/v1alpha2/regions/{region}/job-definitions",
+          "operations": [
+            "ListJobDefinitions",
+            "CreateJobDefinition",
+            "GetJobDefinition",
+            "UpdateJobDefinition",
+            "DeleteJobDefinition"
+          ]
+        },
+        {
+          "name": "JobRun",
+          "tier": "StructurallyConformant",
+          "collectionPath": "serverless-jobs/v1alpha2/regions/{region}/job-runs",
+          "itemPath": "serverless-jobs/v1alpha2/regions/{region}/job-runs",
+          "operations": [
+            "ListJobRuns",
+            "GetJobRun"
+          ]
+        }
+      ],
+      "actions": [
+        "StartJobDefinition",
+        "StopJobRun"
+      ]
+    },
+    {
+      "service": "tem",
+      "slug": "transactional-email",
+      "namespace": "Scaleway.Sdk.Tem.V1Alpha1",
+      "apiVersion": "V1Alpha1",
+      "entryPoint": "ScalewayProjectClient.Tem",
+      "resourceGroups": [
+        {
+          "name": "Domain",
+          "tier": "StructurallyConformant",
+          "collectionPath": "transactional-email/v1alpha1/regions/{region}/domains",
+          "itemPath": "transactional-email/v1alpha1/regions/{region}/domains",
+          "operations": [
+            "ListDomains",
+            "CreateDomain",
+            "GetDomain",
+            "UpdateDomain"
+          ]
+        },
+        {
+          "name": "Email",
+          "tier": "StructurallyConformant",
+          "collectionPath": "transactional-email/v1alpha1/regions/{region}/emails",
+          "itemPath": "transactional-email/v1alpha1/regions/{region}/emails",
+          "operations": [
+            "ListEmails",
+            "CreateEmail",
+            "GetEmail"
+          ]
+        }
+      ],
+      "actions": [
+        "GetDomainLastStatus",
+        "CheckDomain",
+        "ListOfferSubscriptions",
+        "UpdateOfferSubscription"
+      ]
+    },
+    {
+      "service": "vpc",
+      "slug": "vpc",
+      "namespace": "Scaleway.Sdk.Vpc.V2",
+      "apiVersion": "V2",
+      "entryPoint": "ScalewayProjectClient.Vpc",
+      "resourceGroups": [
+        {
+          "name": "PrivateNetwork",
+          "tier": "StructurallyConformant",
+          "collectionPath": "vpc/v2/regions/{region}/private-networks",
+          "itemPath": "vpc/v2/regions/{region}/private-networks",
+          "operations": [
+            "ListPrivateNetworks",
+            "CreatePrivateNetwork",
+            "GetPrivateNetwork",
+            "UpdatePrivateNetwork",
+            "DeletePrivateNetwork"
+          ]
+        },
+        {
+          "name": "VPC",
+          "tier": "StructurallyConformant",
+          "collectionPath": "vpc/v2/regions/{region}/vpcs",
+          "itemPath": "vpc/v2/regions/{region}/vpcs",
+          "operations": [
+            "ListVPCs",
+            "CreateVPC",
+            "GetVPC",
+            "UpdateVPC",
+            "DeleteVPC"
+          ]
+        }
+      ],
+      "actions": []
+    }
+  ]
+}

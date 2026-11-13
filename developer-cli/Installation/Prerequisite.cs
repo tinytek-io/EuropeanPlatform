@@ -9,6 +9,7 @@ public abstract record Prerequisite
 {
     public static readonly Prerequisite Dotnet = new CommandLineToolPrerequisite("dotnet", "dotnet", new Version(10, 0, 404));
     public static readonly Prerequisite Docker = new CommandLineToolPrerequisite("docker", "Docker", new Version(27, 0, 0));
+    public static readonly Prerequisite Curl = new CommandLineToolPrerequisite("curl", "curl", new Version(7, 68));
     public static readonly Prerequisite Node = new NodePrerequisite();
     public static readonly Prerequisite AzureCli = new CommandLineToolPrerequisite("az", "Azure CLI", new Version(2, 79));
     public static readonly Prerequisite GithubCli = new CommandLineToolPrerequisite("gh", "GitHub CLI", new Version(2, 83));
