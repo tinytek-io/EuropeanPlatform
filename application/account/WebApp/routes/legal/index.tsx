@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import PublicFooter from "@/federated-modules/public/PublicFooter";
 import PublicNavigation from "@/federated-modules/public/PublicNavigation";
 
-import { AzureInfrastructureSection } from "./-components/AzureInfrastructureSection";
+import { CloudInfrastructureSection } from "./-components/CloudInfrastructureSection";
 import { ComplianceResourcesSection } from "./-components/ComplianceResourcesSection";
 import { LegalDocumentsSection } from "./-components/LegalDocumentsSection";
 
@@ -18,7 +18,7 @@ function LegalIndex() {
       <div className="flex flex-1 flex-col">
         <PublicNavigation />
         <LegalDocumentsSection />
-        <AzureInfrastructureSection />
+        <CloudInfrastructureSection />
         <ComplianceResourcesSection />
       </div>
       <PublicFooter />

@@ -68,9 +68,6 @@ msgstr "10 brugere"
 msgid "100 GB storage"
 msgstr "100 GB lagerplads"
 
-msgid "100% Security Score"
-msgstr "100% sikkerhedsscore"
-
 msgid "5 users"
 msgstr "5 brugere"
 
@@ -131,9 +128,6 @@ msgstr "Konto suspenderet"
 msgid "Account switched"
 msgstr "Konto skiftet"
 
-msgid "Achieved in Microsoft Defender for Cloud following Azure best practices"
-msgstr "Opnået i Microsoft Defender for Cloud ved at følge Azures bedste praksis"
-
 msgid "Activating subscription"
 msgstr "Aktiverer abonnement"
 
@@ -175,6 +169,9 @@ msgstr "Admin"
 
 msgid "Advanced analytics"
 msgstr "Avanceret analyse"
+
+msgid "All traffic passes through a managed web application firewall, with TLS everywhere"
+msgstr "Al trafik går gennem en administreret webapplikations-firewall, med TLS overalt"
 
 msgid "All users"
 msgstr "Alle brugere"
@@ -229,9 +226,6 @@ msgstr "Er du sikker på, at du vil slette <0>{userDisplayName}</0> permanent?"
 msgid "Are you sure you want to revoke this session? The device will be logged out and will need to log in again."
 msgstr "Er du sikker på, at du vil tilbagekalde denne session? Enheden vil blive logget ud og skal logge ind igen."
 
-msgid "Audit reports and assessments"
-msgstr "Revisionsrapporter og vurderinger"
-
 msgid "Authentication failed"
 msgstr "Godkendelse mislykkedes"
 
@@ -243,12 +237,6 @@ msgstr "Autentificering deles på tværs af alle faner. For at bruge flere konti
 
 msgid "Authentication was cancelled or denied. Please try again if you want to continue."
 msgstr "Godkendelse blev annulleret eller afvist. Prøv venligst igen, hvis du vil fortsætte."
-
-msgid "Azure Compliance"
-msgstr "Azure Compliance"
-
-msgid "Azure Compliance (opens in new window)"
-msgstr "Azure Compliance (åbner i nyt vindue)"
 
 msgid "Back to app"
 msgstr "Tilbage til appen"
@@ -391,11 +379,20 @@ msgstr "Luk"
 msgid "Close user profile"
 msgstr "Luk brugerprofil"
 
+msgid "Cloud contracts and DPA"
+msgstr "Cloudkontrakter og DPA"
+
+msgid "Cloud contracts and DPA (opens in new window)"
+msgstr "Cloudkontrakter og DPA (åbner i nyt vindue)"
+
 msgid "Complete your payment to activate your subscription."
 msgstr "Gennemfør din betaling for at aktivere dit abonnement."
 
 msgid "Compliance"
 msgstr "Compliance"
+
+msgid "Compliance resources"
+msgstr "Compliance-ressourcer"
 
 msgid "Confirm downgrade"
 msgstr "Bekræft nedgradering"
@@ -454,9 +451,6 @@ msgstr "Dashboard"
 msgid "Data Processing Agreement"
 msgstr "Databehandleraftale"
 
-msgid "Data protection addendum"
-msgstr "Databeskyttelsestillæg"
-
 msgid "Data residency"
 msgstr "Dataopbevaring"
 
@@ -505,6 +499,9 @@ msgstr "Slettede brugere indlæses"
 
 msgid "Deleted users will appear here for recovery"
 msgstr "Slettede brugere vil blive vist her til gendannelse"
+
+msgid "Deployments run through a scripted pipeline with scoped, revocable credentials — no passwords in the codebase"
+msgstr "Deployments kører gennem en scriptet pipeline med afgrænsede, tilbagekaldelige credentials — ingen adgangskoder i kodebasen"
 
 msgid "Desktop"
 msgstr "Stationær"
@@ -575,14 +572,29 @@ msgstr "Indtast dine nye betalingsoplysninger nedenfor."
 msgid "Enter your verification code"
 msgstr "Indtast din bekræftelseskode"
 
-msgid "Enterprise-grade Azure infrastructure"
-msgstr "Azure-infrastruktur i virksomhedsklasse"
+msgid "Enterprise-grade European cloud infrastructure"
+msgstr "Europæisk cloud-infrastruktur i virksomhedsklasse"
 
 msgid "Environment isolation"
 msgstr "Miljøisolering"
 
 msgid "Estimated next bill: {targetFormattedPrice}"
 msgstr "Forventet næste regning: {targetFormattedPrice}"
+
+msgid "EU data protection"
+msgstr "EU-databeskyttelse"
+
+msgid "EU data protection (opens in new window)"
+msgstr "EU-databeskyttelse (åbner i nyt vindue)"
+
+msgid "EU data residency"
+msgstr "EU-dataopbevaring"
+
+msgid "EU Data Residency"
+msgstr "EU-dataopbevaring"
+
+msgid "Every service runs with its own scoped credentials, and only trusted personnel can access data"
+msgstr "Hver tjeneste kører med sine egne afgrænsede credentials, og kun betroet personale har adgang til data"
 
 msgid "Excl. tax"
 msgstr "Ekskl. moms"
@@ -617,8 +629,8 @@ msgstr "Filtre"
 msgid "First name"
 msgstr "Fornavn"
 
-msgid "For detailed compliance certifications and audit reports, visit Microsoft's official resources."
-msgstr "For detaljerede certificeringer og revisionsrapporter, besøg Microsofts officielle ressourcer."
+msgid "For detailed compliance documents and regulations, follow the official resources below."
+msgstr "For detaljerede compliance-dokumenter og regler, følg de officielle ressourcer nedenfor."
 
 msgid "Found an alternative"
 msgstr "Fandt et alternativ"
@@ -644,11 +656,17 @@ msgstr "GDPR-kompatibel"
 msgid "GDPR Compliant"
 msgstr "GDPR-kompatibel"
 
+msgid "GDPR regulation text"
+msgstr "GDPR-forordningsteksten"
+
+msgid "GDPR regulation text (opens in new window)"
+msgstr "GDPR-forordningsteksten (åbner i nyt vindue)"
+
+msgid "General terms, Data Processing Agreement, and technical and organizational measures"
+msgstr "Generelle vilkår, Data Processing Agreement og tekniske og organisatoriske foranstaltninger"
+
 msgid "GitHub"
 msgstr "GitHub"
-
-msgid "GitHub deploys directly to Azure without passwords or API keys"
-msgstr "GitHub deployer direkte til Azure uden adgangskoder eller API-nøgler"
 
 msgid "Go to account settings"
 msgstr "Gå til kontoindstillinger"
@@ -737,6 +755,9 @@ msgstr "Efternavn"
 msgid "Last seen"
 msgstr "Sidst set"
 
+msgid "Least-privilege access"
+msgstr "Least-privilege-adgang"
+
 msgid "Leave"
 msgstr "Forlad"
 
@@ -800,29 +821,11 @@ msgstr "Administrer dit abonnement."
 msgid "Manage your users and permissions here."
 msgstr "Administrer dine brugere og tilladelser her."
 
-msgid "Managed identities"
-msgstr "Administrerede identiteter"
+msgid "Managed Kubernetes and managed PostgreSQL on European cloud infrastructure."
+msgstr "Administreret Kubernetes og administreret PostgreSQL på europæisk cloud-infrastruktur."
 
 msgid "Member"
 msgstr "Medlem"
-
-msgid "Microsoft Azure"
-msgstr "Microsoft Azure"
-
-msgid "Microsoft Azure Platform-as-a-Service (PaaS) with enterprise-grade reliability."
-msgstr "Microsoft Azure Platform-as-a-Service (PaaS) med pålidelighed i virksomhedsklasse."
-
-msgid "Microsoft compliance resources"
-msgstr "Microsofts compliance-ressourcer"
-
-msgid "Microsoft DPA"
-msgstr "Microsoft DPA"
-
-msgid "Microsoft DPA (opens in new window)"
-msgstr "Microsoft DPA (åbner i nyt vindue)"
-
-msgid "Microsoft patches and secures all PaaS infrastructure automatically"
-msgstr "Microsoft opdaterer og sikrer automatisk al PaaS-infrastruktur"
 
 msgid "Mobile"
 msgstr "Mobil"
@@ -881,9 +884,6 @@ msgstr "Kun kontoejere kan ændre kontonavnet"
 msgid "Only owners can change user roles"
 msgstr "Kun ejere kan ændre brugerroller"
 
-msgid "Only trusted personnel access data through Azure AD authentication"
-msgstr "Kun betroet personale får adgang til data gennem Azure AD autentificering"
-
 msgid "or"
 msgstr "eller"
 
@@ -904,9 +904,6 @@ msgstr "Siden blev ikke fundet"
 
 msgid "Paid"
 msgstr "Betalt"
-
-msgid "Passwordless deployments"
-msgstr "Adgangskodeløse implementeringer"
 
 msgid "Pay"
 msgstr "Betal"
@@ -1044,9 +1041,6 @@ msgstr "Reference-ID: {id}"
 msgid "Refunded"
 msgstr "Refunderet"
 
-msgid "Regulatory standards and certifications"
-msgstr "Lovgivningsmæssige standarder og certificeringer"
-
 msgid "Reload"
 msgstr "Genindlæs"
 
@@ -1099,11 +1093,11 @@ msgstr "Gemmer..."
 msgid "Screenshots of the dashboard project with desktop and mobile versions"
 msgstr "Skærmbilleder af dashboard-projektet med desktop- og mobilversioner"
 
+msgid "Scripted deployments"
+msgstr "Scriptede deployments"
+
 msgid "Search"
 msgstr "Søg"
-
-msgid "Security, privacy, and compliance information"
-msgstr "Sikkerheds-, privatlivs- og compliance-oplysninger"
 
 #. placeholder {0}: user.firstName
 #. placeholder {1}: user.lastName
@@ -1175,12 +1169,6 @@ msgstr "SLA"
 
 msgid "Small"
 msgstr "Lille"
-
-msgid "SOC and ISO Reports"
-msgstr "SOC og ISO rapporter"
-
-msgid "SOC and ISO Reports (opens in new window)"
-msgstr "SOC og ISO rapporter (åbner i nyt vindue)"
 
 msgid "Something went wrong"
 msgstr "Noget gik galt"
@@ -1264,8 +1252,17 @@ msgstr "Aftalen der styrer din brug af vores service, inklusive acceptabel brug 
 msgid "The authentication request was invalid. Please try again."
 msgstr "Godkendelsesanmodningen var ugyldig. Prøv venligst igen."
 
+msgid "The European Commission's overview of GDPR rules and how they protect your data"
+msgstr "Europæiske Kommissions oversigt over GDPR-reglerne og hvordan de beskytter dine data"
+
+msgid "The managed platform patches and secures the underlying infrastructure automatically"
+msgstr "Den administrerede platform opdaterer og sikrer den underliggende infrastruktur automatisk"
+
 msgid "The name of your account, shown to users and in email notifications"
 msgstr "Navnet på din konto, vist til brugere og i e-mail-notifikationer"
+
+msgid "The official General Data Protection Regulation as published by the European Union"
+msgstr "Den officielle General Data Protection Regulation som offentliggjort af EU"
 
 msgid "The page you are looking for does not exist or was moved."
 msgstr "Siden du leder efter findes ikke eller er blevet flyttet."
@@ -1311,12 +1308,6 @@ msgstr "Totalt antal brugere"
 
 msgid "Transparency, security, and privacy are at the core of how we operate. Review our policies and learn how we protect your data."
 msgstr "Gennemsigtighed, sikkerhed og privatliv er kernen i hvordan vi opererer. Gennemgå vores politikker og lær hvordan vi beskytter dine data."
-
-msgid "Trust Center"
-msgstr "Tillidscenter"
-
-msgid "Trust Center (opens in new window)"
-msgstr "Tillidscenter (åbner i nyt vindue)"
 
 msgid "Try adjusting your search or filters"
 msgstr "Prøv at justere din søgning eller filtre"
@@ -1469,6 +1460,9 @@ msgstr "Se brugere"
 msgid "We detected a security issue with your login attempt. Please try again."
 msgstr "Vi opdagede et sikkerhedsproblem med dit loginforsøg. Prøv venligst igen."
 
+msgid "Web application firewall"
+msgstr "Webapplikations-firewall"
+
 msgid "When you accept this invitation, your profile information (name, title, and avatar) from your current account will be copied to the new account."
 msgstr "Når du accepterer denne invitation, vil dine profiloplysninger (navn, titel og avatar) fra din nuværende konto blive kopieret til den nye konto."
 
@@ -1523,8 +1517,8 @@ msgstr "Din opsigelse vil blive fortrudt, og dit {planName}-abonnement vil forbl
 msgid "Your changes may take a moment to appear."
 msgstr "Dine ændringer kan tage et øjeblik at blive vist."
 
-msgid "Your data stays in the Azure region you select at signup"
-msgstr "Dine data forbliver i den Azure-region, du vælger ved tilmelding"
+msgid "Your data stays in the European region your environment runs in"
+msgstr "Dine data forbliver i den europæiske region, dit miljø kører i"
 
 msgid "Your downgrade has been scheduled."
 msgstr "Din nedgradering er blevet planlagt."
