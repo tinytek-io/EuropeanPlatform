@@ -381,6 +381,8 @@ FodyWeavers.xsd
 *.terraform.lock.hcl
 *.tfstate.lock.info
 *.tfstate.backup
+# An operator's local tier overrides (the deploy layers them over the committed tier file)
+*.local.tfvars
 
 # macOS files
 .DS_Store
@@ -422,6 +424,7 @@ playwright-report/
 # .NET Aspire
 **/.aspire/settings.json
 aspire.config.json
+aspire-output/
 
 # PlatformPlatform agent workspace
 .workspace
@@ -432,3 +435,4 @@ application/playwright.combined.config.ts
 # Claude Code scheduled-tasks runtime lock
 .claude/scheduled_tasks.lock
 .claude/worktrees
+

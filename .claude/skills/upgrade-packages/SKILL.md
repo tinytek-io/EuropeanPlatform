@@ -64,6 +64,7 @@ Either way, keep every commit independently green and bisectable, and never move
    - **Trivial** = every `patch` and `minor` line.
    - **Majors** = every `major` line. Collect the package names; each becomes its own commit.
    - **Toolchain** = any `(sdk)` line (e.g. `dotnet-sdk`) and any `⚠️ … is NOT installed` warning — these gate the backend and are handled first (step 3).
+   - An `aspire-cli … (mise.toml)` line is the Aspire CLI following the Aspire packages; it lands with the backend bulk, and the user then runs `mise install` (the deploy refuses a CLI that differs from the AppHost SDK).
    - `restricted` lines are the permanent exceptions — ignore them.
 
 3. **Toolchain prerequisites (sudo) — resolve before any upgrade** — if the dry-run reports a `dotnet-sdk` (or other framework) bump whose target version is not installed locally, the backend update will abort: `update-packages --backend` exits when the required SDK is missing. You **cannot** install it yourself — it needs sudo/admin. **Stop and ask the user to run the exact install command the dry-run printed** (e.g. `brew upgrade dotnet-sdk` on macOS, `winget upgrade Microsoft.DotNet.SDK.<major>` on Windows), then wait for them to confirm. Re-run `update-packages --dry-run --quiet` and check that nothing is still flagged as not-installed before continuing. This keeps the backend first and unblocked — do not start the frontend while a backend toolchain install is pending.
