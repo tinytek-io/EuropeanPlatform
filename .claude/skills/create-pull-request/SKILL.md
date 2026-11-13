@@ -64,15 +64,15 @@ Stash the answers; consumed in STEP 6, 7, 8, 11.
 
 ## STEP 5: Correlate to [Task]
 
-Look up `.claude/reference/product-management/[PRODUCT_MANAGEMENT_TOOL].md` for [Task] ID format and MCP tools.
+Look up `.claude/reference/product-management/[PRODUCT_MANAGEMENT_TOOL].md` for the [Task] ID format and the operations to read and create [tasks] with: MCP tools for most providers, the `gh` CLI for GitHub. Wherever this step says "fetch" or "create", use the provider's operations from that guide.
 
 1. **Parse [Task] ID from branch name.** The exact pattern depends on the configured [PRODUCT_MANAGEMENT_TOOL] — check `.claude/reference/product-management/[PRODUCT_MANAGEMENT_TOOL].md`. Strip `worktree-` first if present.
 
-2. **If [Task] detected**, fetch via MCP. Use its title, description, and parent [Feature] to validate the draft in STEP 6 and spot drift.
+2. **If [Task] detected**, fetch it with the provider's operations. Use its title, description, and parent [Feature] to validate the draft in STEP 6 and spot drift.
 
 3. **Detect unrelated commits (rare).** If some commits clearly belong to a different scope, offer to create a **new [Task]** as future follow-up - written as a fresh problem statement (future tense, what needs to happen). [Feature] choice: parent [Feature] of current branch's [Task] -> [Feature] with [Active] status -> ask.
 
-4. **If no [Task] in the branch name**, ask: "No [Task] detected. Create one for this pull request?". If yes, draft a [Task] from the diff (problem statement, not what was done) and create it via MCP. Suggest a [Feature] using the same rules as above.
+4. **If no [Task] in the branch name**, ask: "No [Task] detected. Create one for this pull request?". If yes, draft a [Task] from the diff (problem statement, not what was done) and create it with the provider's operations. Suggest a [Feature] using the same rules as above.
 
 ## STEP 6: Draft Title and Description
 
@@ -94,6 +94,7 @@ Use the official template at `.github/PULL_REQUEST_TEMPLATE.md`:
 - **Summary & Motivation**: lead with the most important change, explain what and why (not how), use bullets for multiple items, mention minor fixes last. **Do not end with a closing benefit summary** - that is the most common rejection reason.
 - **No "pull request" or "pull-request" in the body** - CI rejects either phrase. Use "this change", "the change", etc.
 - **Checklist**: copy items from the template. Render every `[ ]` as `[x]` if the user picked "Mark all checklist items..." in STEP 4; otherwise leave them as `[ ]`.
+- **[Task] links**: when the provider guide says links are not automatic from the branch name (GitHub), end the body with one `Closes #<taskId>` line per [task] the change covers. When updating an existing description, keep the `Closes` lines already there and add any missing ones; never drop one.
 
 Save the rendered title (as a level-1 heading) + body to `.workspace/<branch-name>/pull-request.md`. Use the un-prefixed branch name if STEP 3 stripped `worktree-`.
 
@@ -147,6 +148,8 @@ gh pr edit <number> \
 
 (Strip the level-1 heading from the body file before passing.) Tell the user the pull request was updated, not newly created. Don't change draft/ready state without an explicit ask.
 
+Then move every linked [task] that isn't [Completed] yet to [Review], with the provider's operations (for GitHub, the board's Status field).
+
 **If no pull request exists:**
 
 ```sh
@@ -159,7 +162,7 @@ gh pr create \
 
 Append `--label "<name>"` per label from STEP 4. `@me` resolves to the authenticated user. Don't pass `--draft`; this workflow opens ready-for-review.
 
-Capture the pull request URL from gh's output for STEP 12.
+Capture the pull request URL from gh's output for STEP 12. Then move every linked [task] that isn't [Completed] yet to [Review], with the provider's operations (for GitHub, the board's Status field).
 
 ## STEP 12: Report
 
@@ -168,7 +171,7 @@ Print:
 - The pull request URL (clickable)
 - Title
 - Labels applied
-- [Task] linked via branch name (auto by [PRODUCT_MANAGEMENT_TOOL])
+- [Task] links: through the branch name where the provider links automatically (Linear), or the `Closes #<taskId>` lines (GitHub)
 - Pull-request markdown saved at the absolute path
 
 End with a clickable link to the saved file.
@@ -242,6 +245,6 @@ Pull request opened: https://github.com/<owner>/<repo>/pull/123
 
 Title:        Fix login redirect after OTP verification
 Labels:       Bug, Deploy to Staging
-[Task]:       linked via branch name (auto-detected by [PRODUCT_MANAGEMENT_TOOL])
+[Task]:       linked through the branch name (Linear) or `Closes #<taskId>` (GitHub)
 Description:  /absolute/path/to/repo/.workspace/fix-login-redirect/pull-request.md
 ```
