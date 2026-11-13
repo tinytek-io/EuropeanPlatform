@@ -15,7 +15,7 @@
 #
 #   ingress:  kubelet probes (host entity) + Cilium Envoy (the `ingress` entity, the Gateway data
 #             plane, on the serving port 8443 only) + YARP app-gateway where the gateway routes to
-#             the workload.
+#             the workload + the back-office BFF calling account's internal API.
 #   egress:   kube-dns (with the L7 DNS proxy rule — required for toFQDNs), the RDB endpoint
 #             (private network IP/port from the environment module's outputs), and the external
 #             Scaleway APIs by exact FQDN and port: Object Storage, Secret Manager/TEM
@@ -98,7 +98,7 @@ spec:
               protocol: TCP
 ---
 # app-gateway (YARP): public traffic enters through Cilium's Envoy (the `ingress` entity); it
-# routes to the feature APIs by Host, and proxies avatars/logos straight
+# routes to the feature APIs and the back-office BFF by Host, and proxies avatars/logos straight
 # from Object Storage. Like every workload it loads its configuration (token signing key, internal
 # TLS material) from Secret Manager and exports telemetry to Cockpit — without those it cannot
 # start.
@@ -146,6 +146,13 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: back-office-api
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
     - toFQDNs:
         - matchName: s3.<region>.scw.cloud
         - matchName: api.scaleway.com
@@ -157,7 +164,8 @@ spec:
             - port: "443"
               protocol: TCP
 ---
-# account-api: served through Envoy (its BackendTLSPolicy) and YARP. Reaches the database, Object Storage (avatars), Secret Manager, TEM, Cockpit.
+# account-api: served through Envoy (its BackendTLSPolicy) and YARP; the back-office BFF calls
+# its internal API. Reaches the database, Object Storage (avatars), Secret Manager, TEM, Cockpit.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -179,6 +187,9 @@ spec:
     - fromEndpoints:
         - matchLabels:
             k8s:app.kubernetes.io/component: app-gateway
+    - fromEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: back-office-api
   egress:
     - toEndpoints:
         - matchLabels:
@@ -267,6 +278,66 @@ spec:
             - port: "443"
               protocol: TCP
 ---
+# back-office-api (the BFF): served through Envoy and YARP; calls account's internal API;
+# proxies blobs through its keyed storage client; keeps the staff identity state in its own
+# database, and signs staff in itself (the staff OIDC provider).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: back-office-api-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:app.kubernetes.io/component: back-office-api
+  ingress:
+    - fromEntities:
+        - host
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: app-gateway
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toEndpoints:
+        - matchLabels:
+            k8s:app.kubernetes.io/component: account-api
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: s3.<region>.scw.cloud
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
 # Workers: no inbound callers at all — background processors reaching the database, storage,
 # Secret Manager, and telemetry.
 apiVersion: cilium.io/v2
@@ -331,11 +402,54 @@ spec:
             - port: "443"
               protocol: TCP
 ---
+# back-office-workers: no inbound callers; the back-office database (its data migrations and
+# housekeeping), Secret Manager, and telemetry.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: back-office-workers-east-west
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: default
+      k8s:app.kubernetes.io/component: back-office-workers
+  ingress:
+    - fromEntities:
+        - host
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toCIDR:
+        - <rdb-ip>/32
+      toPorts:
+        - ports:
+            - port: "<rdb-port>"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: api.scaleway.com
+        - matchPattern: "*.metrics.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.logs.cockpit.<region>.scw.cloud"
+        - matchPattern: "*.traces.cockpit.<region>.scw.cloud"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
 # Migrator Jobs (pods exist only during deploys): database structure ownership, resolved from
 # Secret Manager, on the migrator role. Selected by the workload-role label the chart's migration
 # Job template sets, not by component name: the Jobs are pre-upgrade hooks, which run before the
 # release applies its policies, so a new migrator must be admitted by the policy already in the
-# cluster (a new migrator's first deploy would otherwise time out reaching Secret Manager).
+# cluster (found live: back-office-migrator timed out reaching Secret Manager on its first deploy).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

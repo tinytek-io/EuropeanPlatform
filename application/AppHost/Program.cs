@@ -4,8 +4,10 @@ using AppHost;
 using Aspire.Hosting.EuropeanPlatform;
 using Aspire.Hosting.EuropeanPlatform.Profiles;
 using Aspire.Hosting.EuropeanPlatform.SelfContainedSystems;
+using BackOffice.Authentication.MockSignIn;
+using BackOffice.StaffIdentity;
+using Microsoft.Extensions.Configuration;
 using Projects;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Configuration;
 
 // Docker volume name prefix, derived from branding.productName in platform-settings.jsonc so the
@@ -60,11 +62,26 @@ var backOfficePublicHostname = isPublishMode
     : backOfficeHostname;
 
 var appBaseUrl = $"https://{appHostname}:{ports.AppGateway}";
-// Locally the back-office bypasses the app gateway and hits account-api directly on a dedicated Kestrel port.
-var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.BackOfficeApi}";
+// Both hostnames are browsed through the app gateway, locally as deployed, so the gateway's avatar and logo
+// storage routes serve the back-office too.
+var backOfficeBaseUrl = $"https://{backOfficeHostname}:{ports.AppGateway}";
 // In publish mode the scheme+hostname is the public URL seen by browsers; internally the gateway
 // forwards plain HTTP to the workloads.
 var appPublicUrl = $"https://{appPublicHostname}";
+
+// The back-office signs staff in itself, with an emailed one-time code, from the environment's
+// committed staff identity file (cloud-infrastructure/staff-identity/<environment>.yaml, shipped
+// with the back-office). Deployed environments always do; local development opts in with
+// StaffIdentity:Enabled (codes land in Mailpit) and otherwise keeps the mock login picker.
+var staffSignInEnabled = isPublishMode || builder.Configuration.GetSection("StaffIdentity:Enabled").Get<bool>();
+var staffIdentityFile = isPublishMode
+    ? $"staff-identity/{builder.Configuration["StaffIdentity:Environment"] ?? throw new InvalidOperationException("Publish mode requires StaffIdentity:Environment (the Terraform environment name) in AppHost configuration.")}.yaml"
+    : Path.Combine(builder.AppHostDirectory, "StaffIdentity", "development.yaml");
+
+// The staff group whose members get the back-office admin capability: the staff identity file's
+// admins group wherever the back-office signs staff in itself, and the mock admin identity's group
+// behind the mock login picker.
+var backOfficeAdminsGroupId = staffSignInEnabled ? StaffGroups.Admins : MockStaffIdentities.MockAdminsGroupId;
 
 // Development-machine material only: the dev HTTPS certificate (consumed by the build-only frontend
 // container, which never reaches the manifest) and the user-secrets token signing key. Deployed
@@ -75,6 +92,10 @@ if (!isPublishMode)
 {
     SecretManagerHelper.GenerateAuthenticationTokenSigningKey("authentication-token-signing-key");
 }
+
+var (delegationSigningKeyPem, delegationPublicKeyPem) = isPublishMode
+    ? (string.Empty, string.Empty)
+    : SecretManagerHelper.GetOrCreateBackOfficeDelegationKeyPair("back-office-delegation-signing-key");
 
 var (googleOAuthConfigured, googleOAuthClientId, googleOAuthClientSecret) = ConfigureGoogleOAuthParameters();
 
@@ -120,8 +141,11 @@ account.Api
     // back to the canonical dev hostname. In publish mode the public URL is the real one.
     .WithEnvironment("OAUTH_PUBLIC_URL", isPublishMode ? appPublicUrl : "https://localhost:" + ports.AppGateway)
     .WithEnvironment("Hostnames__App", appPublicHostname)
+    // The internal API's DelegationAdmin gate reads the admins group id (BackOfficeHostOptions is
+    // bound by the AccountAndBackOffice document layout); the host value only satisfies its
+    // startup validation — the staff-facing routes live in the back-office system.
     .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
-    .WithEnvironment("BackOffice__AdminsGroupId", MockEasyAuthIdentities.MockAdminsGroupId)
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
     .WithEnvironment("OAuth__Google__ClientId", googleOAuthClientId)
     .WithEnvironment("OAuth__Google__ClientSecret", googleOAuthClientSecret)
     // The mock OAuth provider is a developer-machine convenience, so publish mode pins it off
@@ -131,20 +155,6 @@ account.Api
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled);
 
 WithStripeConfiguration(account.Api);
-
-if (!isPublishMode)
-{
-    // The back-office is served by account-api on a second, local-only Kestrel listener: deployed environments do
-    // not route the back-office hostname, because nothing signs staff in there.
-    account.Api
-        .WithEnvironment("BACK_OFFICE_KESTREL_PORT", ports.BackOfficeApi.ToString())
-        // BackOfficeDevStaticProxy forwards /static/* and HMR traffic on the back-office listener to the rsbuild dev
-        // server.
-        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString())
-        // Back-office bundle URLs target the dedicated Kestrel port directly (no AppGateway).
-        .WithEnvironment("BACK_OFFICE_PUBLIC_URL", backOfficeBaseUrl)
-        .WithEnvironment("BACK_OFFICE_CDN_URL", backOfficeBaseUrl);
-}
 
 // main's API owns the Data Protection keyring: it mints the antiforgery tokens in the module-federated shell that
 // account's API validates.
@@ -159,11 +169,51 @@ main.Api
     .WithEnvironment("PUBLIC_GOOGLE_OAUTH_ENABLED", googleOAuthConfigured ? "true" : "false")
     .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", stripeFullyConfigured ? "true" : "false");
 
-// The app hostname flows through the app gateway; the back-office hostname is not routed when deployed.
-platform.AddAppGateway<AppGateway>(ports.AppGateway, [account, main], [appPublicHostname])
+// The standalone back-office system: a BFF over the feature systems' internal APIs, owning the staff identity
+// outright; the gateway routes the back-office hostname here. Its BFF calls account's internal API
+// (/internal-api/back-office/*) carrying the signed-in staff member's delegation token. Its workers migrate the
+// back-office database in local development and sync the staff identity file's OIDC clients into the provider's store.
+var backOffice = platform.AddSelfContainedSystem<BackOffice_Api, BackOffice_Workers, BackOffice_Migrator>(
+        "back-office",
+        new SelfContainedSystemPorts(ports.BackOfficeSystemApi, ports.BackOfficeWorkers)
+    )
+    .UsesInternalApiOf(account);
+
+backOffice.Workers.WithEnvironment("StaffIdentity__File", staffSignInEnabled ? staffIdentityFile : string.Empty);
+
+backOffice.Api
+    .WithEnvironment("BackOffice__Host", backOfficePublicHostname)
+    .WithEnvironment("BackOffice__AdminsGroupId", backOfficeAdminsGroupId)
+    .WithEnvironment("PUBLIC_SUBSCRIPTION_ENABLED", subscriptionUiEnabled)
+    .WithEnvironment("StaffIdentity__File", staffSignInEnabled ? staffIdentityFile : string.Empty)
+    // The SPA's bundle URLs (and the staff OIDC issuer) target the back-office origin the browser sees: the
+    // app gateway's port on localhost, the public hostname in publish mode.
+    .WithUrlConfiguration(backOfficePublicHostname, isPublishMode ? null : ports.AppGateway, "");
+
+if (isPublishMode)
+{
+    // Deployed environments always sign staff in themselves: the mock login picker never runs there.
+    backOffice.Api.WithEnvironment("MockStaffIdentity__Enabled", "false");
+}
+else
+{
+    backOffice.Api
+        // Drives the dev static proxy to the rsbuild dev server.
+        .WithEnvironment("BACK_OFFICE_STATIC_PORT", ports.BackOfficeStatic.ToString())
+        // The back-office signs delegation tokens; account's internal API validates them (deployed
+        // environments receive both halves through Secret Manager).
+        .WithEnvironment("BackOfficeDelegation__SigningKeyPem", delegationSigningKeyPem);
+    account.Api.WithEnvironment("BackOfficeDelegation__PublicKeyPem", delegationPublicKeyPem);
+}
+
+// Both public hostnames flow through the app gateway: the YARP back-office route targets the back-office API, and the
+// gateway's wildcard avatar/logo storage routes serve blobs for both hostnames (the back-office system itself holds no
+// blob proxy).
+platform.AddAppGateway<AppGateway>(ports.AppGateway, [account, main, backOffice], [appPublicHostname, backOfficePublicHostname])
     .WithReference(frontendBuild)
     .WaitFor(frontendBuild)
     .WithEnvironment("Hostnames__App", appPublicHostname)
+    .WithEnvironment("Hostnames__BackOffice", backOfficePublicHostname)
     .WithUrls(context =>
         {
             // Replace the auto-published "https" endpoint URL with three explicit dashboard URLs.

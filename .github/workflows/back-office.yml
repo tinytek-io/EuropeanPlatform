@@ -1,0 +1,82 @@
+name: Back Office
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "application/*"
+      - "application/shared-kernel/**"
+      - "application/shared-webapp/**"
+      - "application/back-office/**"
+      - ".github/workflows/back-office.yml"
+      - "!**.md"
+  pull_request:
+    paths:
+      - "application/*"
+      - "application/shared-kernel/**"
+      - "application/shared-webapp/**"
+      - "application/back-office/**"
+      - ".github/workflows/back-office.yml"
+      - "!**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: back-office-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: application/.node-version
+
+      - name: Install Node Modules
+        working-directory: application
+        run: npm ci
+
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: application/global.json
+
+      - name: Restore .NET Tools
+        working-directory: application
+        run: dotnet tool restore
+
+      - name: Restore .NET Dependencies
+        working-directory: application
+        run: dotnet restore
+
+      - name: Generate and Set User Secret for Token Signing Key
+        working-directory: application/shared-kernel/SharedKernel
+        run: |
+          # The tests sign authentication tokens; a throwaway key is enough, and none is committed.
+          USER_SECRETS_ID=$(grep -oP '(?<=<UserSecretsId>).*?(?=</UserSecretsId>)' SharedKernel.csproj)
+          dotnet user-secrets set "authentication-token-signing-key" "$(openssl rand -base64 64)" --id $USER_SECRETS_ID
+
+      # The staff sign-in tests render the email templates, which are built, not committed.
+      - name: Build Email Templates
+        working-directory: application
+        run: npx turbo run build --filter=@repo/emails
+
+      - name: Run Tests
+        working-directory: application
+        run: |
+          dotnet build back-office/BackOffice.slnf --no-restore &&
+          dotnet test back-office/BackOffice.slnf --no-build
+
+  # Deployment placeholder. The upstream deployment jobs (database migrations, API, workers) targeted Azure and are
+  # removed. The back-office deploys to Scaleway with the rest of the environment through the developer CLI's `deploy`
+  # command until `aspire deploy` can deploy infrastructure and each system on its own (#12); its jobs belong here.

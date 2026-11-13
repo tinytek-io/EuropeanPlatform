@@ -19,13 +19,17 @@ public sealed record PortAllocation(int BasePort)
     // Worktrees scan these in order and pick the first base port whose full allocation is free.
     internal static readonly int[] WorktreeCandidateBasePorts = [9100, 9200, 9300, 9400, 9500, 9600, 9700, 9800, 9900];
 
-    // Port layout within a worktree's allocation. The browser-facing hosts take the lowest offsets:
-    //   +0 app.dev.localhost   +1 back-office.dev.localhost   +2 (reserved: web.dev.localhost)
-    //   +3 Aspire dashboard    +4 Postgres    +5 Mailpit UI/API    +6 Blob storage
-    // BasePort + 2 is intentionally unallocated so the future web host can claim it without a reshuffle.
+    // Port layout within a worktree's allocation. The browser-facing gateway takes the lowest offset:
+    //   +0 app gateway (app.dev.localhost and back-office.dev.localhost)   +1 account's folded back-office listener
+    //   +2 back-office system (standalone)   +3 Aspire dashboard    +4 Postgres
+    //   +5 Mailpit UI/API    +6 Blob storage
     public int AppGateway => BasePort;
 
     public int BackOfficeApi => BasePort + 1;
+
+    // The standalone back-office system's dev listener; claims the long-reserved +2 offset. Browsers
+    // reach it through the app gateway (+0), which routes the back-office.dev.localhost host here.
+    public int BackOfficeSystemApi => BasePort + 2;
 
     public int Aspire => BasePort + 3;
 
@@ -55,10 +59,13 @@ public sealed record PortAllocation(int BasePort)
 
     public int BackOfficeStatic => BasePort + 16;
 
+    public int BackOfficeWorkers => BasePort + 17;
+
     public int[] AllPorts =>
     [
-        AppGateway, BackOfficeApi, Aspire, Postgres, MailpitHttp, Blob, MailpitSmtp, OtelEndpoint,
-        ResourceService, MainApi, MainStatic, MainWorkers, AccountApi, AccountStatic, AccountWorkers, BackOfficeStatic
+        AppGateway, BackOfficeApi, BackOfficeSystemApi, Aspire, Postgres, MailpitHttp, Blob, MailpitSmtp, OtelEndpoint,
+        ResourceService, MainApi, MainStatic, MainWorkers, AccountApi, AccountStatic, AccountWorkers, BackOfficeStatic,
+        BackOfficeWorkers
     ];
 
     // Empty on the default base port so existing developers' Docker volumes are reused unchanged on

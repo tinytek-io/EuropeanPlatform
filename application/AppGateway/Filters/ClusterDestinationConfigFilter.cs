@@ -22,11 +22,12 @@ public class ClusterDestinationConfigFilter(PortAllocation ports) : IProxyConfig
         return new ValueTask<RouteConfig>(route);
     }
 
-    // Resolves a cluster's destination address. Production deploys (Bicep) set the full URL via
+    // Resolves a cluster's destination address. Deployed environments set the full URL via
     // {SERVICE}_API_URL environment variables; that takes priority. Local dev gets ports from
     // PortAllocation and composes https://localhost:{port}. Used by both this filter (mutates the
     // proxy's internal config) and ApiAggregationService (which reads the unfiltered config from
-    // IProxyConfigProvider and resolves destinations itself).
+    // IProxyConfigProvider and resolves destinations itself), and by the internal-CA forwarder
+    // factory, which checks the destination's certificate against the host it dials.
     public static string ResolveClusterAddress(string clusterId, PortAllocation ports)
     {
         return clusterId switch
@@ -34,6 +35,7 @@ public class ClusterDestinationConfigFilter(PortAllocation ports) : IProxyConfig
             "account-api" => ResolveAddress("ACCOUNT_API_URL", ports.AccountApi),
             "account-static" => ResolveAddress("ACCOUNT_API_URL", ports.AccountStatic),
             "account-storage" => ResolveStorageAddress("ACCOUNT_STORAGE_URL", ports.Blob),
+            "back-office-api" => ResolveAddress("BACK_OFFICE_API_URL", ports.BackOfficeSystemApi),
             "main-api" => ResolveAddress("MAIN_API_URL", ports.MainApi),
             "main-static" => ResolveAddress("MAIN_API_URL", ports.MainStatic),
             "main-storage" => ResolveStorageAddress("MAIN_STORAGE_URL", ports.Blob),

@@ -1,0 +1,12 @@
+# Development staff identity (never deployed). Sign in with one of these emails; the one-time code
+# arrives in Mailpit. See cloud-infrastructure/staff-identity/README.md for the format.
+staff:
+  - id: dev-admin
+    email: dev-admin@dev.localhost
+    name: Dev Admin
+    groups: [staff, admins]
+  - id: dev-staff
+    email: dev-staff@dev.localhost
+    name: Dev Staff
+    groups: [staff]
+clients: []

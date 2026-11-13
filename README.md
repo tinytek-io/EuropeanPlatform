@@ -3,6 +3,7 @@
 [![App Gateway](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml?query=branch%3Amain)
 [![Account](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/account.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/account.yml?query=branch%3Amain)
 [![Main](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/main.yml?query=branch%3Amain)
+[![Back Office](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/back-office.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/back-office.yml?query=branch%3Amain)
 [![Cloud Infrastructure](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/cloud-infrastructure.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/cloud-infrastructure.yml?query=branch%3Amain)
 [![Code Style](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/code-style.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/code-style.yml?query=branch%3Amain)
 [![Developer CLI](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/developer-cli.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/developer-cli.yml?query=branch%3Amain)
@@ -41,7 +42,7 @@ Show your support for our project - give us a star on GitHub! It truly means a l
 
 ### Back office
 
-Operate the platform from a dedicated SPA on its own hostname (local development only for now: deployed environments do not route the back-office hostname until it has a staff sign-in):
+Operate the platform from a dedicated SPA on its own hostname, behind its own staff sign-in (an emailed one-time code for the people listed in git, with a mock identity selector in development). The back-office is also the OIDC provider other tools (Forgejo, ...) sign staff in through:
 
 * **Dashboard** - KPI tiles for total accounts, blended MRR, all-time revenue, active users, and live sessions; trend cards for MRR, revenue, tenant growth, plan distribution, user logins; activity feeds for recent signups, payments, logins, and Stripe webhook events
 * **Accounts** - Search and filter every tenant; drill into detail with owner, plan, and signup activity
@@ -433,6 +434,44 @@ Remember to add redirect URIs for each environment in your Google Cloud Console 
 - `https://app.yourproduct.com/api/account/authentication/Google/login/callback`
 - `https://app.yourproduct.com/api/account/authentication/Google/signup/callback`
 
+### Staff sign-in and the staff OIDC provider
+
+The back-office signs staff in itself: a staff member enters their work email and receives a
+one-time code (Transactional Email); nobody has a password. Who may sign in is decided by the
+environment's staff identity file, `cloud-infrastructure/staff-identity/<environment>.yaml` — the
+only place staff are managed (see the [README](./cloud-infrastructure/staff-identity/README.md)
+beside it for the format). Changes take effect with the next deploy; deactivating someone
+(`active: false`) ends their sessions on their next request. The open-source project ships every
+list empty, and the first deploy of an environment asks for the first admin and writes the entry;
+commit it in your fork.
+
+The back-office is also an OIDC provider, so other tools sign staff in through it. List a tool
+under `clients` in the same file (its `clientId`, `redirectUris`, and the `allowedGroups` that may
+use it) and deploy; Terraform generates its client secret. Configure the tool with:
+
+- Issuer / discovery URL: `https://back-office.<domain>` (`/.well-known/openid-configuration`)
+- Client ID: the `clientId`, and the secret from
+  `terraform -chdir=cloud-infrastructure/scaleway/environment output -json staff_identity_client_secrets`
+- Scopes: `openid profile email groups` — the ID token carries `sub` (the staff id),
+  `preferred_username`, `name`, `email`, and `groups` (`staff`, `admins`)
+
+#### Test the staff sign-in locally
+
+The dev stack keeps the mock identity picker by default. To run the real sign-in against the
+development staff identity file (`application/AppHost/StaffIdentity/development.yaml`):
+
+1. Start the dev stack with `STAFFIDENTITY__ENABLED=true` on the AppHost.
+2. Sign in as `dev-admin@dev.localhost` (groups `staff` + `admins`) or `dev-staff@dev.localhost`
+   (`staff` only), and read the code in Mailpit.
+3. Run the spec against it:
+
+   ```bash
+   dotnet run --project developer-cli -- e2e staff-sign-in --no-wait-for-aspire
+   ```
+
+   with `STAFF_SIGN_IN_ENABLED=true` in the environment (the spec skips itself otherwise, so it
+   stays out of the default suite).
+
 ### (Optional) Configure Stripe for staging and production
 
 Create a separate Stripe account (or sandbox) for each environment. For production, use a live Stripe account instead of a sandbox. Follow the Stripe Dashboard setup steps in [section 3.2](#32-optional-set-up-stripe-sandbox-for-localhost) to configure products, payment methods, tax, invoices, and other settings.
@@ -449,8 +488,14 @@ Deployed environments take the Stripe settings as Aspire parameters when the dep
 
 ### Back-office access
 
-The back-office is served by account-api on its own hostname in local development, behind a mock
-identity selector. Deployed environments do not route the back-office hostname yet.
+The back-office runs as its own self-contained system — a backend-for-frontend over the feature
+systems' internal APIs — on its own hostname (`back-office.<domain>`), behind its own staff
+sign-in, and the edge pipelines serve its hostname with the same TLS, WAF, and caching as the app.
+To grant a person access, add them to the environment's staff identity file (`admins` for the
+admin-only actions) and deploy.
+
+Add the back-office CNAME record the same way as the app hostname (see the
+[DNS guide](./cloud-infrastructure/scaleway/docs/dns-guide.md)).
 
 # Multi-Agent Development with Claude Code
 
@@ -574,13 +619,18 @@ EuropeanPlatform is a [monorepo](https://en.wikipedia.org/wiki/Monorepo) contain
 │  │   ├─ Core           # Core business logic, application use cases, and infrastructure
 │  │   ├─ Workers        # Background workers for long-running tasks and event processing
 │  │   └─ Tests          # Tests for the Api, Core, and Workers
-│  ├─ account            # Federated module for authentication, user and account management; also hosts the back-office surface
+│  ├─ account            # Federated module for authentication, user and account management
 │  │   ├─ WebApp         # React SPA loaded into main via Module Federation
-│  │   ├─ BackOffice     # React SPA for operations and support, served on its own host (mock identity selector in development)
-│  │   ├─ Api             # Presentation layer exposing both account and back-office endpoints
-│  │   ├─ Core            # Core business logic, application use cases, and infrastructure
-│  │   ├─ Workers         # Background workers for long-running tasks and event processing
-│  │   └─ Tests           # Tests for the Api, Core, and Workers
+│  │   ├─ Api            # Presentation layer exposing the API and the internal back-office API
+│  │   ├─ Core           # Core business logic, application use cases, and infrastructure
+│  │   ├─ Workers        # Background workers for long-running tasks and event processing
+│  │   ├─ Migrator       # Run-once database migrator, deployed as a pre-upgrade Job
+│  │   └─ Tests          # Tests for the Api, Core, and Workers
+│  ├─ back-office        # Staff surface for operations and support, on its own hostname
+│  │   ├─ WebApp         # React SPA served to staff (email-code sign-in, mock selector in development)
+│  │   ├─ Api            # BFF over the feature systems' internal APIs
+│  │   ├─ Core           # Staff identity, delegation, and BFF use cases
+│  │   └─ Tests          # System tests over the full BFF pipeline
 │  ├─ shared-kernel      # Reusable components and default configuration for all systems
 │  └─ shared-webapp      # Reusable ShadCN 2.0 components with Base UI that affect all systems
 ├─ cloud-infrastructure  # Infrastructure as Code (Terraform) and cluster operation scripts for Scaleway

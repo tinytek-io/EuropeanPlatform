@@ -17,7 +17,7 @@ public class SinglePageAppConfiguration
     public static readonly string[] SupportedLocalizations = ["en-US", "da-DK"];
 
     // Default bundle directory for callers that host a single SPA (the original layout). Multi-SPA
-    // hosts (e.g. consolidated account-api hosting both account/WebApp and account/BackOffice)
+    // hosts (e.g. account-api hosting account/WebApp, the back-office hosting its own WebApp)
     // construct one SinglePageAppConfiguration per SPA via the WebAppProjectName parameter.
     public static readonly string BuildRootPath = GetWebAppDistRoot(DefaultWebAppProjectName, "dist");
 

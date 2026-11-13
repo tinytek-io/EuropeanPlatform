@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 using Account.Features.Subscriptions.Domain;
 using FluentAssertions;
-using SharedKernel.Authentication.MockEasyAuth;
 using SharedKernel.Domain;
 using SharedKernel.Tests.Persistence;
 using Xunit;
@@ -25,11 +24,11 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
                 ("drift_discrepancies", JsonSerializer.Serialize(discrepancies))
             ]
         );
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -44,11 +43,11 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenSubscriptionHasNoDrift_ShouldReturnBadRequest()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -60,12 +59,12 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenTenantNotFound_ShouldReturnNotFound()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "admin");
+        var identity = TestStaffIdentities.Admin;
         using var client = CreateBackOfficeClientForIdentity(identity);
         var unknownTenantId = TenantId.NewId();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{unknownTenantId}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{unknownTenantId}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -75,11 +74,11 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
     public async Task AcknowledgeBillingDrift_WhenNonAdminBackOfficeUser_ShouldReturnForbidden()
     {
         // Arrange
-        var identity = MockEasyAuthIdentities.Default.Single(i => i.Id == "user");
+        var identity = TestStaffIdentities.User;
         using var client = CreateBackOfficeClientForIdentity(identity);
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -92,7 +91,7 @@ public sealed class AcknowledgeBillingDriftTests(BackOfficeWebApplicationFactory
         using var client = CreateBackOfficeClient();
 
         // Act
-        var response = await client.PostAsync($"/api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
+        var response = await client.PostAsync($"/internal-api/back-office/tenants/{DatabaseSeeder.Tenant1.Id}/drift/acknowledge", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

@@ -56,7 +56,7 @@ test.describe("@smoke", () => {
       await route.fulfill({ status: 200, contentType: "application/json", json: billingEventsResponse });
     });
 
-    await step("Log in as Admin via MockEasyAuth & verify redirect to dashboard")(async () => {
+    await step("Log in as Admin via the mock identity picker & verify redirect to dashboard")(async () => {
       await page.goto(`${BACK_OFFICE_BASE_URL}/`);
 
       await expect(page.getByRole("radio", { name: "Admin Log in with admin rights" })).toBeVisible();
