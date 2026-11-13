@@ -3,9 +3,18 @@
 ## Configuration
 
 ```
-DEFAULT_PROJECT=null   # GitHub Projects (v2) number of the board, under the tinytek-io organization
+DEFAULT_PROJECT=12   # GitHub Projects (v2) number of the EuropeanPlatform board, under the tinytek-io organization
 DEFAULT_REPO=tinytek-io/EuropeanPlatform   # owner/repo issues are created in (also GH_REPO in .claude/settings.json)
 ```
+
+The board's ids, which the field mutations take. They stay the same unless a field or option is deleted and recreated; if a mutation rejects one, re-read them from `projectV2(number: 12) { id fields(first: 30) { ... } }`.
+
+| Board element | Id |
+|---|---|
+| Project | `PVT_kwDOB7l0y84Brczc` |
+| Status field | `PVTSSF_lADOB7l0y84BrczczhpvfZo` — `Todo` `f75ad846`, `In progress` `47fc9ee4`, `In review` `e8d19b26`, `Done` `98236657` |
+| Area field | `PVTMSF_lADOB7l0y84Brczczhpvgus` — `Account` `1abeb460`, `Main` `e1a92ff6`, `Back-Office` `85ab11e7`, `AppHost` `8867b0c3`, `AppGateway` `b1025f14`, `Shared Kernel` `0df0978e`, `Shared WebApp` `b4b08879`, `Developer CLI` `016b6660`, `Scaleway SDK` `e836207e`, `EuropeanPlatform SDK` `b342787f`, `Infrastructure` `245c1fe4`, `Tooling` `8d61093f` |
+| Iteration field | `PVTIF_lADOB7l0y84Brczczhpvfi8` (iteration ids change every sprint; read the current one, see Operations) |
 
 ## Never Mention Users — Escape Every `@`
 
@@ -56,7 +65,22 @@ Status, assignee and iteration are three separate writes: Status and Iteration t
 
 Every new [task] or [feature] issue gets, at creation time:
 
-1. **A System.** Set the board's **System** field to every self-contained system the work touches: `Account`, `Main`, `Back-Office`, or `Platform` for cross-cutting work (shared-kernel, shared-webapp, developer-cli, Scaleway.Sdk, Aspire.Hosting.EuropeanPlatform, cloud-infrastructure, CI, AI rules). It is a multi-select field; pick more than one when a [task] spans systems.
+1. **An Area.** Set the board's **Area** field to every area the work will impact. It is a multi-select field; pick every area whose code or configuration the [task] changes, not only the one it is about:
+
+   | Area | Covers |
+   |---|---|
+   | `Account` | `application/account` |
+   | `Main` | `application/main` |
+   | `Back-Office` | `application/back-office` |
+   | `AppHost` | `application/AppHost` |
+   | `AppGateway` | `application/AppGateway` |
+   | `Shared Kernel` | `application/shared-kernel/SharedKernel` and its tests |
+   | `Shared WebApp` | `application/shared-webapp` |
+   | `Developer CLI` | `developer-cli` |
+   | `Scaleway SDK` | `application/shared-kernel/Scaleway.Sdk*` (the SDK and its generator) |
+   | `EuropeanPlatform SDK` | `application/shared-kernel/Aspire.Hosting.EuropeanPlatform*` |
+   | `Infrastructure` | `cloud-infrastructure` (Terraform, cluster operations, environments) |
+   | `Tooling` | `.github` (CI workflows) and `.claude` (AI rules, skills and agents) |
 2. **A parent [feature], when a relevant one exists.** Attach the [task] as a **sub-issue** of the most relevant open [feature] so it inherits context and rolls up on the board. Look for an `[Active]` or `[Planned]` [feature] covering the same area before creating a top-level [task]; only leave it parentless when none fits.
 3. **A place on the board.** Add every new issue to the configured project and set its Status: `Todo` for planned work, or `In progress` if you start it immediately (then also assign yourself and set the current iteration, see **Assign on start**).
 4. **A self-contained body.** The repository is public. Copy the requirements a [task] needs into its body (rules, states, acceptance criteria) rather than linking anything in `.workspace/` or outside the repository, and never include credentials, personal data or names of unrelated projects.
@@ -96,62 +120,30 @@ gh auth refresh --scopes project
 - **Pull request linking is not automatic from the branch name.** Link a [task] by putting `Closes #<taskId>` in the pull request body. Starting the branch with the issue number (`57-short-description`) lets the create-pull-request workflow find the [task].
 - featureId is a parent issue number (e.g. `#42`); taskId is a sub-issue number (e.g. `#57`).
 - Issue bodies are GitHub-Flavored Markdown; no HTML wrapping is needed.
-- To create the [feature]/[task] hierarchy: create the parent issue, create each [task] issue in the order the PRD lists them, attach each as a sub-issue of the parent in that order (the sub-issue order is the implementation sequence), then add every issue to the board and set its Status and System.
+- To create the [feature]/[task] hierarchy: create the parent issue, create each [task] issue in the order the PRD lists them, attach each as a sub-issue of the parent in that order (the sub-issue order is the implementation sequence), then add every issue to the board and set its Status and Area.
 - To query the [tasks] of a [feature]: list the sub-issues of the parent issue. Filter board queries to issues, so a pull request on the board isn't counted as a [task].
 
 ## Operations
 
-Issue CRUD uses the `gh issue` commands. Sub-issues and the board's fields have no high-level command, so they go through `gh api` and `gh api graphql`: GitHub keeps an issue's status on a separate board item, not on the issue.
-
-| Operation | `gh` command |
-|---|---|
-| Create a [feature] or [task] issue | `gh issue create` |
-| Edit an issue | `gh issue edit` |
-| Assign / unassign the current developer | `gh issue edit <number> --add-assignee "@me"` / `--remove-assignee "@me"` |
-| List / search issues | `gh issue list` / `gh search issues` |
-| Attach / list **sub-issues** | `gh api` REST `.../issues/<number>/sub_issues` |
-| **Add** an issue to the board | `gh api graphql` → `addProjectV2ItemById` |
-| Read board items / an issue's current Status | `gh api graphql` query on `projectV2` |
-| Set **Status**, **System** or **Iteration** | `gh api graphql` → `updateProjectV2ItemFieldValue` |
-
-Examples:
+Issues, comments and assignees use the plain `gh issue` commands. Sub-issues and the board's fields have no `gh issue` command: GitHub keeps an issue's status on a separate board item, so they go through `gh api`.
 
 ```bash
-# Create the parent (feature) and a task issue (then add both to the board and set Status and System)
-gh issue create --title "<title>" --body-file <file>
+# Attach a task as a sub-issue of its parent. sub_issue_id is the task's REST id (the numeric "id"), NOT its #number
+gh api repos/{owner}/{repo}/issues/<parentNumber>/sub_issues -F sub_issue_id="$(gh api repos/{owner}/{repo}/issues/<taskNumber> --jq .id)"
 
-# Attach a task as a sub-issue of the parent. sub_issue_id is the task's REST id (the numeric "id", NOT the #number)
-taskId=$(gh api repos/tinytek-io/EuropeanPlatform/issues/<taskNumber> --jq .id)
-gh api repos/tinytek-io/EuropeanPlatform/issues/<parentNumber>/sub_issues -F sub_issue_id="$taskId"
-
-# List a parent's sub-issues, in order
-gh api repos/tinytek-io/EuropeanPlatform/issues/<parentNumber>/sub_issues --jq '.[] | "\(.number) \(.state) \(.title)"'
-
-# Resolve the project node id and the Status and System fields with their option ids
-gh api graphql -f query='query{ organization(login:"tinytek-io"){ projectV2(number:<DEFAULT_PROJECT>){ id
-  status: field(name:"Status"){ ... on ProjectV2SingleSelectField { id options { id name } } }
-  system: field(name:"System"){ ... on ProjectV2MultiSelectField { id multiSelectOptions { id name } } } } } }'
-
-# Read an issue's node id and its board items (the board may auto-add new issues; add only when missing)
+# Find an issue's board item. The board auto-adds new issues; add one only when no item on project 12 is returned
 gh api graphql -f query='query{ repository(owner:"tinytek-io", name:"EuropeanPlatform"){ issue(number:<number>){ id
   projectItems(first:10){ nodes { id project { number } } } } } }'
+gh api graphql -f query='mutation{ addProjectV2ItemById(input:{ projectId:"PVT_kwDOB7l0y84Brczc", contentId:"<issueNodeId>" }){ item { id } } }'
 
-# Add an issue to the board (returns the board item id)
-gh api graphql -f query='mutation{ addProjectV2ItemById(input:{ projectId:"<projectId>", contentId:"<issueNodeId>" }){ item { id } } }'
+# Set a field on the item. The value shape follows the field: Status is { singleSelectOptionId: "<id>" },
+# Area is { multiSelectOptionIds: ["<id>", ...] } (the full set, it replaces), Iteration is { iterationId: "<id>" }
+gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{ projectId:"PVT_kwDOB7l0y84Brczc", itemId:"<itemId>",
+  fieldId:"<fieldId>", value:{ singleSelectOptionId:"<optionId>" } }){ projectV2Item { id } } }'
 
-# Set the item's Status
-gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{ projectId:"<projectId>", itemId:"<itemId>",
-  fieldId:"<statusFieldId>", value:{ singleSelectOptionId:"<optionId>" } }){ projectV2Item { id } } }'
-
-# Set the System field to Account and Platform (multi-select)
-gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{ projectId:"<projectId>", itemId:"<itemId>",
-  fieldId:"<systemFieldId>", value:{ multiSelectOptionIds:["<accountOptionId>","<platformOptionId>"] } }){ projectV2Item { id } } }'
-
-# Resolve the iterations, pick the one whose [startDate, startDate + duration) contains today, and set it
-gh api graphql -f query='query{ organization(login:"tinytek-io"){ projectV2(number:<DEFAULT_PROJECT>){
-  field(name:"Iteration"){ ... on ProjectV2IterationField { id configuration { iterations { id title startDate duration } } } } } } }'
-gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{ projectId:"<projectId>", itemId:"<itemId>",
-  fieldId:"<iterationFieldId>", value:{ iterationId:"<currentIterationId>" } }){ projectV2Item { id } } }'
+# The current iteration is the one whose [startDate, startDate + duration days) contains today
+gh api graphql -f query='query{ node(id:"PVTIF_lADOB7l0y84Brczczhpvfi8"){ ... on ProjectV2IterationField {
+  configuration { iterations { id title startDate duration } } } } }'
 ```
 
 ## Initialization
