@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using DeveloperCli.Installation;
 using DeveloperCli.Utilities;
@@ -218,7 +219,7 @@ public class TestCommand : Command
     }
 
     // Reads the run's TRX results and deletes them. Null when no assembly wrote results (the run failed before
-    // executing tests), so the console output is all there is.
+    // executing tests) or any result file is unreadable, so the console output is all there is.
     private static TestStats? ConsumeTrxResults(string resultsDirectory)
     {
         if (!Directory.Exists(resultsDirectory)) return null;
@@ -232,7 +233,14 @@ public class TestCommand : Command
         var stats = new TestStats();
         foreach (var trxFile in trxFiles)
         {
-            foreach (var testResult in XDocument.Load(trxFile).Descendants().Where(element => element.Name.LocalName == "UnitTestResult"))
+            var testRun = LoadTestRun(trxFile);
+            if (testRun is null)
+            {
+                Directory.Delete(resultsDirectory, true);
+                return null;
+            }
+
+            foreach (var testResult in testRun.Descendants().Where(element => element.Name.LocalName == "UnitTestResult"))
             {
                 switch (testResult.Attribute("outcome")?.Value)
                 {
@@ -252,6 +260,25 @@ public class TestCommand : Command
 
         Directory.Delete(resultsDirectory, true);
         return stats;
+    }
+
+    // An interrupted run can leave a truncated result file. Skipping it would silently drop that assembly's tests and
+    // failures from the summary, so the caller falls back to the console output, which covers every assembly.
+    private static XElement? LoadTestRun(string trxFile)
+    {
+        try
+        {
+            var testRun = XDocument.Load(trxFile).Root;
+            if (testRun?.Name.LocalName == "TestRun") return testRun;
+
+            AnsiConsole.MarkupLine($"[yellow]Test results file '{Markup.Escape(trxFile)}' has no test run. Counting the console output instead.[/]");
+            return null;
+        }
+        catch (Exception exception) when (exception is XmlException or IOException or UnauthorizedAccessException)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Test results file '{Markup.Escape(trxFile)}' is unreadable: {Markup.Escape(exception.Message)} Counting the console output instead.[/]");
+            return null;
+        }
     }
 
     private static TestStats ParseTestOutput(string output)
