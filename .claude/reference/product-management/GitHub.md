@@ -47,11 +47,11 @@ Status is the board's **Status** single-select field, never a label and not open
 | `[Review]` | In review |
 | `[Completed]` | Done |
 
-The Status field has four options: `Todo`, `In progress`, `In review`, `Done` (lowercase `p` and `r`). A [task] moves to `In review` when its pull request opens and stays there until the pull request merges.
+The Status field has four options: `Todo`, `In progress`, `In review`, `Done` (lowercase `p` and `r`).
 
-A [task] reaches `[Completed]` when **its pull request merges**, not by a manual status change. A pull request whose body links it with `Closes #<taskId>` closes the [task] on merge, and the board's `Item closed` workflow sets its Status to `Done` in the same moment. So once a pull request covers a [task], don't also set it to Done or close it by hand. Setting Status to Done directly still applies to the rare [task] that finishes without a pull request.
-
-A [task] staying `In review` until the merge is the normal path, not broken automation. `Closes #<taskId>` registers on the pull request when it opens (`closingIssuesReferences` confirms it), but GitHub's closing keywords fire on merge into the default branch. That is core repository behaviour, so no Projects setting changes it.
+- **`[Review]` — In review:** the [task]'s work is handed over for review. In the agent team workflow that is when the engineer asks the reviewer; outside it, when the pull request covering the [task] opens.
+- **`[Completed]` — Done:** the [task]'s work is committed and verified. In the agent team workflow the guardian sets Done right after the [task]'s commit (the guardian and team-lead instructions couple the commit and the status), and the team lead's between-task checkpoint relies on it, so tasks complete one by one while the feature's branch is still open. The board's `Auto-close issue` workflow closes the issue when its Status becomes Done.
+- **The pull request still links every [task] it covers** with `Closes #<taskId>` in its body. A [task] completed without the agent workflow (no guardian setting Done) closes when that pull request merges into the default branch, and the board's `Item closed` workflow sets its Status to Done; for a [task] already closed the keyword changes nothing.
 
 **Assign on start.** When you move a [task] to `[Active]` (In progress), also **assign it to the current developer** and **set the Iteration field to the current iteration** (skip this while the board has no iterations configured):
 
@@ -71,7 +71,7 @@ Every new [task] or [feature] issue gets, at creation time:
    |---|---|
    | `Account` | `application/account` |
    | `Main` | `application/main` |
-   | `Back-Office` | `application/back-office` |
+   | `Back-Office` | `application/back-office` once the back-office is its own system; before that, `application/account/BackOffice` (its SPA) and `application/account/Core/Features/BackOffice` (account's back-office endpoints) |
    | `AppHost` | `application/AppHost` |
    | `AppGateway` | `application/AppGateway` |
    | `Shared Kernel` | `application/shared-kernel/SharedKernel` and its tests |
@@ -87,13 +87,13 @@ Every new [task] or [feature] issue gets, at creation time:
 
 ## Completion
 
-After the pull request merges, **verify the [task] actually closed**. A [task] left `In progress` or `In review` after its work shipped is an invisible mistake, and the check is one command:
+After the pull request merges, **verify every [task] it lists actually closed**. A [task] left `In progress` or `In review` after its work shipped is an invisible mistake, and the check is one command per [task]:
 
 ```bash
 gh issue view <taskId> --json state,stateReason
 ```
 
-If it did not close (the pull request merged into a branch other than the default one, or the link was never registered), close the issue or set Status `Done` then. A merged [task] must never be left `In progress` or `In review`.
+If one did not close (the pull request merged into a branch other than the default one, or the link was never registered), set its Status to Done then; the board closes it. A merged [task] must never be left `In progress` or `In review`.
 
 ## Authentication
 
@@ -116,7 +116,7 @@ gh auth refresh --scopes project
 
 - All operations use the `gh` CLI, **not** the GitHub MCP server. The MCP server needs a long-lived Personal Access Token, which we don't store. Do not enable it.
 - If a `gh` command fails: Stop immediately and report the error. Don't work around failures.
-- Don't skip status updates. When you **start** a [task]: move it to In progress, assign yourself and set the current iteration. When you open its pull request: put `Closes #<taskId>` in the body and move the [task] to In review. **After the pull request merges**: verify the [task] is closed and Done.
+- Don't skip status updates. When you **start** a [task]: move it to In progress, assign yourself and set the current iteration. When its work goes to review: move it to In review. When it is committed and verified: set Done (the guardian does this in the agent team workflow). When the pull request opens: list every [task] it covers with `Closes #<taskId>`. **After the pull request merges**: verify every listed [task] is closed and Done.
 - **Pull request linking is not automatic from the branch name.** Link a [task] by putting `Closes #<taskId>` in the pull request body. Starting the branch with the issue number (`57-short-description`) lets the create-pull-request workflow find the [task].
 - featureId is a parent issue number (e.g. `#42`); taskId is a sub-issue number (e.g. `#57`).
 - Issue bodies are GitHub-Flavored Markdown; no HTML wrapping is needed.
