@@ -1,3 +1,5 @@
+![EuropeanPlatform: a .NET and React starter kit for EU-hosted, GDPR-native SaaS](docs/images/readme-banner.png)
+
 <h4 align="center">
 
 [![App Gateway](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml/badge.svg?branch=main)](https://github.com/tinytek-io/EuropeanPlatform/actions/workflows/app-gateway.yml?query=branch%3Amain)
