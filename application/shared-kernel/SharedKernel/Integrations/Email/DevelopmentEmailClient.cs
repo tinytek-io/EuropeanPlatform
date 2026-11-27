@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using System.Net.Mime;
 using SharedKernel.Configuration;
+using SharedKernel.Cqrs;
 
 namespace SharedKernel.Integrations.Email;
 
@@ -10,7 +11,7 @@ public sealed class DevelopmentEmailClient(PortAllocation ports) : IEmailClient
 
     private readonly SmtpClient _emailSender = new("localhost", ports.MailpitSmtp);
 
-    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+    public async Task<Result> SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
         var mailMessage = new MailMessage(Sender, message.Recipient) { Subject = message.Subject };
         mailMessage.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.PlainTextBody, null, MediaTypeNames.Text.Plain));
@@ -24,6 +25,7 @@ public sealed class DevelopmentEmailClient(PortAllocation ports) : IEmailClient
             }
         }
 
-        return _emailSender.SendMailAsync(mailMessage, cancellationToken);
+        await _emailSender.SendMailAsync(mailMessage, cancellationToken);
+        return Result.Success();
     }
 }

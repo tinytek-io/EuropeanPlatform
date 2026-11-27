@@ -46,23 +46,18 @@ public class ApiResult(ResultBase result, string? routePrefix = null, IDictionar
 
     protected IResult GetProblemDetailsAsJson()
     {
+        var extensions = result.ProblemExtensions?.ToDictionary() ?? new Dictionary<string, object?>();
+        if (result.Errors?.Length > 0)
+        {
+            extensions["errors"] = result.Errors.GroupBy(e => e.PropertyName)
+                .ToDictionary(g => JsonNamingPolicy.CamelCase.ConvertName(g.Key), g => g.Select(e => e.Message).ToArray());
+        }
+
         return Results.Problem(
             title: GetHttpStatusDisplayName(result.StatusCode),
             statusCode: (int)result.StatusCode,
             detail: result.ErrorMessage?.Message,
-            extensions: result.Errors?.Length > 0
-                ? new Dictionary<string, object?>
-                {
-                    {
-                        "errors",
-                        result.Errors.GroupBy(e => e.PropertyName)
-                            .ToDictionary(
-                                g => JsonNamingPolicy.CamelCase.ConvertName(g.Key),
-                                g => g.Select(e => e.Message).ToArray()
-                            )
-                    }
-                }
-                : null
+            extensions: extensions.Count > 0 ? extensions : null
         );
     }
 

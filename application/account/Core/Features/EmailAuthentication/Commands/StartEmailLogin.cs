@@ -54,10 +54,11 @@ public sealed class StartEmailLoginHandler(
                 new UnknownUserEmailModel(command.Email, signupUrl)
             );
             var unknownRendered = emailRenderer.RenderEmail(unknownTemplate);
-            await emailClient.SendAsync(
+            var sendResult = await emailClient.SendAsync(
                 new EmailMessage(command.Email.ToLower(), unknownRendered.Subject, unknownRendered.HtmlBody, unknownRendered.PlainTextBody),
                 cancellationToken
             );
+            if (!sendResult.IsSuccess) return Result<StartEmailLoginResponse>.From(sendResult);
 
             return new StartEmailLoginResponse(EmailLoginId.NewId(), EmailLogin.ValidForSeconds);
         }

@@ -2,10 +2,10 @@ using Account.Database;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Integrations.Email;
 using SharedKernel.Tests.Telemetry;
 
 namespace Account.Tests;
@@ -68,7 +68,7 @@ internal static class SeededDatabaseTemplate
         services.AddDbContext<AccountDbContext>(options => options.UseSqlite(_template).UseSnakeCaseNamingConvention());
         services.AddAccountServices();
         services.AddScoped<ITelemetryEventsCollector>(_ => new TelemetryEventsCollectorSpy(new TelemetryEventsCollector()));
-        services.AddScoped<IEmailClient>(_ => Substitute.For<IEmailClient>());
+        services.AddScoped<IEmailClient>(_ => EmailClientSubstitute.Create());
         services.AddScoped<IExecutionContext, HttpExecutionContext>();
 
         using var serviceProvider = services.BuildServiceProvider();

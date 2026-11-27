@@ -42,11 +42,11 @@ public sealed class ValidationPipelineBehavior<TRequest, TResponse>(IEnumerable<
 
     /// <summary>
     ///     Uses reflection to create a new instance of the specified Result type, passing the errorDetails to the
-    ///     constructor.
+    ///     constructor. Reflection ignores optional parameters, so every constructor argument is passed explicitly.
     /// </summary>
     private static TResult CreateValidationResult<TResult>(ErrorDetail[] errorDetails)
         where TResult : ResultBase
     {
-        return (TResult)Activator.CreateInstance(typeof(TResult), HttpStatusCode.BadRequest, null, false, errorDetails, null)!;
+        return (TResult)Activator.CreateInstance(typeof(TResult), HttpStatusCode.BadRequest, null, false, errorDetails, null, null)!;
     }
 }

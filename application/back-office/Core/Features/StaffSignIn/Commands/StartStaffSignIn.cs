@@ -64,6 +64,8 @@ public sealed class StartStaffSignInHandler(
 
         var host = backOfficeHostOptions.Value.Host;
         var expiryMinutes = Domain.StaffSignIn.ValidForSeconds / 60;
+        // A refused send is not passed on: answering differently from the not-staff path above would reveal that the
+        // address belongs to staff. The email client has already logged the refusal.
         await emailClient.SendAsync(
             new EmailMessage(
                 member.Email,

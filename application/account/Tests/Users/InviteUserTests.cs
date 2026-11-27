@@ -8,6 +8,7 @@ using Account.Features.Users.Domain;
 using FluentAssertions;
 using NSubstitute;
 using SharedKernel.Authentication;
+using SharedKernel.Cqrs;
 using SharedKernel.Domain;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Platform;
@@ -191,6 +192,24 @@ public sealed class InviteUserTests(AccountWebApplicationFactory factory) : Endp
         // Assert
         await response.ShouldHaveErrorStatusCode(HttpStatusCode.BadRequest, $"The user '{deletedUserEmail}' was previously deleted. Please restore or permanently delete the user before inviting again.");
 
+        TelemetryEventsCollectorSpy.AreAllEventsDispatched.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InviteUser_WhenEmailProviderRefusesTheRecipientDomain_ShouldReturnServiceUnavailableWithoutCreatingUser()
+    {
+        // Arrange
+        Connection.Update("tenants", "id", DatabaseSeeder.Tenant1.Id.ToString(), [("name", "Test Company")]);
+        EmailClient.SendAsync(null!, CancellationToken.None).ReturnsForAnyArgs(Result.ServiceUnavailable("Email to 'example.com' cannot be delivered right now.", TimeSpan.FromMinutes(15)));
+        var email = Faker.Internet.UniqueEmail();
+        var command = new InviteUserCommand(email);
+
+        // Act
+        var response = await AuthenticatedOwnerHttpClient.PostAsJsonAsync("/api/account/users/invite", command);
+
+        // Assert
+        await response.ShouldHaveErrorStatusCode(HttpStatusCode.ServiceUnavailable, "Email to 'example.com' cannot be delivered right now.");
+        Connection.ExecuteScalar<long>("SELECT COUNT(*) FROM users WHERE email = @email", [new { email = email.ToLower() }]).Should().Be(0);
         TelemetryEventsCollectorSpy.AreAllEventsDispatched.Should().BeFalse();
     }
 }

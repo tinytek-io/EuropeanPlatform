@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { api } from "@/shared/lib/api/client";
+import { handleEmailMutationError } from "@/shared/lib/emailDeliveryUnavailable";
 
 import { clearLoginState, setLastSubmittedCode } from "./loginState";
 
@@ -46,6 +47,7 @@ export function useLoginVerification({
   });
 
   const resendLoginCodeMutation = api.useMutation("post", "/api/account/authentication/email/login/{id}/resend-code", {
+    onError: handleEmailMutationError,
     onSuccess: (data) => {
       if (data) {
         onResendSuccess(data.validForSeconds);

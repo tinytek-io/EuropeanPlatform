@@ -9,6 +9,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using NSubstitute;
 using SharedKernel.Authentication;
+using SharedKernel.Cqrs;
 using SharedKernel.Domain;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Platform;
@@ -258,5 +259,31 @@ public sealed class StartEmailLoginTests(AccountWebApplicationFactory factory) :
             ),
             Arg.Any<CancellationToken>()
         );
+    }
+
+    [Fact]
+    public async Task StartEmailLogin_WhenEmailProviderRefusesTheRecipientDomain_ShouldReturnServiceUnavailableWithoutStartingLogin()
+    {
+        // Arrange
+        var email = DatabaseSeeder.Tenant1Owner.Email;
+        EmailClient.SendAsync(null!, CancellationToken.None).ReturnsForAnyArgs(Result.ServiceUnavailable(
+                "Email to 'example.com' cannot be delivered right now.", TimeSpan.FromMinutes(15),
+                new Dictionary<string, object?> { ["reason"] = "email-recipient-domain-unavailable", ["recipientDomain"] = "example.com" }
+            )
+        );
+        var command = new StartEmailLoginCommand(email);
+
+        // Act
+        var response = await AnonymousHttpClient.PostAsJsonAsync("/api/account/authentication/email/login/start", command);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        response.Headers.RetryAfter!.Delta.Should().Be(TimeSpan.FromMinutes(15));
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("reason").GetString().Should().Be("email-recipient-domain-unavailable");
+        problem.GetProperty("recipientDomain").GetString().Should().Be("example.com");
+
+        Connection.ExecuteScalar<long>("SELECT COUNT(*) FROM email_logins WHERE email = @email", [new { email = email.ToLower() }]).Should().Be(0);
+        TelemetryEventsCollectorSpy.AreAllEventsDispatched.Should().BeFalse();
     }
 }

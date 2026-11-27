@@ -65,10 +65,11 @@ public sealed class ResendEmailLoginCodeHandler(
             new ResendEmailLoginEmailModel(oneTimePassword, EmailDomainHelper.GetPublicHost(), EmailLogin.ValidForSeconds / 60)
         );
         var rendered = emailRenderer.RenderEmail(template);
-        await emailClient.SendAsync(
+        var sendResult = await emailClient.SendAsync(
             new EmailMessage(emailLogin.Email, rendered.Subject, rendered.HtmlBody, rendered.PlainTextBody),
             cancellationToken
         );
+        if (!sendResult.IsSuccess) return Result<ResendEmailLoginCodeResponse>.From(sendResult);
 
         return new ResendEmailLoginCodeResponse(EmailLogin.ValidForSeconds);
     }

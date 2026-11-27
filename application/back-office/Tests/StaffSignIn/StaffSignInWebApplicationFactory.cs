@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Integrations.Email;
 using SharedKernel.Tests.Telemetry;
 
 namespace BackOffice.Tests.StaffSignIn;
@@ -58,7 +59,7 @@ public sealed partial class StaffSignInWebApplicationFactory : BackOfficeWebAppl
         );
     }
 
-    public IEmailClient EmailClient { get; } = Substitute.For<IEmailClient>();
+    public IEmailClient EmailClient { get; } = EmailClientSubstitute.Create();
 
     public TelemetryEventsCollectorSpy TelemetryEventsCollectorSpy { get; } = new(new TelemetryEventsCollector());
 
