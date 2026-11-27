@@ -15,10 +15,12 @@ import { DotIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import ErrorPage from "@/federated-modules/errorPages/ErrorPage";
+import { EmailDeliveryUnavailableAlert } from "@/shared/components/EmailDeliveryUnavailableAlert";
 import { useMainNavigation } from "@/shared/hooks/useMainNavigation";
 import googleIconUrl from "@/shared/images/google-icon.svg";
 import { HorizontalHeroLayout } from "@/shared/layouts/HorizontalHeroLayout";
 import { api } from "@/shared/lib/api/client";
+import { handleEmailMutationError } from "@/shared/lib/emailDeliveryUnavailable";
 
 import { getLoginState } from "../login/-shared/loginState";
 import { clearSignupState, getSignupState, setSignupState } from "./-shared/signupState";
@@ -55,7 +57,9 @@ export function StartSignupForm() {
   const [email, setEmail] = useState(savedEmail || loginEmail || "");
   const { enabled: isGoogleOAuthEnabled } = useFeatureFlag("google-oauth");
 
-  const startSignupMutation = api.useMutation("post", "/api/account/authentication/email/signup/start");
+  const startSignupMutation = api.useMutation("post", "/api/account/authentication/email/signup/start", {
+    onError: handleEmailMutationError
+  });
   const [isGoogleSignupPending, setIsGoogleSignupPending] = useState(false);
 
   const handleGoogleSignup = () => {
@@ -113,6 +117,7 @@ export function StartSignupForm() {
         className="flex w-full flex-col"
         disabled={isPending}
       />
+      <EmailDeliveryUnavailableAlert error={startSignupMutation.error} suggestGoogle={isGoogleOAuthEnabled} />
       <Button
         type="submit"
         isPending={startSignupMutation.isPending}

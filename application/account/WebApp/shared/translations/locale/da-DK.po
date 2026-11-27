@@ -1099,6 +1099,9 @@ msgstr "Scriptede deployments"
 msgid "Search"
 msgstr "Søg"
 
+msgid "See the email provider's status"
+msgstr "Se e-mailudbyderens driftsstatus"
+
 #. placeholder {0}: user.firstName
 #. placeholder {1}: user.lastName
 msgid "Select {0} {1}"
@@ -1269,6 +1272,9 @@ msgstr "Siden du leder efter findes ikke eller er blevet flyttet."
 
 msgid "Theme"
 msgstr "Tema"
+
+msgid "There is an issue between our email provider and yours. Please try again later."
+msgstr "Der er et problem mellem vores e-mailudbyder og din. Prøv igen senere."
 
 msgid "This account is linked to a different Google identity."
 msgstr "Denne konto er knyttet til en anden Google-identitet."
@@ -1457,6 +1463,9 @@ msgstr "Se profil"
 msgid "View users"
 msgstr "Se brugere"
 
+msgid "We can't deliver email to {recipientDomain} right now"
+msgstr "Vi kan ikke levere e-mails til {recipientDomain} lige nu"
+
 msgid "We detected a security issue with your login attempt. Please try again."
 msgstr "Vi opdagede et sikkerhedsproblem med dit loginforsøg. Prøv venligst igen."
 
@@ -1468,6 +1477,9 @@ msgstr "Når du accepterer denne invitation, vil dine profiloplysninger (navn, t
 
 msgid "X"
 msgstr "X"
+
+msgid "You can also continue with Google instead."
+msgstr "Du kan også fortsætte med Google i stedet."
 
 msgid "You cannot change your own role"
 msgstr "Du kan ikke ændre din egen rolle"

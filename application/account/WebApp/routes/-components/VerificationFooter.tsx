@@ -5,6 +5,8 @@ import { Button } from "@repo/ui/components/Button";
 import { Form } from "@repo/ui/components/Form";
 import { mutationSubmitter } from "@repo/ui/forms/mutationSubmitter";
 
+import { EmailDeliveryUnavailableAlert } from "@/shared/components/EmailDeliveryUnavailableAlert";
+
 interface VerificationFooterProps {
   showRequestLink: boolean;
   isRateLimited: boolean;
@@ -26,6 +28,7 @@ export function VerificationFooter({
 }: VerificationFooterProps) {
   return (
     <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+      <EmailDeliveryUnavailableAlert error={resendMutation.error} />
       <div className="text-center text-sm">
         <Trans>Can&apos;t find your code?</Trans>{" "}
         {!showRequestLink || isRateLimited ? (

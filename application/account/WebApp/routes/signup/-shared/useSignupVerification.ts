@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { api } from "@/shared/lib/api/client";
+import { handleEmailMutationError } from "@/shared/lib/emailDeliveryUnavailable";
 
 import { clearSignupState, setLastSubmittedCode } from "./signupState";
 
@@ -25,6 +26,7 @@ export function useSignupVerification({ emailLoginId, onResendSuccess }: UseSign
     "post",
     "/api/account/authentication/email/signup/{id}/resend-code",
     {
+      onError: handleEmailMutationError,
       onSuccess: (data) => {
         if (data) {
           onResendSuccess(data.validForSeconds);

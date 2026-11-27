@@ -13,10 +13,12 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ErrorPage from "@/federated-modules/errorPages/ErrorPage";
+import { EmailDeliveryUnavailableAlert } from "@/shared/components/EmailDeliveryUnavailableAlert";
 import { useMainNavigation } from "@/shared/hooks/useMainNavigation";
 import googleIconUrl from "@/shared/images/google-icon.svg";
 import { HorizontalHeroLayout } from "@/shared/layouts/HorizontalHeroLayout";
 import { api } from "@/shared/lib/api/client";
+import { handleEmailMutationError } from "@/shared/lib/emailDeliveryUnavailable";
 
 import { getSignupState } from "../signup/-shared/signupState";
 import { clearLoginState, getLoginState, setLoginState } from "./-shared/loginState";
@@ -60,7 +62,9 @@ export function LoginForm() {
   const { returnPath } = Route.useSearch();
   const { enabled: isGoogleOAuthEnabled } = useFeatureFlag("google-oauth");
 
-  const startLoginMutation = api.useMutation("post", "/api/account/authentication/email/login/start");
+  const startLoginMutation = api.useMutation("post", "/api/account/authentication/email/login/start", {
+    onError: handleEmailMutationError
+  });
   const [isGoogleLoginPending, setIsGoogleLoginPending] = useState(false);
 
   const handleGoogleLogin = () => {
@@ -125,6 +129,7 @@ export function LoginForm() {
         className="flex w-full flex-col"
         disabled={isPending}
       />
+      <EmailDeliveryUnavailableAlert error={startLoginMutation.error} suggestGoogle={isGoogleOAuthEnabled} />
       <Button
         type="submit"
         isPending={startLoginMutation.isPending}

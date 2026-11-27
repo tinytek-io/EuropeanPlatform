@@ -17,7 +17,9 @@ import { TextField } from "@repo/ui/components/TextField";
 import { mutationSubmitter } from "@repo/ui/forms/mutationSubmitter";
 import { toast } from "sonner";
 
+import { EmailDeliveryUnavailableAlert } from "@/shared/components/EmailDeliveryUnavailableAlert";
 import { api } from "@/shared/lib/api/client";
+import { handleEmailMutationError } from "@/shared/lib/emailDeliveryUnavailable";
 
 interface InviteUserDialogProps {
   isOpen: boolean;
@@ -47,6 +49,7 @@ export default function InviteUserDialog({ isOpen, onOpenChange }: Readonly<Invi
 function InviteUserDialogBody({ onClose }: { onClose: () => void }) {
   const setDirty = useDialogSetDirty();
   const inviteUserMutation = api.useMutation("post", "/api/account/users/invite", {
+    onError: handleEmailMutationError,
     onSuccess: () => {
       toast.success(t`User invited successfully`);
       onClose();
@@ -64,6 +67,7 @@ function InviteUserDialogBody({ onClose }: { onClose: () => void }) {
           placeholder={t`user@email.com`}
           onChange={() => setDirty(true)}
         />
+        <EmailDeliveryUnavailableAlert error={inviteUserMutation.error} />
       </DialogBody>
       <DialogFooter>
         <DialogClose render={<Button type="reset" variant="secondary" disabled={inviteUserMutation.isPending} />}>
