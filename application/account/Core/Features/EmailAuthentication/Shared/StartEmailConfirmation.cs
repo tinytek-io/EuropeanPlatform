@@ -38,10 +38,11 @@ public sealed class StartEmailConfirmation(
 
         var template = templateFactory(oneTimePassword);
         var rendered = emailRenderer.RenderEmail(template);
-        await emailClient.SendAsync(
+        var sendResult = await emailClient.SendAsync(
             new EmailMessage(emailLogin.Email, rendered.Subject, rendered.HtmlBody, rendered.PlainTextBody),
             cancellationToken
         );
+        if (!sendResult.IsSuccess) return Result<EmailLoginId>.From(sendResult);
 
         return emailLogin.Id;
     }

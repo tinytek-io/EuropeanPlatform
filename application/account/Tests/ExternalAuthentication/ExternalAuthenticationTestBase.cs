@@ -17,12 +17,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using SharedKernel.Domain;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Integrations.Email;
 using SharedKernel.Tests.Persistence;
 using SharedKernel.Tests.Telemetry;
 
@@ -68,7 +68,7 @@ public abstract class ExternalAuthenticationTestBase : IDisposable
         SeededDatabaseTemplate.RestoreInto(Connection);
 
         TelemetryEventsCollectorSpy = new TelemetryEventsCollectorSpy(new TelemetryEventsCollector());
-        var emailClient = Substitute.For<IEmailClient>();
+        var emailClient = EmailClientSubstitute.Create();
 
         _webApplicationFactory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {

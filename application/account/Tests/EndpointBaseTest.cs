@@ -7,12 +7,12 @@ using JetBrains.Annotations;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using SharedKernel.Authentication;
 using SharedKernel.Authentication.TokenGeneration;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.Telemetry;
+using SharedKernel.Tests.Integrations.Email;
 using SharedKernel.Tests.Telemetry;
 
 namespace Account.Tests;
@@ -61,7 +61,7 @@ public abstract class EndpointBaseTest<TContext> : IDisposable where TContext : 
         }
 
         TelemetryEventsCollectorSpy = new TelemetryEventsCollectorSpy(new TelemetryEventsCollector());
-        EmailClient = Substitute.For<IEmailClient>();
+        EmailClient = EmailClientSubstitute.Create();
         StripeState = new MockStripeState();
 
         // BeginTest must run before any service resolution on the shared host so the host's

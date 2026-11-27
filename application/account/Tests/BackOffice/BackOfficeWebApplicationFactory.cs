@@ -10,13 +10,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NSubstitute;
 using SharedKernel.Authentication;
 using SharedKernel.ExecutionContext;
 using SharedKernel.Integrations.Email;
 using SharedKernel.SinglePageApp;
 using SharedKernel.Telemetry;
 using SharedKernel.Tests.Authentication;
+using SharedKernel.Tests.Integrations.Email;
 
 namespace Account.Tests.BackOffice;
 
@@ -106,7 +106,7 @@ public class BackOfficeWebApplicationFactory : WebApplicationFactory<Program>
                 services.AddTransient<MockStripeState>(_ => CurrentContext.StripeState);
 
                 services.Remove(services.Single(d => d.ServiceType == typeof(IEmailClient)));
-                services.AddTransient<IEmailClient>(_ => Substitute.For<IEmailClient>());
+                services.AddTransient<IEmailClient>(_ => EmailClientSubstitute.Create());
 
                 services.AddScoped<IExecutionContext, HttpExecutionContext>();
 

@@ -87,11 +87,10 @@ public sealed class InviteUserHandler(
             new InviteUserEmailModel(inviter, tenant.Name, command.Email.ToLower(), loginPath)
         );
         var rendered = emailRenderer.RenderEmail(template);
-        await emailClient.SendAsync(
+        // A failed send returns before the unit of work commits, so the invited user is not created either.
+        return await emailClient.SendAsync(
             new EmailMessage(command.Email.ToLower(), rendered.Subject, rendered.HtmlBody, rendered.PlainTextBody),
             cancellationToken
         );
-
-        return Result.Success();
     }
 }

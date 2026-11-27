@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using SharedKernel.Validation;
 
@@ -11,7 +12,7 @@ public abstract class ResultBase
         StatusCode = httpStatusCode;
     }
 
-    protected ResultBase(HttpStatusCode statusCode, ErrorMessage errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null)
+    protected ResultBase(HttpStatusCode statusCode, ErrorMessage errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null, IReadOnlyDictionary<string, object?>? problemExtensions = null)
     {
         IsSuccess = false;
         StatusCode = statusCode;
@@ -19,6 +20,7 @@ public abstract class ResultBase
         CommitChangesOnFailure = commitChanges;
         Errors = errors;
         ResponseHeaders = responseHeaders;
+        ProblemExtensions = problemExtensions;
     }
 
     public bool IsSuccess { get; }
@@ -32,6 +34,12 @@ public abstract class ResultBase
     public ErrorDetail[]? Errors { get; }
 
     public IDictionary<string, string>? ResponseHeaders { get; }
+
+    /// <summary>
+    ///     Machine-readable members added to the problem details body, so the frontend can tell this failure apart from
+    ///     others with the same status code (e.g. a 503 the email provider caused from a 503 the gateway returns).
+    /// </summary>
+    public IReadOnlyDictionary<string, object?>? ProblemExtensions { get; }
 
     public string GetErrorSummary()
     {
@@ -50,8 +58,8 @@ public sealed class Result : ResultBase
     {
     }
 
-    public Result(HttpStatusCode statusCode, ErrorMessage? errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null)
-        : base(statusCode, errorMessage!, commitChanges, errors, responseHeaders)
+    public Result(HttpStatusCode statusCode, ErrorMessage? errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null, IReadOnlyDictionary<string, object?>? problemExtensions = null)
+        : base(statusCode, errorMessage!, commitChanges, errors, responseHeaders, problemExtensions)
     {
     }
 
@@ -95,9 +103,19 @@ public sealed class Result : ResultBase
         return new Result(HttpStatusCode.TooManyRequests, new ErrorMessage(message), commitChanges, []);
     }
 
+    /// <summary>
+    ///     A dependency the request needs is temporarily unavailable. The request itself was valid, so the caller may
+    ///     retry it unchanged after <paramref name="retryAfter" />, which is sent as the <c>Retry-After</c> header.
+    /// </summary>
+    public static Result ServiceUnavailable(string message, TimeSpan retryAfter, IReadOnlyDictionary<string, object?>? problemExtensions = null)
+    {
+        var responseHeaders = new Dictionary<string, string> { ["Retry-After"] = ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture) };
+        return new Result(HttpStatusCode.ServiceUnavailable, new ErrorMessage(message), false, [], responseHeaders, problemExtensions);
+    }
+
     public static Result From(ResultBase result)
     {
-        return new Result(result.StatusCode, result.ErrorMessage!, result.CommitChangesOnFailure, result.Errors!, result.ResponseHeaders);
+        return new Result(result.StatusCode, result.ErrorMessage!, result.CommitChangesOnFailure, result.Errors!, result.ResponseHeaders, result.ProblemExtensions);
     }
 }
 
@@ -113,8 +131,8 @@ public sealed class Result<T> : ResultBase
         Value = value;
     }
 
-    public Result(HttpStatusCode statusCode, ErrorMessage? errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null)
-        : base(statusCode, errorMessage!, commitChanges, errors, responseHeaders)
+    public Result(HttpStatusCode statusCode, ErrorMessage? errorMessage, bool commitChanges, ErrorDetail[] errors, IDictionary<string, string>? responseHeaders = null, IReadOnlyDictionary<string, object?>? problemExtensions = null)
+        : base(statusCode, errorMessage!, commitChanges, errors, responseHeaders, problemExtensions)
     {
     }
 
@@ -175,6 +193,6 @@ public sealed class Result<T> : ResultBase
 
     public static Result<T> From(ResultBase result)
     {
-        return new Result<T>(result.StatusCode, result.ErrorMessage!, result.CommitChangesOnFailure, result.Errors!, result.ResponseHeaders);
+        return new Result<T>(result.StatusCode, result.ErrorMessage!, result.CommitChangesOnFailure, result.Errors!, result.ResponseHeaders, result.ProblemExtensions);
     }
 }
